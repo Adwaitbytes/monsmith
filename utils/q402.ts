@@ -51,7 +51,7 @@ async function ensureCorrectChain(
         }
     }
 
-    // Chain is unknown to the wallet — offer to add it.
+    // Chain is unknown to the wallet - offer to add it.
     const isTestnet = chainId === MONAD_TESTNET_CHAIN_ID;
     try {
         await ethereum.request({

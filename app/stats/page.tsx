@@ -54,7 +54,7 @@ export default function StatsPage() {
       <div className="max-w-6xl mx-auto px-6 py-10">
         <header className="flex items-start justify-between mb-8 gap-4">
           <div>
-            <h1 className="text-2xl font-bold">MonadStudio analytics</h1>
+            <h1 className="text-2xl font-bold">Monsmith analytics</h1>
             <p className="text-sm text-text-secondary mt-1">
               Live from the database{updatedAt && ` · updated ${updatedAt}`}
             </p>
@@ -226,7 +226,7 @@ export default function StatsPage() {
                       <div
                         className="w-full rounded-t bg-gradient-to-t from-purple-600 to-pink-500"
                         style={{ height: `${height}%` }}
-                        title={`${hour}:00 — ${row?.events ?? 0} events`}
+                        title={`${hour}:00 - ${row?.events ?? 0} events`}
                       />
                       {hour % 6 === 0 && (
                         <span className="text-[9px] text-text-muted">{hour}</span>

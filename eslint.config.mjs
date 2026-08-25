@@ -19,7 +19,7 @@ const eslintConfig = defineConfig([
   ]),
   {
     // Hardhat's config, deploy scripts and Mocha suites run under CommonJS by
-    // design — `require` is correct there, not a lint violation.
+    // design - `require` is correct there, not a lint violation.
     files: ["**/*.cjs"],
     languageOptions: {
       globals: {

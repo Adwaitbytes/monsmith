@@ -1,5 +1,5 @@
 # pymon_service/server.py
-# Flask API Server for PyMon Integration with MonadStudio
+# Flask API Server for PyMon Integration with Monsmith
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -279,7 +279,7 @@ def run_server(host: str = "0.0.0.0", port: int = 5001, debug: bool = False):
     """Run the PyMon API server"""
     print(f"""
     ╔═══════════════════════════════════════════╗
-    ║     PyMon API Server for MonadStudio      ║
+    ║       PyMon API Server for Monsmith       ║
     ╠═══════════════════════════════════════════╣
     ║  Endpoints:                               ║
     ║  POST /api/pymon/compile   - Compile      ║

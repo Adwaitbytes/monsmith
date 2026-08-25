@@ -1,5 +1,5 @@
 -- ============================================
--- MONADSTUDIO SUPABASE SCHEMA
+-- MONSMITH SUPABASE SCHEMA
 -- Complete data capture for investor-ready analytics
 -- ============================================
 

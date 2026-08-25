@@ -263,7 +263,7 @@ export function GasProfiler({ code, onClose }: GasProfilerProps) {
                   </div>
                   <div className="mt-1 text-xs text-text-secondary">
                     {profile.contractName}
-                    {profile.deployment.unbounded && ' — constructor cost depends on its arguments'}
+                    {profile.deployment.unbounded && ' - constructor cost depends on its arguments'}
                   </div>
                 </div>
 

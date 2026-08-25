@@ -1,5 +1,5 @@
 # pymon_service/compiler.py
-# Python Contract Compiler for MonadStudio
+# Python Contract Compiler for Monsmith
 # Compiles Python contracts to EVM bytecode via Solidity transpilation
 
 import json

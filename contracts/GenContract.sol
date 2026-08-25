@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title GenContract
- * @notice Reference ERC20 shipped with MonadStudio. Doubles as the test token for
+ * @notice Reference ERC20 shipped with Monsmith. Doubles as the test token for
  *         the DEX suite, so it stays mintable, burnable and pausable.
  * @dev Deployed with no constructor arguments so the studio's one-click deploy
  *      flow can broadcast the bytecode without prompting for parameters.

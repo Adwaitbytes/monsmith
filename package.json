@@ -1,5 +1,5 @@
 {
-  "name": "monad-studio",
+  "name": "monsmith",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -49,7 +49,7 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   },
-  "description": "MonadStudio: browser IDE for building, auditing and shipping smart contracts on the Monad network.",
+  "description": "Monsmith: browser IDE for building, auditing and shipping smart contracts on the Monad network.",
   "main": "index.js",
   "keywords": [
     "monad",

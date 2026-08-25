@@ -95,7 +95,7 @@ export default function LandingPage() {
             <div className="w-10 h-10 bg-gradient-to-br from-purple-500 via-pink-500 to-cyan-500 rounded-xl flex items-center justify-center font-black text-white text-lg shadow-lg shadow-purple-500/25">
               M
             </div>
-            <span className="font-bold text-xl tracking-tight">MonadStudio</span>
+            <span className="font-bold text-xl tracking-tight">Monsmith</span>
           </Link>
 
           {/* Nav Links */}
@@ -203,7 +203,7 @@ export default function LandingPage() {
               className={`text-xl md:text-2xl mb-10 max-w-2xl mx-auto ${isDark ? 'text-gray-400' : 'text-gray-600'}`}
             >
               The AI-powered IDE for smart contract development. 
-              Write, compile, debug, and deploy—all in your browser.
+              Write, compile, debug, and deploy - all in your browser.
             </motion.p>
 
             {/* CTA Buttons */}
@@ -258,7 +258,7 @@ export default function LandingPage() {
                 <div className="w-3 h-3 rounded-full bg-green-500" />
               </div>
               <span className={`text-xs font-mono ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                MyToken.sol — MonadStudio
+                MyToken.sol - Monsmith
               </span>
               <div />
             </div>
@@ -505,7 +505,7 @@ export default function LandingPage() {
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
               >
-                Launch MonadStudio →
+                Launch Monsmith →
               </motion.button>
             </Link>
           </motion.div>
@@ -519,12 +519,12 @@ export default function LandingPage() {
             <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center font-bold text-white text-sm">
               M
             </div>
-            <span className="font-bold">MonadStudio</span>
+            <span className="font-bold">Monsmith</span>
             <span className={isDark ? 'text-gray-500' : 'text-gray-400'}>© 2025</span>
           </div>
           
           <div className="flex items-center gap-6">
-            <a href="https://github.com/Adwaitbytes/MonadStudio" target="_blank" className={`${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'} transition-colors`}>
+            <a href="https://github.com/Adwaitbytes/monsmith" target="_blank" className={`${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'} transition-colors`}>
               <Github size={20} />
             </a>
             <a href="https://twitter.com" target="_blank" className={`${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'} transition-colors`}>

@@ -303,7 +303,7 @@ async function callOpenRouterModel(
                 "Content-Type": "application/json",
                 // OpenRouter attributes usage to these; both are optional but recommended.
                 "HTTP-Referer": process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
-                "X-Title": "MonadStudio"
+                "X-Title": "Monsmith"
             },
             body: JSON.stringify({
                 model,
@@ -527,7 +527,7 @@ export async function POST(req: Request) {
                         amount: Q402_PRICE_WEI,
                         to: Q402_PAYEE,
                         deadline: Math.floor(Date.now() / 1000) + 3600,
-                        // Unguessable payment id — a predictable one lets a third party
+                        // Unguessable payment id - a predictable one lets a third party
                         // pre-sign a witness for someone else's session.
                         paymentId: `0x${randomBytes(32).toString("hex")}`,
                         nonce: `0x${randomBytes(8).toString("hex")}`

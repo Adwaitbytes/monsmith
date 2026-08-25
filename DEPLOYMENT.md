@@ -1,4 +1,4 @@
-# MonadStudio - AI-Powered Smart Contract IDE
+# Monsmith - AI-Powered Smart Contract IDE
 
 Build, compile, audit, and deploy smart contracts on Monad Network with AI assistance.
 
@@ -26,8 +26,8 @@ Build, compile, audit, and deploy smart contracts on Monad Network with AI assis
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/Adwaitbytes/monad-studio.git
-   cd monad-studio
+   git clone https://github.com/Adwaitbytes/monsmith.git
+   cd monsmith
    ```
 
 2. **Install dependencies**
@@ -43,7 +43,7 @@ Build, compile, audit, and deploy smart contracts on Monad Network with AI assis
 4. **Edit `.env.local` with your credentials:**
 
    ```env
-   # AI Services — at least one is needed for generate/audit/explain/research.
+   # AI Services - at least one is needed for generate/audit/explain/research.
    # Compile, deploy and transfer work without any of these.
    OPENROUTER_API_KEY=sk-or-v1-your_openrouter_key_here
    OPENAI_API_KEY=sk-your_openai_key_here
@@ -267,7 +267,7 @@ MIT License - see LICENSE file for details
 
 ## 📞 Support
 
-- GitHub Issues: [Report a bug](https://github.com/Adwaitbytes/monad-studio/issues)
+- GitHub Issues: [Report a bug](https://github.com/Adwaitbytes/monsmith/issues)
 - Twitter: [@Adwaitbytes](https://twitter.com/Adwaitbytes)
 
 ---

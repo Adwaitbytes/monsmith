@@ -400,8 +400,7 @@ contract MyContract {
                 </p>
                 {result.contract.isProxy && result.contract.implementationAddress && (
                   <p className="mt-1 text-xs text-yellow-500/90">
-                    Proxy contract. The logic lives at {result.contract.implementationAddress} —
-                    import that address to analyze the implementation.
+                    Proxy contract. The logic lives at {result.contract.implementationAddress} -                     import that address to analyze the implementation.
                   </p>
                 )}
               </div>

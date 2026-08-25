@@ -2,7 +2,7 @@
 
 import type { EventType } from "./analytics";
 
-const VISITOR_KEY = "monadstudio.visitor";
+const VISITOR_KEY = "monsmith.visitor";
 
 /**
  * A stable id for this browser.

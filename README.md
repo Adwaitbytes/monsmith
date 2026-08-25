@@ -1,4 +1,4 @@
-# MonadStudio
+# Monsmith
 
 A browser-based smart contract development environment for Monad Network.
 
@@ -7,7 +7,7 @@ A browser-based smart contract development environment for Monad Network.
 
 ## About
 
-MonadStudio is an integrated development environment designed specifically for building smart contracts on Monad Network. It provides a complete toolchain including code editing, compilation, security analysis, and deployment capabilities - all accessible through a web browser without requiring local setup.
+Monsmith is an integrated development environment designed specifically for building smart contracts on Monad Network. It provides a complete toolchain including code editing, compilation, security analysis, and deployment capabilities - all accessible through a web browser without requiring local setup.
 
 The IDE is optimized for Monad's parallel execution architecture, offering unique analysis tools to help developers write contracts that take full advantage of Monad's 10,000 TPS throughput.
 
@@ -80,7 +80,7 @@ npm install
 Create a `.env.local` file with your configuration:
 
 ```env
-# AI provider — at least one is needed for generate/audit/explain/research.
+# AI provider - at least one is needed for generate/audit/explain/research.
 # Compile, deploy and transfer work without any of these.
 OPENAI_API_KEY=your_openai_api_key
 OPENROUTER_API_KEY=your_openrouter_api_key
@@ -104,7 +104,7 @@ The application will be available at `http://localhost:3000`.
 
 ### Production Deployment
 
-MonadStudio can be deployed to Vercel, Netlify, or any Node.js hosting platform.
+Monsmith can be deployed to Vercel, Netlify, or any Node.js hosting platform.
 
 For Vercel:
 ```bash
@@ -244,7 +244,7 @@ To deploy a contract:
 
 ## Monad Network
 
-MonadStudio is built for Monad, an EVM-compatible blockchain with 10,000 TPS throughput via parallel execution.
+Monsmith is built for Monad, an EVM-compatible blockchain with 10,000 TPS throughput via parallel execution.
 
 **Network Configuration**
 
@@ -436,7 +436,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-MonadStudio is built with and for the Monad ecosystem:
+Monsmith is built with and for the Monad ecosystem:
 
 - **Monad Labs** - For building the fastest EVM-compatible blockchain
 - **OpenZeppelin** - For secure, audited smart contract libraries

@@ -1,4 +1,4 @@
--- MonadStudio analytics schema (Neon Postgres).
+-- Monsmith analytics schema (Neon Postgres).
 --
 -- Deliberately narrow: one row per thing that happened, with enough context to
 -- answer "how many people used this, and what did they do" without joins across

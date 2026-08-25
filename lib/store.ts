@@ -18,7 +18,7 @@ export const useThemeStore = create<ThemeState>()(
       toggleTheme: () => set({ theme: get().theme === 'dark' ? 'light' : 'dark' }),
     }),
     {
-      name: 'monadstudio-theme',
+      name: 'monsmith-theme',
     }
   )
 );
@@ -58,7 +58,7 @@ export const useUserStore = create<UserState>()(
       setNetwork: (network) => set({ network }),
     }),
     {
-      name: 'monadstudio-user',
+      name: 'monsmith-user',
     }
   )
 );
@@ -143,7 +143,7 @@ export const useIDEStore = create<IDEState>((set, get) => ({
   isCompiling: false,
   isDeploying: false,
   compileResult: null,
-  consoleOutput: ['🟣 MonadStudio IDE initialized...'],
+  consoleOutput: ['🟣 Monsmith IDE initialized...'],
   terminalOpen: true,
   sidebarOpen: true,
   aiPanelOpen: false,

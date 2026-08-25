@@ -24,7 +24,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /**
  * @title {{TOKEN_NAME}}
  * @dev Advanced DeFi Token with tax system and anti-whale protection
- * @notice Built with MonadStudio for Monad Network
+ * @notice Built with Monsmith for Monad Network
  */
 contract {{CONTRACT_NAME}} is ERC20, ERC20Burnable, Ownable, ReentrancyGuard {
     // Tax configuration
@@ -154,7 +154,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /**
  * @title {{COLLECTION_NAME}}
  * @dev NFT Collection with reveal, royalties, and whitelist
- * @notice Built with MonadStudio for Monad Network
+ * @notice Built with Monsmith for Monad Network
  */
 contract {{CONTRACT_NAME}} is ERC721, ERC721URIStorage, ERC721Burnable, Ownable, ReentrancyGuard {
     // Supply
@@ -328,7 +328,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /**
  * @title {{DAO_NAME}}
  * @dev Governance DAO with proposals, voting, and treasury
- * @notice Built with MonadStudio for Monad Network
+ * @notice Built with Monsmith for Monad Network
  */
 contract {{CONTRACT_NAME}} is Ownable, ReentrancyGuard {
     // Proposal structure
@@ -537,7 +537,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /**
  * @title {{VAULT_NAME}}
  * @dev Staking vault with flexible rewards and lock periods
- * @notice Built with MonadStudio for Monad Network
+ * @notice Built with Monsmith for Monad Network
  */
 contract {{CONTRACT_NAME}} is Ownable, ReentrancyGuard {
 
@@ -749,7 +749,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /**
  * @title {{WALLET_NAME}}
  * @dev Multi-signature wallet with timelock
- * @notice Built with MonadStudio for Monad Network
+ * @notice Built with Monsmith for Monad Network
  */
 contract {{CONTRACT_NAME}} is ReentrancyGuard {
     // Owners

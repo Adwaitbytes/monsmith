@@ -231,7 +231,7 @@ function loopHint(body: string, stateVars: Set<string>): string | null {
     if (loops.length === 0) return null;
 
     if (loops.some((loop) => /\.length/.test(loop.header))) {
-        return 'unbounded loop over a dynamic array — cap the iteration count or paginate the work';
+        return 'unbounded loop over a dynamic array - cap the iteration count or paginate the work';
     }
 
     const withStorage = loops
@@ -239,10 +239,10 @@ function loopHint(body: string, stateVars: Set<string>): string | null {
         .find((variable) => variable !== null);
 
     if (withStorage) {
-        return `storage read of "${withStorage}" inside a loop — cache it in a memory variable before the loop`;
+        return `storage read of "${withStorage}" inside a loop - cache it in a memory variable before the loop`;
     }
 
-    return 'loop bound depends on runtime data — enforce a maximum iteration count';
+    return 'loop bound depends on runtime data - enforce a maximum iteration count';
 }
 
 /**
@@ -250,7 +250,7 @@ function loopHint(body: string, stateVars: Set<string>): string | null {
  *
  * The order reflects what actually defeats the estimator: an unbounded loop or
  * a call into unknown code, then data whose length is only known at runtime.
- * Counting storage writes would be misleading here — writes are bounded, so
+ * Counting storage writes would be misleading here - writes are bounded, so
  * they are never the reason the estimate is "infinite".
  */
 function hintForUnbounded(entry: AbiEntry | undefined, body: string | undefined, stateVars: Set<string>): string {
@@ -259,33 +259,33 @@ function hintForUnbounded(entry: AbiEntry | undefined, body: string | undefined,
         if (loop) return loop;
 
         if (EXTERNAL_CALL_PATTERN.test(body)) {
-            return 'external call in the hot path — the callee sets the real cost, so batch the calls or move them off this function';
+            return 'external call in the hot path - the callee sets the real cost, so batch the calls or move them off this function';
         }
     }
 
     if ((entry?.outputs ?? []).some(isDynamic)) {
-        return 'returns dynamic data (string, bytes or an array) so solc cannot bound the cost — the real gas scales with the returned length';
+        return 'returns dynamic data (string, bytes or an array) so solc cannot bound the cost - the real gas scales with the returned length';
     }
 
     if ((entry?.inputs ?? []).some(isDynamic)) {
-        return 'cost scales with the length of a dynamic argument — validate a maximum length before doing the work';
+        return 'cost scales with the length of a dynamic argument - validate a maximum length before doing the work';
     }
 
     if (body) {
         if (/abi\.encodePacked\s*\(|abi\.encode\s*\(/.test(body)) {
-            return 'hashes or encodes dynamically sized data — encode fixed-width values instead so the cost stops depending on input length';
+            return 'hashes or encodes dynamically sized data - encode fixed-width values instead so the cost stops depending on input length';
         }
 
-        return 'cost depends on runtime values, so solc could not bound it — measure this one on a fork before relying on a fixed gas limit';
+        return 'cost depends on runtime values, so solc could not bound it - measure this one on a fork before relying on a fixed gas limit';
     }
 
-    return 'solc cannot bound this cost — it comes from inherited or data-dependent logic, so check the base contract for loops over dynamic data';
+    return 'solc cannot bound this cost - it comes from inherited or data-dependent logic, so check the base contract for loops over dynamic data';
 }
 
 /** Explains a large but bounded estimate, where storage traffic usually dominates. */
 function hintForExpensive(body: string | undefined, stateVars: Set<string>): string {
     if (!body) {
-        return 'cost comes from an inherited implementation — check the base contract, or call this less often by batching';
+        return 'cost comes from an inherited implementation - check the base contract, or call this less often by batching';
     }
 
     const loop = loopHint(body, stateVars);
@@ -293,22 +293,22 @@ function hintForExpensive(body: string | undefined, stateVars: Set<string>): str
 
     const writes = countStorageWrites(body, stateVars);
     if (writes >= 3) {
-        return `${writes} storage writes — pack the related fields into one struct so they share a slot`;
+        return `${writes} storage writes - pack the related fields into one struct so they share a slot`;
     }
 
     if (EXTERNAL_CALL_PATTERN.test(body)) {
-        return 'external call in the hot path — the callee sets the real cost, so batch the calls or move them off this function';
+        return 'external call in the hot path - the callee sets the real cost, so batch the calls or move them off this function';
     }
 
     if (/\bnew\s+\w+\s*\(/.test(body)) {
-        return 'deploys a contract on every call — deploy once and use a minimal proxy or a registry instead';
+        return 'deploys a contract on every call - deploy once and use a minimal proxy or a registry instead';
     }
 
     if (writes > 0) {
-        return `${writes} storage write${writes === 1 ? '' : 's'} plus surrounding checks — see whether any stored value can be derived on read instead`;
+        return `${writes} storage write${writes === 1 ? '' : 's'} plus surrounding checks - see whether any stored value can be derived on read instead`;
     }
 
-    return 'cost is dominated by storage and arithmetic in this function — look for values that can be computed once and reused';
+    return 'cost is dominated by storage and arithmetic in this function - look for values that can be computed once and reused';
 }
 
 /**

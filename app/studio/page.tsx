@@ -103,7 +103,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 /**
  * @title MyToken
  * @dev ERC20 token with mint and burn capabilities
- * @notice Built with MonadStudio for Monad Network
+ * @notice Built with Monsmith for Monad Network
  */
 contract MyToken is ERC20, ERC20Burnable, Ownable {
     constructor(
@@ -142,7 +142,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 /**
  * @title MyNFT
  * @dev NFT collection with metadata management
- * @notice Built with MonadStudio for Monad Network
+ * @notice Built with Monsmith for Monad Network
  */
 contract MyNFT is ERC721, ERC721URIStorage, ERC721Burnable, Ownable {
     uint256 private _nextTokenId;
@@ -213,7 +213,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 /**
  * @title SimpleDAO
  * @dev Basic DAO with proposal creation and voting
- * @notice Built with MonadStudio for Monad Network
+ * @notice Built with Monsmith for Monad Network
  */
 contract SimpleDAO is Ownable {
     struct Proposal {
@@ -331,7 +331,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /**
  * @title StakingRewards
  * @dev Stake tokens and earn rewards over time
- * @notice Built with MonadStudio for Monad Network
+ * @notice Built with Monsmith for Monad Network
  */
 contract StakingRewards is Ownable, ReentrancyGuard {
     IERC20 public stakingToken;
@@ -690,7 +690,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 /**
  * @title MyToken
  * @dev A simple ERC20 token with minting capability
- * @notice Built with MonadStudio for Monad Network
+ * @notice Built with Monsmith for Monad Network
  */
 contract MyToken is ERC20, Ownable {
     constructor() ERC20("My Monad Token", "MMT") Ownable(msg.sender) {
@@ -1465,7 +1465,7 @@ pragma solidity ^0.8.24;
 /**
  * @title ${fileName.replace('.sol', '')}
  * @dev Your contract description here
- * @notice Built with MonadStudio for Monad Network
+ * @notice Built with Monsmith for Monad Network
  */
 contract ${fileName.replace('.sol', '')} {
     // Your code here
@@ -2366,7 +2366,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
           />
         )}
 
-        {/* Editor Area — min-width keeps the code readable when a side panel opens */}
+        {/* Editor Area - min-width keeps the code readable when a side panel opens */}
         <div className="flex-1 flex flex-col min-w-[320px] overflow-hidden">
           {/* Monaco Editor */}
           <div className={`${terminalOpen ? "flex-1" : "h-full"} min-h-0`}>
@@ -2548,7 +2548,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
                         </div>
                       )}
 
-                      {/* Analysis output — audits, explanations and quick actions land here */}
+                      {/* Analysis output - audits, explanations and quick actions land here */}
                       {(aiLoading || aiResponse || teachModeContent) && (
                         <div className="space-y-3 mb-4">
                           {aiLoading && !aiResponse && (

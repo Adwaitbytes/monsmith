@@ -36,8 +36,7 @@ export default function TutorialPage() {
     };
   }, [slug]);
 
-  // Tutorial markdown is repo-owned, but the inline formatter builds raw HTML —
-  // escape first so a stray angle bracket can never become live markup.
+  // Tutorial markdown is repo-owned, but the inline formatter builds raw HTML -   // escape first so a stray angle bracket can never become live markup.
   const escapeHtml = (text: string) =>
     text
       .replace(/&/g, '&amp;')
@@ -128,7 +127,7 @@ export default function TutorialPage() {
       {/* Content */}
       <div className="relative z-10 max-w-4xl mx-auto px-6 py-12">
         <Link href="/" className="inline-flex items-center gap-2 text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:text-purple-300 mb-8 text-sm font-bold">
-          ← Back to MonadStudio
+          ← Back to Monsmith
         </Link>
 
         <div className="panel-surface border border-border-subtle rounded-3xl p-8 md:p-12 shadow-[var(--shadow-panel)]">
@@ -137,7 +136,7 @@ export default function TutorialPage() {
 
         <div className="mt-8 text-center">
           <Link href="/" className="inline-block px-6 py-3 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-bold transition-all">
-            Try in MonadStudio
+            Try in Monsmith
           </Link>
         </div>
       </div>

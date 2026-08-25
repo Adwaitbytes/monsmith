@@ -1,6 +1,6 @@
 # Building Your First ERC20 Token on Monad
 
-## Welcome to MonadStudio! 🚀
+## Welcome to Monsmith! 🚀
 
 This tutorial will guide you through creating and deploying your first ERC20 token on the Monad blockchain.
 
@@ -213,4 +213,4 @@ You've successfully created and deployed your first ERC20 token on Monad!
 
 ---
 
-*Built with ❤️ by MonadStudio*
+*Built with ❤️ by Monsmith*

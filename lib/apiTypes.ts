@@ -15,7 +15,7 @@ export interface SecurityIssue {
 
 export interface SecurityAnalysis {
   riskLevel: string;
-  /** Penalty points accumulated across findings — higher is worse, unbounded. */
+  /** Penalty points accumulated across findings - higher is worse, unbounded. */
   riskScore: number;
   /** 0-100, higher is safer. Derived from riskScore and clamped. */
   securityScore: number;

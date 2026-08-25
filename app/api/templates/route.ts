@@ -48,7 +48,7 @@ export async function GET(req: Request) {
                 const tutorialPath = path.join(process.cwd(), template.tutorial);
                 tutorial = fs.readFileSync(tutorialPath, "utf-8");
             } catch {
-                // Tutorial not found — the template is still usable without it.
+                // Tutorial not found - the template is still usable without it.
             }
 
             return NextResponse.json({
