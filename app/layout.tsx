@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ThemeSync } from "./ThemeSync";
 
@@ -8,19 +8,29 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-display",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
 });
 
+const description =
+  "A browser-based smart contract studio for Monad. Write, audit, profile, deploy, and migrate contracts with parallel execution in view, all from the browser.";
+
 export const metadata: Metadata = {
-  title: "Monsmith | Build. Learn. Ship to Monad.",
-  description: "The AI-powered IDE for smart contract development on Monad Network. Write, compile, debug, and deploy - all in your browser.",
-  keywords: ["Monad", "Smart Contracts", "Blockchain", "IDE", "Web3", "Solidity", "DeFi", "NFT"],
-  authors: [{ name: "Monsmith Team" }],
+  title: "Monsmith · Smart Contract Studio for Monad",
+  description,
+  keywords: ["Monad", "Smart Contracts", "Solidity", "Parallel EVM", "IDE", "Web3", "Deployment"],
+  authors: [{ name: "Monsmith" }],
+  icons: { icon: "/monsmith-logo.svg" },
   openGraph: {
-    title: "Monsmith | Build. Learn. Ship to Monad.",
-    description: "The AI-powered IDE for smart contract development on Monad Network.",
+    title: "Monsmith · Smart Contract Studio for Monad",
+    description,
     type: "website",
   },
 };
@@ -44,7 +54,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${inter.variable} ${jetbrainsMono.variable} antialiased font-sans`}
+        className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} antialiased font-sans`}
       >
         <ThemeSync />
         {children}

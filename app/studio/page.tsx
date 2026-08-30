@@ -46,6 +46,7 @@ import {
   Gauge,
 } from "lucide-react";
 import Link from "next/link";
+import { MonsmithMark } from "../landing/MonsmithMark";
 import { useThemeStore, useUserStore, useProjectStore, useIDEStore } from "@/lib/store";
 import { useHydrated } from "@/lib/useHydrated";
 import { useResizable } from "@/lib/useResizable";
@@ -2027,29 +2028,24 @@ Be concise but thorough. Format your response with markdown for readability.`;
   if (!mounted) return null;
 
   return (
-    <div className={`h-screen flex flex-col ${isDark ? "bg-[#0d0d12] text-white" : "bg-gray-50 text-gray-900"}`}>
+    <div className="h-screen flex flex-col bg-background text-text-primary">
       {/* Top Bar */}
-      <div className={`h-12 flex items-center justify-between px-4 border-b ${
-        isDark ? "bg-[#16161d] border-white/5" : "bg-white border-gray-200"
-      }`}>
+      <div className="h-12 flex items-center justify-between px-4 border-b border-border-subtle bg-surface-raised">
         {/* Left */}
-        <div className="flex items-center gap-4">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center font-bold text-white text-xs">
-              M
-            </div>
+        <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-2 group">
+            <MonsmithMark size={22} className="transition-transform group-hover:scale-110" />
+            <span className="hidden sm:inline text-sm font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Monsmith</span>
           </Link>
-          <div className={`text-xs ${isDark ? "text-gray-500" : "text-gray-400"}`}>|</div>
-          <span className="text-sm font-medium">{currentFileName}</span>
+          <span className="h-4 w-px bg-border-strong" />
+          <span className="text-sm font-medium text-text-secondary">{currentFileName}</span>
 
           {/* Language Toggle */}
-          <div className={`flex items-center rounded-lg p-0.5 ml-4 ${isDark ? "bg-white/5" : "bg-gray-100"}`}>
+          <div className="flex items-center rounded-lg p-0.5 ml-2 bg-surface-sunken border border-border-subtle">
             <button
               onClick={() => handleLanguageSwitch("solidity")}
               className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                language === "solidity"
-                  ? "bg-purple-600 text-white"
-                  : isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-900"
+                language === "solidity" ? "bg-accent text-white" : "text-text-muted hover:text-text-primary"
               }`}
             >
               Solidity
@@ -2057,12 +2053,10 @@ Be concise but thorough. Format your response with markdown for readability.`;
             <button
               onClick={() => handleLanguageSwitch("python")}
               className={`px-3 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1 ${
-                language === "python"
-                  ? "bg-green-600 text-white"
-                  : isDark ? "text-gray-400 hover:text-white" : "text-gray-500 hover:text-gray-900"
+                language === "python" ? "bg-[#2f9e6d] text-white" : "text-text-muted hover:text-text-primary"
               }`}
             >
-              🐍 Python
+              Python
             </button>
           </div>
         </div>
@@ -2072,10 +2066,8 @@ Be concise but thorough. Format your response with markdown for readability.`;
           <motion.button
             onClick={() => handleCompile()}
             disabled={isCompiling}
-            className={`px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 ${
-              isCompiling
-                ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                : "bg-purple-600 hover:bg-purple-500 text-white"
+            className={`px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors ${
+              isCompiling ? "bg-surface-overlay text-text-muted cursor-not-allowed" : "bg-accent hover:opacity-90 text-white"
             }`}
             whileTap={{ scale: 0.98 }}
           >
@@ -2086,22 +2078,20 @@ Be concise but thorough. Format your response with markdown for readability.`;
           <motion.button
             onClick={language === "python" ? handlePythonAudit : handleAudit}
             disabled={aiLoading}
-            className={`px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 ${
-              isDark ? "bg-white/5 hover:bg-white/10" : "bg-gray-100 hover:bg-gray-200"
-            }`}
+            className="px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 panel-surface border border-border-subtle hover:border-border-strong transition-colors"
             whileTap={{ scale: 0.98 }}
           >
             <Shield size={14} />
-            {language === "python" ? "🔍 Audit" : "Audit"}
+            Audit
           </motion.button>
 
           <motion.button
             onClick={handleDeploy}
             disabled={isDeploying || !compileResult?.success}
-            className={`px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 ${
+            className={`px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 border transition-colors ${
               isDeploying || !compileResult?.success
-                ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                : "bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white"
+                ? "border-border-subtle text-text-muted cursor-not-allowed"
+                : "bg-accent hover:opacity-90 text-white border-transparent"
             }`}
             whileTap={{ scale: 0.98 }}
           >
@@ -2111,14 +2101,14 @@ Be concise but thorough. Format your response with markdown for readability.`;
         </div>
 
         {/* Right */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           {/* Network Toggle */}
           <button
             onClick={() => setNetwork(network === "testnet" ? "mainnet" : "testnet")}
-            className={`px-3 py-1 rounded-full text-xs font-medium border ${
+            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
               network === "mainnet"
-                ? "border-red-500/50 text-red-400 bg-red-500/10"
-                : "border-emerald-500/50 text-emerald-400 bg-emerald-500/10"
+                ? "border-red-500/40 text-red-400 bg-red-500/10"
+                : "border-border-strong text-text-secondary hover:text-text-primary"
             }`}
           >
             {network.toUpperCase()}
@@ -2127,18 +2117,19 @@ Be concise but thorough. Format your response with markdown for readability.`;
           {/* Theme Toggle */}
           <motion.button
             onClick={toggleTheme}
-            className={`p-2 rounded-lg ${isDark ? "bg-white/5 hover:bg-white/10" : "bg-gray-100 hover:bg-gray-200"}`}
+            className="p-2 rounded-lg panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"
             whileTap={{ scale: 0.95 }}
+            title="Toggle theme"
           >
-            {isDark ? <Sun size={16} className="text-yellow-400" /> : <Moon size={16} className="text-purple-600" />}
+            {isDark ? <Sun size={16} /> : <Moon size={16} />}
           </motion.button>
 
           {/* Terminal Toggle */}
           <motion.button
             onClick={toggleTerminal}
-            className={`p-2 rounded-lg ${terminalOpen ? "bg-green-600 text-white" : isDark ? "bg-white/5 hover:bg-white/10" : "bg-gray-100 hover:bg-gray-200"}`}
+            className={`p-2 rounded-lg ${terminalOpen ? "bg-accent text-white border border-transparent" : "panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"}`}
             whileTap={{ scale: 0.95 }}
-            title="Toggle Terminal"
+            title="Toggle terminal"
           >
             <Terminal size={16} />
           </motion.button>
@@ -2146,9 +2137,9 @@ Be concise but thorough. Format your response with markdown for readability.`;
           {/* AI Panel Toggle */}
           <motion.button
             onClick={() => openSidePanel("ai")}
-            className={`p-2 rounded-lg ${aiPanelOpen ? "bg-purple-600 text-white" : isDark ? "bg-white/5 hover:bg-white/10" : "bg-gray-100 hover:bg-gray-200"}`}
+            className={`p-2 rounded-lg ${aiPanelOpen ? "bg-accent text-white border border-transparent" : "panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"}`}
             whileTap={{ scale: 0.95 }}
-            title="AI Assistant"
+            title="AI assistant"
           >
             <Brain size={16} />
           </motion.button>
@@ -2156,17 +2147,17 @@ Be concise but thorough. Format your response with markdown for readability.`;
           {/* Parallel Profiler Toggle */}
           <motion.button
             onClick={() => openSidePanel("profiler")}
-            className={`p-2 rounded-lg ${parallelProfilerOpen ? "bg-gradient-to-r from-purple-600 to-blue-600 text-white" : isDark ? "bg-white/5 hover:bg-white/10" : "bg-gray-100 hover:bg-gray-200"}`}
+            className={`p-2 rounded-lg ${parallelProfilerOpen ? "bg-accent text-white border border-transparent" : "panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"}`}
             whileTap={{ scale: 0.95 }}
-            title="Parallel Execution Profiler"
+            title="Parallel execution profiler"
           >
             <Gauge size={16} />
           </motion.button>
 
-          {/* Migration Tool Toggle */}
+          {/* Gas Profiler Toggle */}
           <motion.button
             onClick={() => openSidePanel("gas")}
-            className={`p-2 rounded-lg ${gasOpen ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white" : isDark ? "bg-white/5 hover:bg-white/10" : "bg-gray-100 hover:bg-gray-200"}`}
+            className={`p-2 rounded-lg ${gasOpen ? "bg-accent text-white border border-transparent" : "panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"}`}
             whileTap={{ scale: 0.95 }}
             title="Gas profiler"
           >
@@ -2175,7 +2166,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
 
           <motion.button
             onClick={() => openSidePanel("interact")}
-            className={`p-2 rounded-lg ${interactOpen ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white" : isDark ? "bg-white/5 hover:bg-white/10" : "bg-gray-100 hover:bg-gray-200"}`}
+            className={`p-2 rounded-lg ${interactOpen ? "bg-accent text-white border border-transparent" : "panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"}`}
             whileTap={{ scale: 0.95 }}
             title="Interact with a deployed contract"
           >
@@ -2184,9 +2175,9 @@ Be concise but thorough. Format your response with markdown for readability.`;
 
           <motion.button
             onClick={() => openSidePanel("migration")}
-            className={`p-2 rounded-lg ${migrationOpen ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white" : isDark ? "bg-white/5 hover:bg-white/10" : "bg-gray-100 hover:bg-gray-200"}`}
+            className={`p-2 rounded-lg ${migrationOpen ? "bg-accent text-white border border-transparent" : "panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"}`}
             whileTap={{ scale: 0.95 }}
-            title="Contract Migration (ETH → Monad)"
+            title="Contract migration"
           >
             <ArrowRightLeft size={16} />
           </motion.button>
@@ -2195,32 +2186,26 @@ Be concise but thorough. Format your response with markdown for readability.`;
           {!isConnected ? (
             <motion.button
               onClick={connectWallet}
-              className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                isDark
-                  ? "bg-white text-black hover:bg-gray-200"
-                  : "bg-gray-900 text-white hover:bg-gray-700"
-              }`}
+              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-text-primary text-background hover:opacity-90 transition-opacity"
               whileTap={{ scale: 0.98 }}
             >
               Connect Wallet
             </motion.button>
           ) : (
             <div className="relative group">
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-white/5 rounded-lg cursor-pointer hover:bg-white/10 transition-colors">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+              <div className="flex items-center gap-2 px-3 py-1.5 panel-surface border border-border-subtle rounded-lg cursor-pointer hover:border-border-strong transition-colors">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                 <span className="text-xs font-mono">{walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}</span>
               </div>
-              
+
               {/* Disconnect Dropdown */}
               <div className="absolute right-0 top-full mt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
                 <motion.button
                   onClick={() => {
                     disconnect();
-                    addConsoleOutput("👋 Wallet disconnected");
+                    addConsoleOutput("Wallet disconnected");
                   }}
-                  className={`px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap flex items-center gap-2 ${
-                    isDark ? "bg-[#16161d] hover:bg-red-500/10 text-red-400" : "bg-white hover:bg-red-50 text-red-600"
-                  } border ${isDark ? "border-white/10" : "border-gray-200"} shadow-lg`}
+                  className="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap flex items-center gap-2 panel-surface border border-border-subtle text-red-400 hover:bg-red-500/10 shadow-[var(--shadow-panel)]"
                   whileTap={{ scale: 0.98 }}
                 >
                   <X size={14} />

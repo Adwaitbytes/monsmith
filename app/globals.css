@@ -35,6 +35,13 @@
   --text-secondary: #4a4a58;
   --text-muted: #6e6e80;
 
+  /* Single accent, used with restraint. `accent-soft` tints surfaces; `strong`
+     is the deep end for depth on gradients. Violet is the only brand hue. */
+  --accent: #6d28d9;
+  --accent-strong: #4c1d95;
+  --accent-soft: rgba(109, 40, 217, 0.08);
+  --accent-line: rgba(109, 40, 217, 0.22);
+
   /* The terminal keeps a dark canvas in both themes: it is a console, and
      coloured log output is unreadable on white. It is tinted, not black. */
   --terminal-bg: #1c1c26;
@@ -62,6 +69,12 @@
   --text-secondary: #b4b4c4;
   --text-muted: #7e7e92;
 
+  /* Brightened one step so the accent still reads on the near-black ground. */
+  --accent: #8b5cf6;
+  --accent-strong: #a78bfa;
+  --accent-soft: rgba(139, 92, 246, 0.14);
+  --accent-line: rgba(139, 92, 246, 0.3);
+
   --terminal-bg: #0a0a0f;
   --terminal-text: #e6e6ef;
 
@@ -83,7 +96,12 @@
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-line: var(--accent-line);
   --font-sans: var(--font-inter);
+  --font-display: var(--font-display);
   --font-mono: var(--font-mono);
 }
 
@@ -213,4 +231,39 @@ body {
 
 .animate-float {
   animation: float 3s ease-in-out infinite;
+}
+
+/* Signature: current flowing through execution lanes. A moving dash offset on
+   the graph edges reads as work moving along each lane. */
+@keyframes dash-flow {
+  to {
+    stroke-dashoffset: -1000;
+  }
+}
+
+.lane-flow {
+  stroke-dasharray: 5 11;
+  animation: dash-flow 9s linear infinite;
+}
+
+/* Hairline technical grid, tuned per theme by the ink colour it draws with. */
+.blueprint-grid {
+  background-image:
+    linear-gradient(to right, var(--border-subtle) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border-subtle) 1px, transparent 1px);
+  background-size: 64px 64px;
+}
+
+/* One quiet accent glow, reused instead of scattering coloured orbs. */
+.accent-veil {
+  background: radial-gradient(60% 60% at 50% 0%, var(--accent-soft), transparent 70%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lane-flow,
+  .animate-float,
+  .animate-pulse-glow,
+  .animate-fade-in-up {
+    animation: none !important;
+  }
 }

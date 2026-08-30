@@ -2,540 +2,658 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
-import { 
-  Code2, 
-  Shield, 
-  Rocket, 
-  Brain, 
-  Monitor,
-  ChevronRight,
+import { motion, useReducedMotion, type Variants } from "framer-motion";
+import {
+  ArrowRight,
+  ArrowUpRight,
+  FileCode2,
+  Network,
+  Cpu,
+  UploadCloud,
+  GitCompareArrows,
+  ShieldCheck,
   Sun,
   Moon,
   Github,
-  Twitter,
-  ArrowRight,
-  Play,
-  Sparkles,
-  Terminal,
-  FileCode,
-  Bug
+  Check,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useThemeStore } from "@/lib/store";
 import { useHydrated } from "@/lib/useHydrated";
 import { track } from "@/lib/track";
+import { MonsmithMark } from "./MonsmithMark";
+import { ExecutionGraph } from "./ExecutionGraph";
+import {
+  SmoothScroll,
+  ScrollProgress,
+  RevealWords,
+  Magnetic,
+  Parallax,
+  AnimatedRule,
+} from "./motion";
+
+// WebGL hero backdrop; client-only and lazy so it never blocks first paint.
+const HeroScene = dynamic(() => import("./HeroScene"), { ssr: false });
+
+const REVEAL: Variants = {
+  hidden: { opacity: 0, y: 18 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } },
+};
+
+const reveal = {
+  variants: REVEAL,
+  initial: "hidden" as const,
+  whileInView: "show" as const,
+  viewport: { once: true, margin: "-80px" },
+};
+
+const EASE = [0.16, 1, 0.3, 1] as const;
+
+/** A single headline line that rises out from a clip mask on load. */
+function MaskLine({
+  children,
+  delay = 0,
+  className,
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  className?: string;
+}) {
+  const reduce = useReducedMotion();
+  return (
+    <span className="block overflow-hidden pb-[0.08em]">
+      <motion.span
+        className={`block ${className ?? ""}`}
+        initial={reduce ? { opacity: 0 } : { y: "110%" }}
+        animate={reduce ? { opacity: 1 } : { y: 0 }}
+        transition={{ duration: 0.9, ease: EASE, delay }}
+      >
+        {children}
+      </motion.span>
+    </span>
+  );
+}
+
+/** Small mono label that sits above a section title. */
+function Eyebrow({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-accent">
+      <span className="h-px w-6 bg-accent-line" />
+      {children}
+    </div>
+  );
+}
 
 export default function LandingPage() {
   const { theme, toggleTheme } = useThemeStore();
   const mounted = useHydrated();
-  const [metrics, setMetrics] = useState({
-    developers: 2847,
-    contracts: 12543,
-    deployments: 8921,
-    gasOptimized: "42M"
-  });
+  const reduce = useReducedMotion();
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     track("page_view", { detail: { page: "landing" } });
   }, []);
 
   useEffect(() => {
-    // Simulate live metrics updates
-    const interval = setInterval(() => {
-      setMetrics(prev => ({
-        developers: prev.developers + Math.floor(Math.random() * 3),
-        contracts: prev.contracts + Math.floor(Math.random() * 5),
-        deployments: prev.deployments + Math.floor(Math.random() * 4),
-        gasOptimized: prev.gasOptimized
-      }));
-    }, 5000);
-    return () => clearInterval(interval);
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   if (!mounted) return null;
-
-  const isDark = theme === 'dark';
+  const isDark = theme === "dark";
 
   return (
-    <div className={`min-h-screen transition-colors duration-500 ${
-      isDark 
-        ? 'bg-[#0a0a0f] text-white' 
-        : 'bg-[#fafafa] text-gray-900'
-    }`}>
-      {/* Animated Background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        {/* Gradient Orbs */}
-        <div className={`absolute top-0 left-1/4 w-[600px] h-[600px] rounded-full blur-[120px] ${
-          isDark ? 'bg-purple-600/20' : 'bg-purple-400/20'
-        }`} />
-        <div className={`absolute bottom-0 right-1/4 w-[500px] h-[500px] rounded-full blur-[100px] ${
-          isDark ? 'bg-cyan-500/15' : 'bg-cyan-400/15'
-        }`} />
-        <div className={`absolute top-1/2 left-1/2 w-[400px] h-[400px] rounded-full blur-[80px] ${
-          isDark ? 'bg-pink-500/10' : 'bg-pink-400/10'
-        }`} />
-        
-        {/* Grid Pattern */}
-        <div className={`absolute inset-0 ${isDark ? 'opacity-[0.02]' : 'opacity-[0.03]'}`}
-          style={{
-            backgroundImage: `linear-gradient(${isDark ? '#fff' : '#000'} 1px, transparent 1px),
-                             linear-gradient(90deg, ${isDark ? '#fff' : '#000'} 1px, transparent 1px)`,
-            backgroundSize: '60px 60px'
-          }}
-        />
-      </div>
-
-      {/* Navigation */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 ${
-        isDark ? 'bg-[#0a0a0f]/80' : 'bg-white/80'
-      } backdrop-blur-xl border-b ${isDark ? 'border-white/5' : 'border-gray-200'}`}>
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-500 via-pink-500 to-cyan-500 rounded-xl flex items-center justify-center font-black text-white text-lg shadow-lg shadow-purple-500/25">
-              M
-            </div>
-            <span className="font-bold text-xl tracking-tight">Monsmith</span>
+    <div className="min-h-screen bg-background text-text-primary selection:bg-accent-soft">
+      <SmoothScroll />
+      <ScrollProgress />
+      {/* ---------------------------------------------------------------- Nav */}
+      <motion.nav
+        initial={{ y: -80, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+        className={`fixed inset-x-0 top-0 z-50 border-b transition-colors duration-300 ${
+          scrolled
+            ? "border-border-subtle bg-background/80 backdrop-blur-xl"
+            : "border-transparent bg-transparent"
+        }`}
+      >
+        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+          <Link href="/" className="group flex items-center gap-2.5">
+            <MonsmithMark size={27} className="transition-transform duration-300 group-hover:scale-110" />
+            <span className="font-display text-lg font-semibold tracking-tight">Monsmith</span>
           </Link>
 
-          {/* Nav Links */}
-          <div className="hidden md:flex items-center gap-8">
-            <Link href="#features" className={`text-sm font-medium ${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'} transition-colors`}>
-              Features
-            </Link>
-            <Link href="#ide" className={`text-sm font-medium ${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'} transition-colors`}>
-              IDE
-            </Link>
-            <Link href="/tutorials/erc20-token" className={`text-sm font-medium ${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'} transition-colors`}>
-              Learn
-            </Link>
-            <a href="https://docs.monad.xyz" target="_blank" className={`text-sm font-medium ${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-600 hover:text-gray-900'} transition-colors`}>
-              Docs
-            </a>
+          <div className="hidden items-center gap-8 md:flex">
+            {[
+              ["Workflow", "#workflow"],
+              ["Execution", "#execution"],
+              ["Product", "#product"],
+              ["Roadmap", "#roadmap"],
+              ["Docs", "https://docs.monad.xyz"],
+            ].map(([label, href]) => (
+              <a
+                key={href}
+                href={href}
+                {...(href.startsWith("http") ? { target: "_blank", rel: "noreferrer" } : {})}
+                className="group relative text-sm text-text-secondary transition-colors hover:text-text-primary"
+              >
+                {label}
+                <span className="absolute -bottom-1.5 left-0 h-px w-0 bg-accent transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:w-full" />
+              </a>
+            ))}
           </div>
 
-          {/* Right Side */}
-          <div className="flex items-center gap-4">
-            {/* Theme Toggle */}
-            <motion.button
+          <div className="flex items-center gap-2">
+            <button
               onClick={toggleTheme}
-              className={`p-2 rounded-full ${isDark ? 'bg-white/5 hover:bg-white/10' : 'bg-gray-100 hover:bg-gray-200'} transition-colors`}
-              whileTap={{ scale: 0.95 }}
+              aria-label="Toggle theme"
+              className="grid h-9 w-9 place-items-center rounded-full border border-border-subtle text-text-secondary transition-colors hover:text-text-primary"
             >
-              <AnimatePresence mode="wait">
-                {isDark ? (
-                  <motion.div
-                    key="sun"
-                    initial={{ rotate: -90, opacity: 0 }}
-                    animate={{ rotate: 0, opacity: 1 }}
-                    exit={{ rotate: 90, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Sun size={18} className="text-yellow-400" />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="moon"
-                    initial={{ rotate: 90, opacity: 0 }}
-                    animate={{ rotate: 0, opacity: 1 }}
-                    exit={{ rotate: -90, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    <Moon size={18} className="text-purple-600" />
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </motion.button>
-
-            {/* Launch App Button */}
-            <Link href="/studio">
-              <motion.button
-                className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full text-sm font-semibold shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-shadow flex items-center gap-2"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+              {isDark ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            <Magnetic strength={0.4}>
+              <Link
+                href="/studio"
+                onClick={() => track("page_view", { detail: { event: "cta_click", cta: "nav_open_studio" } })}
+                className="group inline-flex items-center gap-1.5 rounded-full bg-accent px-4 py-2 text-sm font-medium text-white transition-transform hover:-translate-y-0.5"
               >
-                Launch Studio
-                <ArrowRight size={16} />
-              </motion.button>
-            </Link>
+                Open Studio
+                <ArrowRight size={15} className="transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            </Magnetic>
           </div>
         </div>
-      </nav>
+      </motion.nav>
 
-      {/* Hero Section */}
-      <section className="relative pt-32 pb-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center max-w-4xl mx-auto">
-            {/* Badge */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium mb-8 ${
-                isDark 
-                  ? 'bg-purple-500/10 text-purple-400 border border-purple-500/20' 
-                  : 'bg-purple-50 text-purple-600 border border-purple-200'
-              }`}
-            >
-              <Sparkles size={14} />
-              Built for Monad&apos;s 10,000 TPS
-              <ChevronRight size={14} />
+      {/* --------------------------------------------------------------- Hero */}
+      <section className="relative overflow-hidden px-6 pb-24 pt-36">
+        <div className="pointer-events-none absolute inset-0 blueprint-grid opacity-40" />
+        {/* WebGL parallel-execution field, masked so it fades behind the headline */}
+        <div className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(130%_105%_at_74%_18%,black,transparent_72%)]">
+          <HeroScene dark={isDark} />
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] accent-veil" />
+
+        <div className="relative mx-auto max-w-6xl">
+          <div className="max-w-3xl">
+            <motion.div {...reveal}>
+              <Eyebrow>Smart contract studio · built for Monad</Eyebrow>
             </motion.div>
-
-            {/* Main Headline */}
-            <motion.h1
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="text-5xl md:text-7xl font-black tracking-tight leading-[1.1] mb-6"
-            >
-              Build. Learn.
-              <br />
-              <span className="bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-500 bg-clip-text text-transparent">
-                Ship to Monad.
-              </span>
-            </motion.h1>
-
-            {/* Subheadline */}
+            <h1 className="mt-6 font-display text-5xl font-semibold leading-[1.02] tracking-tight sm:text-6xl md:text-7xl">
+              <MaskLine delay={0.05}>Build for Monad</MaskLine>
+              <MaskLine delay={0.16} className="text-accent">
+                Execute without friction
+              </MaskLine>
+            </h1>
             <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className={`text-xl md:text-2xl mb-10 max-w-2xl mx-auto ${isDark ? 'text-gray-400' : 'text-gray-600'}`}
+              {...reveal}
+              transition={{ ...REVEAL.show, delay: 0.35 }}
+              className="mt-7 max-w-xl text-lg leading-relaxed text-text-secondary"
             >
-              The AI-powered IDE for smart contract development. 
-              Write, compile, debug, and deploy - all in your browser.
+              A browser-based studio to write, profile, deploy, and migrate smart
+              contracts, with Monad&apos;s parallel execution in view the whole way.
             </motion.p>
 
-            {/* CTA Buttons */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="flex flex-col sm:flex-row items-center justify-center gap-4"
-            >
-              <Link href="/studio">
-                <motion.button
-                  className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-2xl text-lg font-bold shadow-2xl shadow-purple-500/30 hover:shadow-purple-500/50 transition-all flex items-center gap-3"
-                  whileHover={{ scale: 1.02, y: -2 }}
-                  whileTap={{ scale: 0.98 }}
+            <motion.div {...reveal} transition={{ ...REVEAL.show, delay: 0.45 }} className="mt-9 flex flex-wrap items-center gap-3">
+              <Magnetic strength={0.4}>
+                <Link
+                  href="/studio"
+                  onClick={() => track("page_view", { detail: { event: "cta_click", cta: "hero_open_studio" } })}
+                  className="group inline-flex items-center gap-2 rounded-full bg-accent px-6 py-3 text-base font-medium text-white shadow-[0_8px_30px_-8px] shadow-accent transition-transform hover:-translate-y-0.5"
                 >
-                  Start Building Free
-                  <Rocket size={20} />
-                </motion.button>
-              </Link>
-              
-              <motion.button
-                className={`px-8 py-4 rounded-2xl text-lg font-bold flex items-center gap-3 ${
-                  isDark 
-                    ? 'bg-white/5 hover:bg-white/10 border border-white/10' 
-                    : 'bg-gray-100 hover:bg-gray-200 border border-gray-200'
-                } transition-all`}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Play size={20} className="text-purple-500" />
-                Watch Demo
-              </motion.button>
+                  Open Studio
+                  <ArrowRight size={18} className="transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              </Magnetic>
+              <Magnetic strength={0.25}>
+                <a
+                  href="#workflow"
+                  className="inline-flex items-center gap-2 rounded-full border border-border-strong px-6 py-3 text-base font-medium text-text-primary transition-colors hover:bg-surface-raised"
+                >
+                  See how it works
+                </a>
+              </Magnetic>
             </motion.div>
           </div>
 
-          {/* Hero Visual - IDE Preview */}
+          {/* Signature execution graph */}
           <motion.div
-            initial={{ opacity: 0, y: 40 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className={`mt-20 rounded-3xl overflow-hidden border ${
-              isDark ? 'border-white/10 bg-[#111]/50' : 'border-gray-200 bg-white/50'
-            } backdrop-blur-xl shadow-2xl`}
+            {...reveal}
+            transition={{ ...REVEAL.show, delay: 0.15 }}
+            className="mt-16 rounded-2xl border border-border-subtle bg-surface-base/70 p-4 shadow-[var(--shadow-panel)] backdrop-blur-sm sm:p-8"
           >
-            {/* IDE Header */}
-            <div className={`h-12 px-4 flex items-center justify-between border-b ${
-              isDark ? 'border-white/5 bg-[#0a0a0f]' : 'border-gray-100 bg-gray-50'
-            }`}>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-500" />
-                <div className="w-3 h-3 rounded-full bg-yellow-500" />
-                <div className="w-3 h-3 rounded-full bg-green-500" />
-              </div>
-              <span className={`text-xs font-mono ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                MyToken.sol - Monsmith
+            <Parallax amount={26}>
+              <ExecutionGraph className="mx-auto max-w-3xl" />
+            </Parallax>
+          </motion.div>
+
+          {/* Status line */}
+          <motion.div
+            {...reveal}
+            className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[11px] uppercase tracking-[0.14em] text-text-muted"
+          >
+            {["Monad", "EVM compatible", "Parallel execution", "Browser native"].map((s, i) => (
+              <span key={s} className="flex items-center gap-6">
+                {i > 0 && <span className="h-1 w-1 rounded-full bg-accent" />}
+                {s}
               </span>
-              <div />
-            </div>
-
-            {/* IDE Content */}
-            <div className="grid grid-cols-12">
-              {/* Sidebar */}
-              <div className={`col-span-2 p-4 border-r ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                <div className={`text-xs font-bold uppercase tracking-wider mb-4 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                  Explorer
-                </div>
-                <div className="space-y-2">
-                  <div className={`flex items-center gap-2 text-sm ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>
-                    <FileCode size={14} />
-                    <span>MyToken.sol</span>
-                  </div>
-                  <div className={`flex items-center gap-2 text-sm ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                    <FileCode size={14} />
-                    <span>Deploy.js</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Code Editor */}
-              <div className={`col-span-7 p-6 font-mono text-sm border-r ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-                <pre className={isDark ? 'text-gray-300' : 'text-gray-700'}>
-                  <code>
-                    <span className="text-purple-400">{'// SPDX-License-Identifier: MIT'}</span>{'\n'}
-                    <span className="text-pink-400">pragma</span> <span className="text-cyan-400">solidity</span> ^0.8.24;{'\n\n'}
-                    <span className="text-pink-400">import</span> <span className="text-green-400">{'"@openzeppelin/contracts/token/ERC20/ERC20.sol"'}</span>;{'\n\n'}
-                    <span className="text-pink-400">contract</span> <span className="text-yellow-400">MyToken</span> <span className="text-pink-400">is</span> ERC20 {'{'}{'\n'}
-                    {'    '}<span className="text-pink-400">constructor</span>() ERC20(<span className="text-green-400">{'"Monad Token"'}</span>, <span className="text-green-400">{'"MON"'}</span>) {'{'}{'\n'}
-                    {'        '}_mint(msg.sender, <span className="text-cyan-400">1000000</span> * <span className="text-cyan-400">10</span> ** decimals());{'\n'}
-                    {'    }'}{'\n'}
-                    {'}'}
-                  </code>
-                </pre>
-              </div>
-
-              {/* AI Panel */}
-              <div className={`col-span-3 p-4 ${isDark ? 'bg-[#0a0a0f]/50' : 'bg-gray-50'}`}>
-                <div className="flex items-center gap-2 mb-4">
-                  <Brain className="text-purple-500" size={16} />
-                  <span className="text-sm font-bold">AI Assistant</span>
-                </div>
-                <div className={`p-3 rounded-xl text-xs ${
-                  isDark ? 'bg-purple-500/10 border border-purple-500/20' : 'bg-purple-50 border border-purple-100'
-                }`}>
-                  <p className={isDark ? 'text-purple-300' : 'text-purple-700'}>
-                    ✨ Contract looks good! Consider adding a burn function for deflationary tokenomics.
-                  </p>
-                </div>
-                <button className={`mt-4 w-full py-2 rounded-lg text-xs font-medium ${
-                  isDark ? 'bg-white/5 hover:bg-white/10' : 'bg-gray-100 hover:bg-gray-200'
-                } transition-colors`}>
-                  Run Security Audit
-                </button>
-              </div>
-            </div>
-
-            {/* Terminal */}
-            <div className={`h-32 p-4 border-t ${isDark ? 'border-white/5 bg-[#0a0a0f]' : 'border-gray-100 bg-gray-50'}`}>
-              <div className="flex items-center gap-2 mb-3">
-                <Terminal size={14} className="text-green-500" />
-                <span className="text-xs font-mono text-gray-500">Terminal</span>
-              </div>
-              <div className="font-mono text-xs space-y-1">
-                <p className="text-green-400">✓ Compiled successfully</p>
-                <p className="text-cyan-400">Contract size: 2.4 KB</p>
-                <p className="text-gray-500">Ready to deploy...</p>
-              </div>
-            </div>
+            ))}
           </motion.div>
         </div>
       </section>
 
-      {/* Metrics Section */}
-      <section className={`py-16 border-y ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            {[
-              { label: 'Active Developers', value: metrics.developers.toLocaleString(), suffix: '+' },
-              { label: 'Contracts Created', value: metrics.contracts.toLocaleString(), suffix: '' },
-              { label: 'Deployments', value: metrics.deployments.toLocaleString(), suffix: '' },
-              { label: 'Gas Saved', value: metrics.gasOptimized, suffix: ' GWEI' },
-            ].map((metric, idx) => (
-              <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.1 }}
-                className="text-center"
-              >
-                <div className="text-3xl md:text-4xl font-black bg-gradient-to-r from-purple-500 to-pink-500 bg-clip-text text-transparent">
-                  {metric.value}{metric.suffix}
-                </div>
-                <div className={`text-sm mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>
-                  {metric.label}
-                </div>
-              </motion.div>
-            ))}
-          </div>
+      {/* -------------------------------------------------------- Proof strip */}
+      <section className="border-y border-border-subtle bg-surface-sunken/50">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-8 gap-y-4 px-6 py-6 font-mono text-xs text-text-muted">
+          {[
+            "Solidity 0.8.24",
+            "Hardhat pipeline",
+            "OpenZeppelin resolved",
+            "45 / 45 tests passing",
+            "Monad testnet + mainnet",
+          ].map((f) => (
+            <span key={f} className="flex items-center gap-2">
+              <Check size={13} className="text-accent" />
+              {f}
+            </span>
+          ))}
         </div>
       </section>
 
-      {/* Features Section */}
-      <section id="features" className="py-24 px-6">
-        <div className="max-w-7xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-4xl md:text-5xl font-black mb-4">
-              Everything you need to
-              <br />
-              <span className="bg-gradient-to-r from-cyan-500 to-purple-500 bg-clip-text text-transparent">
-                ship faster
-              </span>
+      {/* ------------------------------------------------------------ Problem */}
+      <section className="px-6 py-20">
+        <div className="mx-auto grid max-w-6xl items-center gap-14 md:grid-cols-2">
+          <motion.div {...reveal}>
+            <Eyebrow>The shift</Eyebrow>
+            <h2 className="mt-6 font-display text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
+              <RevealWords text="Monad changed how execution works. Your workflow should see it" />
             </h2>
-            <p className={`text-lg max-w-2xl mx-auto ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              From idea to mainnet in minutes. No setup, no configuration, just code.
+            <p className="mt-6 max-w-md text-lg leading-relaxed text-text-secondary">
+              Your Solidity and your tooling already run on Monad. What&apos;s missing
+              is a workspace that treats parallel execution as a first-class part of
+              writing contracts, not an afterthought at deploy time.
             </p>
           </motion.div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              {
-                icon: <Code2 className="text-purple-500" />,
-                title: 'Browser IDE',
-                description: 'Full-featured code editor with Solidity syntax highlighting, autocomplete, and real-time error detection.',
-                gradient: 'from-purple-500/20 to-purple-600/5'
-              },
-              {
-                icon: <Brain className="text-pink-500" />,
-                title: 'AI Code Assistant',
-                description: 'Generate contracts from prompts, get intelligent suggestions, and auto-fix errors with explanations.',
-                gradient: 'from-pink-500/20 to-pink-600/5'
-              },
-              {
-                icon: <Bug className="text-red-500" />,
-                title: 'Smart Debugging',
-                description: 'When compilation fails, get human-readable explanations and "Teach Me" lessons for every error.',
-                gradient: 'from-red-500/20 to-red-600/5'
-              },
-              {
-                icon: <Shield className="text-green-500" />,
-                title: 'Security Audits',
-                description: 'Automated vulnerability scanning, gas optimization tips, and best-practice recommendations.',
-                gradient: 'from-green-500/20 to-green-600/5'
-              },
-              {
-                icon: <Rocket className="text-cyan-500" />,
-                title: 'One-Click Deploy',
-                description: 'Deploy to Monad testnet or mainnet instantly. We handle the complexity, you ship the product.',
-                gradient: 'from-cyan-500/20 to-cyan-600/5'
-              },
-              {
-                icon: <Monitor className="text-yellow-500" />,
-                title: 'Live Monitoring',
-                description: 'Track transactions, events, gas usage, and contract interactions in real-time.',
-                gradient: 'from-yellow-500/20 to-yellow-600/5'
-              },
-            ].map((feature, idx) => (
-              <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.1 }}
-                className={`p-6 rounded-3xl border ${
-                  isDark ? 'border-white/5 bg-white/[0.02]' : 'border-gray-100 bg-white'
-                } hover:border-purple-500/30 transition-all group`}
-              >
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-4 bg-gradient-to-br ${feature.gradient}`}>
-                  {feature.icon}
-                </div>
-                <h3 className="text-xl font-bold mb-2">{feature.title}</h3>
-                <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>{feature.description}</p>
-              </motion.div>
-            ))}
-          </div>
+          <motion.div {...reveal} className="relative">
+            <div className="grid grid-cols-2 gap-3">
+              {["Editor", "Compiler", "Terminal", "RPC", "Explorer", "Profiler"].map((t, i) => (
+                <motion.div
+                  key={t}
+                  {...reveal}
+                  transition={{ ...REVEAL.show, delay: 0.05 * i }}
+                  className="rounded-xl border border-border-subtle bg-surface-base px-4 py-3 font-mono text-sm text-text-muted transition-colors duration-300 hover:border-accent-line hover:text-text-secondary"
+                >
+                  {t}
+                </motion.div>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center gap-3 rounded-xl border border-accent-line bg-accent-soft px-4 py-4">
+              <MonsmithMark size={22} />
+              <span className="font-display font-semibold text-text-primary">
+                One workspace
+              </span>
+              <span className="ml-auto font-mono text-xs text-text-muted">converged</span>
+            </div>
+          </motion.div>
         </div>
       </section>
 
-      {/* How It Works */}
-      <section className={`py-24 px-6 ${isDark ? 'bg-[#111]/50' : 'bg-gray-50'}`}>
-        <div className="max-w-7xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-4xl md:text-5xl font-black mb-4">
-              From zero to deployed
-              <br />
-              in 4 steps
+      {/* ------------------------------------------------------- Core loop */}
+      <section id="workflow" className="border-t border-border-subtle bg-surface-sunken/30 px-6 py-20">
+        <div className="mx-auto max-w-6xl">
+          <motion.div {...reveal} className="max-w-2xl">
+            <Eyebrow>The loop</Eyebrow>
+            <h2 className="mt-6 font-display text-4xl font-semibold tracking-tight sm:text-5xl">
+              <RevealWords text="From contract to execution, without leaving the workspace" />
             </h2>
           </motion.div>
 
-          <div className="grid md:grid-cols-4 gap-8">
+          <AnimatedRule className="mt-10 w-full" />
+
+          <div className="mt-8 grid gap-px overflow-hidden rounded-2xl border border-border-subtle bg-border-subtle sm:grid-cols-2 lg:grid-cols-5">
             {[
-              { step: '01', title: 'Write or Generate', desc: 'Use our AI to generate contracts or write your own in the browser IDE' },
-              { step: '02', title: 'Compile & Debug', desc: 'Get instant feedback, error explanations, and fix suggestions' },
-              { step: '03', title: 'Audit & Optimize', desc: 'Run security checks and get gas optimization recommendations' },
-              { step: '04', title: 'Deploy & Monitor', desc: 'One-click deploy to Monad and track everything in real-time' },
-            ].map((item, idx) => (
+              { n: "01", label: "Write", icon: FileCode2, desc: "Monaco editor with Solidity highlighting, autocomplete, and multi-file projects." },
+              { n: "02", label: "Profile", icon: Network, desc: "Storage-dependency analysis scores where functions can run in parallel." },
+              { n: "03", label: "Execute", icon: Cpu, desc: "Compile through Hardhat with OpenZeppelin resolved and clear diagnostics." },
+              { n: "04", label: "Deploy", icon: UploadCloud, desc: "Ship to Monad testnet or mainnet and interact with the live contract." },
+              { n: "05", label: "Migrate", icon: GitCompareArrows, desc: "Move a contract forward with a guided plan and a side-by-side diff." },
+            ].map((s, i) => (
               <motion.div
-                key={idx}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.1 }}
-                className="text-center"
+                key={s.n}
+                {...reveal}
+                transition={{ ...REVEAL.show, delay: 0.06 * i }}
+                className="group bg-surface-base p-6 transition-all duration-300 hover:bg-surface-raised hover:ring-1 hover:ring-inset hover:ring-accent-line"
               >
-                <div className="text-6xl font-black bg-gradient-to-r from-purple-500/30 to-pink-500/30 bg-clip-text text-transparent mb-4">
-                  {item.step}
+                <div className="flex items-center justify-between">
+                  <s.icon size={20} className="text-accent transition-transform duration-300 group-hover:-translate-y-0.5" />
+                  <span className="font-mono text-xs text-text-muted">{s.n}</span>
                 </div>
-                <h3 className="text-xl font-bold mb-2">{item.title}</h3>
-                <p className={isDark ? 'text-gray-400' : 'text-gray-600'}>{item.desc}</p>
+                <h3 className="mt-5 font-display text-xl font-semibold">{s.label}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-secondary">{s.desc}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-24 px-6">
-        <div className="max-w-4xl mx-auto text-center">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            className={`p-12 rounded-3xl border ${
-              isDark ? 'border-white/10 bg-gradient-to-br from-purple-900/20 to-pink-900/20' : 'border-purple-100 bg-gradient-to-br from-purple-50 to-pink-50'
-            }`}
-          >
-            <h2 className="text-4xl md:text-5xl font-black mb-4">
-              Ready to build the future?
+      {/* --------------------------------------------------- Parallel execution */}
+      <section id="execution" className="border-t border-border-subtle px-6 py-20">
+        <div className="mx-auto max-w-6xl">
+          <div className="grid items-start gap-14 lg:grid-cols-[1fr_1.1fr]">
+            <motion.div {...reveal}>
+              <Eyebrow>Parallel execution</Eyebrow>
+              <h2 className="mt-6 font-display text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
+                <RevealWords text={"Don\u2019t just deploy to Monad. Build with its execution model in mind"} />
+              </h2>
+              <p className="mt-6 text-lg leading-relaxed text-text-secondary">
+                Monad runs independent transactions at the same time and serializes
+                only where they touch the same state. The profiler reads your storage
+                access and shows you which is which, function by function.
+              </p>
+
+              <div className="mt-8 grid grid-cols-2 gap-3">
+                {[
+                  { k: "Parallelism score", v: "per function" },
+                  { k: "Execution waves", v: "ordered" },
+                  { k: "Storage conflicts", v: "flagged" },
+                  { k: "Dependency graph", v: "visual" },
+                ].map((m) => (
+                  <div key={m.k} className="rounded-xl border border-border-subtle bg-surface-base p-4">
+                    <div className="font-mono text-[11px] uppercase tracking-wide text-text-muted">
+                      {m.v}
+                    </div>
+                    <div className="mt-1 font-display text-base font-semibold">{m.k}</div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+
+            <motion.div {...reveal} transition={{ ...REVEAL.show, delay: 0.12 }}>
+              <SchedulerCompare reduce={!!reduce} />
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------------- Product */}
+      <section id="product" className="border-t border-border-subtle bg-surface-sunken/30 px-6 py-20">
+        <div className="mx-auto max-w-6xl">
+          <motion.div {...reveal} className="mb-12 max-w-2xl">
+            <Eyebrow>The workspace</Eyebrow>
+            <h2 className="mt-6 font-display text-4xl font-semibold tracking-tight sm:text-5xl">
+              <RevealWords text="Editor, profiler, and deploy console in one view" />
             </h2>
-            <p className={`text-lg mb-8 ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>
-              Join thousands of developers shipping on Monad. No credit card required.
-            </p>
-            <Link href="/studio">
-              <motion.button
-                className="px-10 py-5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-2xl text-lg font-bold shadow-2xl shadow-purple-500/30 hover:shadow-purple-500/50 transition-all"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                Launch Monsmith →
-              </motion.button>
+          </motion.div>
+
+          <motion.div
+            {...reveal}
+            className="overflow-hidden rounded-2xl border border-border-subtle bg-surface-base shadow-[var(--shadow-panel)]"
+          >
+            <Parallax amount={22}>
+              <DemoVideo />
+            </Parallax>
+          </motion.div>
+
+          <div className="mt-6 flex justify-center">
+            <Link
+              href="/studio"
+              onClick={() => track("page_view", { detail: { event: "cta_click", cta: "product_open_studio" } })}
+              className="inline-flex items-center gap-2 text-sm font-medium text-accent transition-colors hover:opacity-80"
+            >
+              Open the real thing
+              <ArrowUpRight size={16} />
             </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* -------------------------------------------------- Migration + Security */}
+      <section className="border-t border-border-subtle px-6 py-20">
+        <div className="mx-auto grid max-w-6xl gap-6 md:grid-cols-2">
+          <motion.div {...reveal} className="group rounded-2xl border border-border-subtle bg-surface-base p-8 transition-all duration-300 hover:-translate-y-1 hover:border-accent-line hover:shadow-[var(--shadow-panel)]">
+            <GitCompareArrows size={22} className="text-accent" />
+            <h3 className="mt-5 font-display text-2xl font-semibold">Migrate without rebuilding the flow</h3>
+            <p className="mt-3 leading-relaxed text-text-secondary">
+              Point the wizard at an old contract, review the plan, and see a
+              line-by-line diff before you commit the new version.
+            </p>
+            <div className="mt-6 flex items-center gap-3 font-mono text-sm">
+              <span className="rounded-md border border-border-subtle px-3 py-1.5 text-text-muted">Contract v1</span>
+              <ArrowRight size={16} className="text-accent" />
+              <span className="rounded-md border border-accent-line bg-accent-soft px-3 py-1.5 text-accent">Contract v2</span>
+            </div>
+          </motion.div>
+
+          <motion.div {...reveal} transition={{ ...REVEAL.show, delay: 0.08 }} className="group rounded-2xl border border-border-subtle bg-surface-base p-8 transition-all duration-300 hover:-translate-y-1 hover:border-accent-line hover:shadow-[var(--shadow-panel)]">
+            <ShieldCheck size={22} className="text-accent" />
+            <h3 className="mt-5 font-display text-2xl font-semibold">Understand it before you ship it</h3>
+            <p className="mt-3 leading-relaxed text-text-secondary">
+              The audit scans for reentrancy, overflow, and access-control issues,
+              scores the risk, and points at the lines that need attention.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-2 font-mono text-xs">
+              {["reentrancy", "overflow", "access control", "risk score"].map((t) => (
+                <span key={t} className="rounded-md border border-border-subtle px-2.5 py-1 text-text-muted">
+                  {t}
+                </span>
+              ))}
+            </div>
           </motion.div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className={`py-12 px-6 border-t ${isDark ? 'border-white/5' : 'border-gray-100'}`}>
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center font-bold text-white text-sm">
-              M
-            </div>
-            <span className="font-bold">Monsmith</span>
-            <span className={isDark ? 'text-gray-500' : 'text-gray-400'}>© 2025</span>
+      {/* ------------------------------------------------- Built around Monad */}
+      <section className="border-t border-border-subtle px-6 py-20">
+        <div className="mx-auto grid max-w-6xl items-center gap-14 md:grid-cols-2">
+          <motion.div {...reveal}>
+            <Eyebrow>Built around Monad</Eyebrow>
+            <h2 className="mt-6 font-display text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
+              <RevealWords text="One EVM. A different execution environment" />
+            </h2>
+            <p className="mt-6 text-lg leading-relaxed text-text-secondary">
+              Monad keeps EVM compatibility, so your contracts, languages, and
+              libraries stay the same. Monsmith adds the layer that makes the
+              workflow aware of how Monad actually executes them.
+            </p>
+          </motion.div>
+          <motion.ul {...reveal} transition={{ ...REVEAL.show, delay: 0.1 }} className="space-y-3">
+            {[
+              "Familiar Solidity and OpenZeppelin, compiled with the standard toolchain",
+              "Storage-level analysis surfaced while you write, not after you deploy",
+              "Deploy and interact on Monad testnet and mainnet from the browser",
+            ].map((t) => (
+              <li key={t} className="flex gap-3 rounded-xl border border-border-subtle bg-surface-base px-5 py-4 transition-colors duration-300 hover:border-accent-line">
+                <Check size={18} className="mt-0.5 shrink-0 text-accent" />
+                <span className="text-text-secondary">{t}</span>
+              </li>
+            ))}
+          </motion.ul>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------------ Roadmap */}
+      <section id="roadmap" className="border-t border-border-subtle bg-surface-sunken/30 px-6 py-20">
+        <div className="mx-auto max-w-6xl">
+          <motion.div {...reveal} className="max-w-2xl">
+            <Eyebrow>Build in public</Eyebrow>
+            <h2 className="mt-6 font-display text-4xl font-semibold tracking-tight sm:text-5xl">
+              <RevealWords text="One product, shipped in the open" />
+            </h2>
+          </motion.div>
+
+          <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-border-subtle bg-border-subtle sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              { d: "Now", t: "Core workflow", s: "Editor, compile, deploy, audit live in the browser." },
+              { d: "Next", t: "Deeper profiling", s: "Richer dependency graphs and per-wave detail." },
+              { d: "Then", t: "Migration paths", s: "Guided upgrades with verification built in." },
+              { d: "Open", t: "Whatever it needs", s: "Shaped by the developers who use it." },
+            ].map((m, i) => (
+              <motion.div
+                key={m.t}
+                {...reveal}
+                transition={{ ...REVEAL.show, delay: 0.06 * i }}
+                className="bg-surface-base p-6 transition-all duration-300 hover:bg-surface-raised hover:ring-1 hover:ring-inset hover:ring-accent-line"
+              >
+                <span className="font-mono text-xs uppercase tracking-wide text-accent">{m.d}</span>
+                <h3 className="mt-4 font-display text-lg font-semibold">{m.t}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-text-secondary">{m.s}</p>
+              </motion.div>
+            ))}
           </div>
-          
-          <div className="flex items-center gap-6">
-            <a href="https://github.com/Adwaitbytes/monsmith" target="_blank" className={`${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'} transition-colors`}>
-              <Github size={20} />
+        </div>
+      </section>
+
+      {/* ---------------------------------------------------------------- CTA */}
+      <section className="relative overflow-hidden border-t border-border-subtle px-6 py-24">
+        <div className="pointer-events-none absolute inset-0 accent-veil opacity-70" />
+        <motion.div {...reveal} className="relative mx-auto max-w-2xl text-center">
+          <MonsmithMark size={44} className="mx-auto block" />
+          <h2 className="mt-8 font-display text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
+            <RevealWords text="Your contracts are ready. Your workspace should be too" />
+          </h2>
+          <div className="mt-10 flex flex-wrap justify-center gap-3">
+            <Magnetic strength={0.4}>
+              <Link
+                href="/studio"
+                onClick={() => track("page_view", { detail: { event: "cta_click", cta: "footer_open_studio" } })}
+                className="group inline-flex items-center gap-2 rounded-full bg-accent px-7 py-3.5 text-base font-medium text-white shadow-[0_8px_30px_-8px] shadow-accent transition-transform hover:-translate-y-0.5"
+              >
+                Open Monsmith
+                <ArrowRight size={18} className="transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            </Magnetic>
+            <Magnetic strength={0.25}>
+              <Link
+                href="/tutorials/erc20-token"
+                className="inline-flex items-center gap-2 rounded-full border border-border-strong px-7 py-3.5 text-base font-medium transition-colors hover:bg-surface-raised"
+              >
+                Start a tutorial
+              </Link>
+            </Magnetic>
+          </div>
+        </motion.div>
+      </section>
+
+      {/* -------------------------------------------------------------- Footer */}
+      <footer className="border-t border-border-subtle px-6 py-12">
+        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 sm:flex-row">
+          <div className="flex items-center gap-2.5">
+            <MonsmithMark size={22} />
+            <span className="font-display font-semibold">Monsmith</span>
+            <span className="font-mono text-xs text-text-muted">Build · Profile · Ship</span>
+          </div>
+          <div className="flex items-center gap-6 text-sm text-text-secondary">
+            <Link href="/studio" className="transition-colors hover:text-text-primary">Studio</Link>
+            <a href="https://docs.monad.xyz" target="_blank" rel="noreferrer" className="transition-colors hover:text-text-primary">Docs</a>
+            <a
+              href="https://github.com/Adwaitbytes/monsmith"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="GitHub"
+              className="transition-colors hover:text-text-primary"
+            >
+              <Github size={18} />
             </a>
-            <a href="https://twitter.com" target="_blank" className={`${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'} transition-colors`}>
-              <Twitter size={20} />
-            </a>
-            <a href="https://discord.gg/monad" target="_blank" className={`${isDark ? 'text-gray-400 hover:text-white' : 'text-gray-500 hover:text-gray-900'} transition-colors`}>
-              Discord
-            </a>
+            <span className="font-mono text-xs text-text-muted">© 2026</span>
           </div>
         </div>
       </footer>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ pieces */
+
+/**
+ * Schematic of the same six transactions run sequentially vs. scheduled into
+ * parallel lanes on Monad. It illustrates the shape of the win — independent
+ * work packs together — not a measured benchmark, so it carries no numbers.
+ */
+function SchedulerCompare({ reduce }: { reduce: boolean }) {
+  const blocks = [
+    { w: 22, dep: false },
+    { w: 16, dep: false },
+    { w: 20, dep: false },
+    { w: 18, dep: true },
+    { w: 14, dep: true },
+    { w: 20, dep: true },
+  ];
+  // Parallel packing: three lanes, dependent block trails its lane's first.
+  const lanes = [
+    [blocks[0], blocks[3]],
+    [blocks[1], blocks[4]],
+    [blocks[2], blocks[5]],
+  ];
+
+  const Bar = ({ w, dep, delay }: { w: number; dep: boolean; delay: number }) => (
+    <motion.div
+      initial={reduce ? false : { scaleX: 0 }}
+      whileInView={reduce ? undefined : { scaleX: 1 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.5, delay, ease: [0.16, 1, 0.3, 1] }}
+      style={{ width: `${w}%`, transformOrigin: "left" }}
+      className={`h-7 rounded-md ${
+        dep ? "border border-accent-line bg-accent-soft" : "bg-accent"
+      }`}
+    />
+  );
+
+  return (
+    <div className="rounded-2xl border border-border-subtle bg-surface-base p-6">
+      <div className="mb-2 font-mono text-[11px] uppercase tracking-wide text-text-muted">
+        Sequential
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {blocks.map((b, i) => (
+          <Bar key={i} w={b.w} dep={false} delay={0.05 * i} />
+        ))}
+      </div>
+
+      <div className="my-6 h-px bg-border-subtle" />
+
+      <div className="mb-2 flex items-center justify-between font-mono text-[11px] uppercase tracking-wide text-text-muted">
+        <span>Parallel · Monad</span>
+        <span className="text-accent">3 lanes</span>
+      </div>
+      <div className="space-y-1.5">
+        {lanes.map((lane, i) => (
+          <div key={i} className="flex gap-1.5">
+            {lane.map((b, j) => (
+              <Bar key={j} w={b.w * 1.6} dep={b.dep} delay={0.1 * i + 0.05 * j} />
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 flex items-center gap-4 font-mono text-[11px] text-text-muted">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm bg-accent" /> independent
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-sm border border-accent-line bg-accent-soft" /> waits on shared state
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** The product film, autoplaying muted and looping; poster + no autoplay under reduced motion. */
+function DemoVideo() {
+  const reduce = useReducedMotion();
+  return (
+    <video
+      className="block w-full"
+      poster="/monsmith-demo-poster.jpg"
+      autoPlay={!reduce}
+      muted
+      loop
+      playsInline
+      preload="metadata"
+      aria-label="Monsmith studio in motion: editor, execution profiler, and deploy console"
+    >
+      <source src="/monsmith-demo.mp4" type="video/mp4" />
+    </video>
   );
 }
