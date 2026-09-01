@@ -23,6 +23,7 @@ import { useHydrated } from "@/lib/useHydrated";
 import { track } from "@/lib/track";
 import { MonsmithMark } from "./MonsmithMark";
 import { ExecutionGraph } from "./ExecutionGraph";
+import { LiveStats } from "./LiveStats";
 import {
   SmoothScroll,
   ScrollProgress,
@@ -241,6 +242,9 @@ export default function LandingPage() {
               </span>
             ))}
           </motion.div>
+
+          {/* Live usage, real numbers from /api/stats (hidden until non-zero) */}
+          <LiveStats />
         </div>
       </section>
 
