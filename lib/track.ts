@@ -1,6 +1,7 @@
 "use client";
 
 import type { EventType } from "./analytics";
+import { capture as capturePostHog } from "./posthog";
 
 const VISITOR_KEY = "monsmith.visitor";
 
@@ -42,6 +43,15 @@ interface TrackOptions {
  */
 export function track(type: EventType, options: TrackOptions = {}): void {
   if (typeof window === "undefined") return;
+
+  // Mirror the event into PostHog for funnels, retention, and DeltaV traction.
+  // The first-party record below stays the source of truth; this is best-effort.
+  capturePostHog(type, {
+    status: options.status ?? "success",
+    duration_ms: options.durationMs,
+    path: window.location.pathname,
+    ...options.detail,
+  });
 
   const body = JSON.stringify({
     visitorId: visitorId(),
