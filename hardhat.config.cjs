@@ -20,8 +20,8 @@ module.exports = {
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
     monadMainnet: {
-      url: "https://mainnet-rpc.monad.xyz",
-      chainId: 10143, // Update when mainnet launches
+      url: "https://rpc.monad.xyz",
+      chainId: 143,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
   },

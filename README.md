@@ -37,6 +37,12 @@ The IDE is optimized for Monad's parallel execution architecture, offering uniqu
 - Dependency graph visualization
 - Specific recommendations for improving contract throughput on Monad
 
+**Chain Fit**
+- Runs your contract in a real EVM and reprices that exact execution under each chain's published gas schedule
+- Per-function cost on Monad, Ethereum, Base, Arbitrum, Polygon and BNB, in gas and in USD
+- Block time, block gas limit and gas price probed live from each chain's public RPC, no API keys
+- Findings tied to measurements from your contract, including the cases where Monad is the more expensive answer
+
 **Deployment**
 - MetaMask wallet integration
 - Support for Monad Testnet and Mainnet
@@ -186,6 +192,36 @@ The Parallel Profiler analyzes contracts for Monad-specific optimizations:
 
 This helps you write contracts that leverage Monad's parallel execution architecture.
 
+### Chain Fit
+
+The Chain Fit panel answers a narrower question than a comparison table: what does
+*this* contract cost, and how does it behave, on each chain you might ship it to.
+
+1. Compiles the contract and deploys it into a local EVM
+2. Calls every state-changing function and traces it opcode by opcode
+3. Reprices that one trace under each chain's gas schedule
+4. Converts gas into money at the gas price read from each chain's RPC just now
+
+Monad keeps Ethereum's gas costs everywhere except four places, so only four
+things are recomputed and everything else cancels:
+
+| | Ethereum and the L2s | Monad |
+|---|---|---|
+| Cold account access | 2,600 | 10,100 |
+| Cold storage | 2,100 per slot | 8,100 per 128-slot page |
+| Memory expansion | 3w + w²/512 | w/2, capped at 8 MB |
+| ecRecover / ecMul / ecPairing / point eval | baseline | 2x to 5x |
+| Max contract size | 24 KB | 128 KB |
+| Gas charged | gas used | gas limit |
+
+The Ethereum figure is what a real EVM charged, not an estimate, and the Monad
+figure is that measurement adjusted by the published MIP-8 schedule. The schedule
+is checked against the worked examples in Monad's own specification by
+`npm run test:chainfit`, so a repricing upstream shows up as a failing test rather
+than as a wrong number in a report.
+
+A public version, with sample contracts and the live network matrix, is at `/compare`.
+
 ### Deployment
 
 To deploy a contract:
@@ -248,10 +284,10 @@ Monsmith is built for Monad, an EVM-compatible blockchain with 10,000 TPS throug
 
 **Network Configuration**
 
-| Network | Chain ID | RPC Endpoint |
-|---------|----------|--------------|
-| Testnet | 10143 | https://testnet-rpc.monad.xyz |
-| Mainnet | 10143 | https://mainnet-rpc.monad.xyz |
+| Network | Chain ID | RPC Endpoint | Explorer |
+|---------|----------|--------------|----------|
+| Testnet | 10143 | https://testnet-rpc.monad.xyz | https://testnet.monadvision.com |
+| Mainnet | 143 | https://rpc.monad.xyz | https://monadvision.com |
 
 **Adding to MetaMask**
 
@@ -313,7 +349,9 @@ monad-ide/
 Run the test suite:
 
 ```bash
-npm test                    # Run all tests
+npm test                    # Contract test suite (Hardhat)
+npm run test:chainfit       # Gas model and EVM tracer
+npm run test:all            # Both
 npm run test:coverage       # With coverage report
 ```
 

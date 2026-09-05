@@ -51,6 +51,21 @@
   --scrollbar-thumb-hover: rgba(16, 16, 29, 0.3);
 
   --shadow-panel: 0 1px 2px rgba(16, 16, 29, 0.04), 0 8px 24px rgba(16, 16, 29, 0.06);
+
+  /* Contention scale for the parallel profiler. Three states carry the whole
+     reading of the graph, so they are tokens rather than per-component colours:
+     serial (always waits), conditional (waits only on the same key), parallel. */
+  --contention-serial: #be123c;
+  --contention-serial-soft: rgba(190, 18, 60, 0.08);
+  --contention-serial-line: rgba(190, 18, 60, 0.28);
+  --contention-conditional: #b45309;
+  --contention-conditional-soft: rgba(180, 83, 9, 0.08);
+  --contention-conditional-line: rgba(180, 83, 9, 0.26);
+  --contention-parallel: #047857;
+  --contention-parallel-soft: rgba(4, 120, 87, 0.08);
+  --contention-parallel-line: rgba(4, 120, 87, 0.26);
+  --graph-read: #2563eb;
+  --graph-grid: rgba(16, 16, 29, 0.06);
 }
 
 :root[data-theme="dark"] {
@@ -82,6 +97,18 @@
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
 
   --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.3);
+
+  --contention-serial: #fb7185;
+  --contention-serial-soft: rgba(251, 113, 133, 0.12);
+  --contention-serial-line: rgba(251, 113, 133, 0.34);
+  --contention-conditional: #fbbf24;
+  --contention-conditional-soft: rgba(251, 191, 36, 0.12);
+  --contention-conditional-line: rgba(251, 191, 36, 0.32);
+  --contention-parallel: #34d399;
+  --contention-parallel-soft: rgba(52, 211, 153, 0.12);
+  --contention-parallel-line: rgba(52, 211, 153, 0.32);
+  --graph-read: #60a5fa;
+  --graph-grid: rgba(255, 255, 255, 0.05);
 }
 
 @theme inline {
@@ -100,6 +127,9 @@
   --color-accent-strong: var(--accent-strong);
   --color-accent-soft: var(--accent-soft);
   --color-accent-line: var(--accent-line);
+  --color-contention-serial: var(--contention-serial);
+  --color-contention-conditional: var(--contention-conditional);
+  --color-contention-parallel: var(--contention-parallel);
   --font-sans: var(--font-inter);
   --font-display: var(--font-display);
   --font-mono: var(--font-mono);

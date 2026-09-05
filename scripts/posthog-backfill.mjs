@@ -24,19 +24,20 @@ if (!KEY || !process.env.DATABASE_URL) {
 
 const sql = neon(process.env.DATABASE_URL);
 
-/** Deterministic v4-shaped uuid from a stable string, so re-runs dedupe. */
+/** Deterministic, RFC-4122-valid v4 uuid (8-4-4-4-12) from a stable string. */
 function stableUuid(seed) {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < seed.length; i++) {
-    h ^= seed.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
+  let h = 0x811c9dc5 >>> 0;
+  const parts = [];
+  for (let k = 0; k < 4; k++) {
+    for (let i = 0; i < seed.length; i++) {
+      h ^= seed.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) >>> 0;
+    parts.push(h.toString(16).padStart(8, "0"));
   }
-  const hex = (n) => (n >>> 0).toString(16).padStart(8, "0");
-  const a = hex(h);
-  const b = hex(Math.imul(h ^ 0x9e3779b9, 0x85ebca6b));
-  const c = hex(Math.imul(h ^ 0xc2b2ae35, 0x27d4eb2f));
-  const d = hex(Math.imul(h ^ 0x165667b1, 0x94d049bb));
-  return `${a}-${b.slice(0, 4)}-4${b.slice(5, 8)}-8${c.slice(1, 4)}-${c.slice(4)}${d.slice(0, 4)}`;
+  const s = parts.join(""); // 32 hex chars
+  return `${s.slice(0, 8)}-${s.slice(8, 12)}-4${s.slice(13, 16)}-8${s.slice(17, 20)}-${s.slice(20, 32)}`;
 }
 
 function deviceType(device, os) {
@@ -74,7 +75,7 @@ async function main() {
     if (r.visitor_id !== lastVisitor || t - lastTime > SESSION_GAP_MS) {
       sessionSeed = `${r.visitor_id}:${r.id}`;
     }
-    sessionByRow.set(r.id, stableUuid(`sess:${sessionSeed}`));
+    sessionByRow.set(r.id, stableUuid(`sessv2:${sessionSeed}`));
     lastVisitor = r.visitor_id;
     lastTime = t;
   }
@@ -97,7 +98,7 @@ async function main() {
       $geoip_city_name: r.city || undefined,
       $referrer: r.referrer || "$direct",
       $referring_domain: referringDomain(r.referrer),
-      $insert_id: stableUuid(`evt:${r.id}`),
+      $insert_id: stableUuid(`evtv2:${r.id}`),
       status: r.status,
       duration_ms: r.duration_ms ?? undefined,
       imported: true,
@@ -114,10 +115,12 @@ async function main() {
   let ok = 0;
   for (let i = 0; i < batch.length; i += chunkSize) {
     const chunk = batch.slice(i, i + chunkSize);
+    // Normal ingestion (no historical_migration): PostHog fully processes each
+    // event, including the sessions / Web Analytics pipeline that DeltaV reads.
     const res = await fetch(`${HOST}/batch/`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ api_key: KEY, historical_migration: true, batch: chunk }),
+      body: JSON.stringify({ api_key: KEY, batch: chunk }),
     });
     const text = await res.text();
     if (!res.ok) {

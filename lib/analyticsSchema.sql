@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS events (
     id          BIGSERIAL PRIMARY KEY,
     visitor_id  TEXT NOT NULL,
     -- compile | deploy | audit | parallel_analysis | migration | ai_generate |
-    -- gas_profile | interact_read | interact_write | transpile | page_view
+    -- gas_profile | chain_fit | interact_read | interact_write | transpile | page_view
     event_type  TEXT NOT NULL,
     -- success | error, so failure rates are queryable without parsing details
     status      TEXT NOT NULL DEFAULT 'success',

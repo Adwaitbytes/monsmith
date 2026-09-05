@@ -15,8 +15,8 @@ const createSupabaseClient = (): SupabaseClient | null => {
 
 export const supabase = createSupabaseClient();
 
-/** Monad chain ids recorded against deployments. Mainnet shares the testnet id until launch. */
-const MONAD_CHAIN_IDS = { mainnet: 10143, testnet: 10143 } as const;
+/** Monad chain ids recorded against deployments. Mainnet launched on chain 143. */
+const MONAD_CHAIN_IDS = { mainnet: 143, testnet: 10143 } as const;
 
 /** Quick-action buttons in the studio's AI panel. */
 export type QuickActionType = 'explain' | 'optimize' | 'secure' | 'debug';

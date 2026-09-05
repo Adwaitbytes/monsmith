@@ -1,450 +1,438 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import type { Edge, Node } from 'reactflow';
-import type { GraphNodeData } from '@/lib/dependencyGraph';
-import { DependencyGraph } from './DependencyGraph';
+import React, { useCallback, useState } from 'react';
+import { Activity, X } from 'lucide-react';
+
+import type { ParallelGraph as GraphModel } from '@/lib/parallel/graph';
+import type { Entrypoint, Grade, Hotspot, ParallelAnalysisResult } from '@/lib/parallelAnalyzer';
+import { ParallelGraph } from './ParallelGraph';
 import { OptimizationPanel } from './OptimizationPanel';
 
-interface ParallelAnalysis {
-  score: number;
-  grade: string;
-  totalFunctions: number;
-  parallelizableFunctions: number;
-  summary: string;
-  functions: Array<{
-    name: string;
-    visibility: string;
-    reads: string[];
-    writes: string[];
-    canParallelize: boolean;
-    conflictsWith: string[];
-  }>;
-  conflicts: Array<{
-    slot: string;
-    variable: string;
-    functions: string[];
-    severity: 'high' | 'medium' | 'low';
-    description: string;
-  }>;
-  suggestions: Array<{
-    type: string;
-    priority: 'high' | 'medium' | 'low';
-    title: string;
-    description: string;
-    currentCode?: string;
-    suggestedCode?: string;
-    gasImpact: string;
-  }>;
-  graph: {
-    nodes: Node<GraphNodeData>[];
-    edges: Edge[];
-  };
-  stats: {
-    totalFunctions: number;
-    parallelFunctions: number;
-    conflictFunctions: number;
-    totalStorageVars: number;
-    highConflicts: number;
-    mediumConflicts: number;
-  };
-  priorities: string[];
-  metadata: {
-    analysisTimeMs: number;
-    timestamp: string;
-  };
-}
+/**
+ * Parallel execution profiler.
+ *
+ * Reports one thing: which of a contract's transactions can run at the same
+ * time on Monad, and for the ones that cannot, the storage slot responsible.
+ */
+
+type Analysis = ParallelAnalysisResult & {
+    graph: GraphModel;
+    priorities: string[];
+    metadata: { analysisTimeMs: number; timestamp: string };
+};
 
 interface ParallelProfilerProps {
-  code: string;
-  onClose?: () => void;
+    code: string;
+    onClose?: () => void;
+    /** Replaces the editor's contents with an optimised rewrite. */
+    onApplyCode?: (code: string) => void;
 }
 
-export function ParallelProfiler({ code, onClose }: ParallelProfilerProps) {
-  const [analysis, setAnalysis] = useState<ParallelAnalysis | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'graph' | 'functions' | 'optimize'>('overview');
+type Tab = 'overview' | 'graph' | 'entrypoints' | 'optimize';
 
-  const analyzeCode = useCallback(async () => {
-    if (!code.trim()) {
-      setError('No code to analyze');
-      return;
-    }
+const TAB_LABELS: Record<Tab, string> = {
+    overview: 'Overview',
+    graph: 'Graph',
+    entrypoints: 'Entrypoints',
+    optimize: 'Optimize',
+};
 
-    setLoading(true);
-    setError(null);
+const GRADE_VAR: Record<Grade, string> = {
+    A: '--contention-parallel',
+    B: '--contention-parallel',
+    C: '--contention-conditional',
+    D: '--contention-conditional',
+    F: '--contention-serial',
+};
 
-    try {
-      const response = await fetch('/api/parallel', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code, mode: 'full' }),
-      });
+const SCOPE_VAR = {
+    global: '--contention-serial',
+    keyed: '--contention-conditional',
+    caller: '--contention-parallel',
+} as const;
 
-      const data = await response.json();
+const SCOPE_LABEL = {
+    global: 'shared slot',
+    keyed: 'keyed',
+    caller: 'per caller',
+} as const;
 
-      if (!data.success) {
-        throw new Error(data.error || 'Analysis failed');
-      }
+export function ParallelProfiler({ code, onClose, onApplyCode }: ParallelProfilerProps) {
+    const [analysis, setAnalysis] = useState<Analysis | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [tab, setTab] = useState<Tab>('overview');
 
-      setAnalysis(data.analysis);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to analyze contract');
-    } finally {
-      setLoading(false);
-    }
-  }, [code]);
+    const analyze = useCallback(async (contract?: string) => {
+        if (!code.trim()) {
+            setError('There is nothing in the editor to analyse.');
+            return;
+        }
 
-  const getGradeColor = (grade: string) => {
-    switch (grade) {
-      case 'A': return 'text-green-600 dark:text-green-400';
-      case 'B': return 'text-blue-600 dark:text-blue-400';
-      case 'C': return 'text-yellow-400';
-      case 'D': return 'text-orange-600 dark:text-orange-400';
-      case 'F': return 'text-red-600 dark:text-red-400';
-      default: return 'text-text-secondary';
-    }
-  };
+        setLoading(true);
+        setError(null);
 
+        try {
+            const response = await fetch('/api/parallel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, contract, mode: 'full' }),
+            });
+            const data = await response.json();
+            if (!data.success) throw new Error(data.error || 'Analysis failed');
+            setAnalysis(data.analysis as Analysis);
+        } catch (caught) {
+            setError(caught instanceof Error ? caught.message : 'Could not analyse this contract.');
+        } finally {
+            setLoading(false);
+        }
+    }, [code]);
 
-  return (
-    <div className="h-full flex flex-col panel-surface">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            <span className="font-semibold">Parallel Execution Profiler</span>
-          </div>
-          <span className="text-xs bg-purple-500/15 text-purple-600 dark:text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full font-medium">
-            Monad Optimized
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={analyzeCode}
-            disabled={loading}
-            className="flex items-center gap-2 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 disabled:bg-purple-800 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-colors"
-          >
-            {loading ? (
-              <>
-                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Analyzing...
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                </svg>
-                Analyze
-              </>
-            )}
-          </button>
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="p-1.5 hover:bg-border-subtle rounded-lg transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Error Message */}
-      {error && (
-        <div className="mx-4 mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-700 dark:text-red-300 text-sm">
-          {error}
-        </div>
-      )}
-
-      {/* Main Content */}
-      {!analysis && !loading && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center max-w-md">
-            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center">
-              <svg className="w-10 h-10 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-text-primary mb-2">Parallel Execution Analysis</h3>
-            <p className="text-text-secondary mb-6">
-              Analyze your Solidity contract to identify parallel execution potential on Monad&apos;s 10,000 TPS EVM.
-            </p>
-            <button
-              onClick={analyzeCode}
-              className="px-6 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 rounded-lg font-medium transition-all"
-            >
-              Start Analysis
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Loading State */}
-      {loading && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 relative">
-              <div className="absolute inset-0 rounded-full border-4 border-purple-500/20"></div>
-              <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-purple-500 animate-spin"></div>
-            </div>
-            <p className="text-text-secondary">Analyzing parallel execution potential...</p>
-          </div>
-        </div>
-      )}
-
-      {/* Analysis Results */}
-      {analysis && !loading && (
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Score Overview */}
-          <div className="px-4 py-4 border-b border-border-subtle">
-            <div className="flex items-center gap-6">
-              {/* Score Circle */}
-              <div className="relative w-24 h-24">
-                <svg className="w-full h-full -rotate-90">
-                  <circle
-                    cx="48"
-                    cy="48"
-                    r="40"
-                    stroke="currentColor"
-                    strokeWidth="8"
-                    fill="none"
-                    className="text-text-primary"
-                  />
-                  <circle
-                    cx="48"
-                    cy="48"
-                    r="40"
-                    stroke="url(#scoreGradient)"
-                    strokeWidth="8"
-                    fill="none"
-                    strokeLinecap="round"
-                    strokeDasharray={`${(analysis.score / 100) * 251.2} 251.2`}
-                  />
-                  <defs>
-                    <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                      <stop offset="0%" stopColor={analysis.score >= 60 ? '#22c55e' : '#ef4444'} />
-                      <stop offset="100%" stopColor={analysis.score >= 60 ? '#3b82f6' : '#f59e0b'} />
-                    </linearGradient>
-                  </defs>
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className={`text-2xl font-bold ${getGradeColor(analysis.grade)}`}>
-                    {analysis.score}
-                  </span>
-                  <span className="text-xs text-text-muted">/ 100</span>
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div className="flex-1 grid grid-cols-4 gap-4">
-                <div className="text-center">
-                  <div className={`text-3xl font-bold ${getGradeColor(analysis.grade)}`}>
-                    {analysis.grade}
-                  </div>
-                  <div className="text-xs text-text-muted">Grade</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-                    {analysis.parallelizableFunctions}
-                  </div>
-                  <div className="text-xs text-text-muted">Parallel</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-red-600 dark:text-red-400">
-                    {analysis.conflicts.filter(c => c.severity === 'high').length}
-                  </div>
-                  <div className="text-xs text-text-muted">Conflicts</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                    {analysis.totalFunctions}
-                  </div>
-                  <div className="text-xs text-text-muted">Functions</div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex border-b border-border-subtle">
-            {(['overview', 'graph', 'functions', 'optimize'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-2.5 text-sm font-medium capitalize transition-colors ${
-                  activeTab === tab
-                    ? 'text-purple-600 dark:text-purple-400 border-b-2 border-purple-400'
-                    : 'text-text-secondary hover:text-text-primary'
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          {/* Tab Content */}
-          <div className="flex-1 overflow-auto p-4">
-            {activeTab === 'overview' && (
-              <div className="space-y-4">
-                {/* Summary */}
-                <div className="p-4 panel-surface/50 rounded-lg border border-border-subtle">
-                  <h4 className="font-medium mb-2">Analysis Summary</h4>
-                  <div className="text-sm text-text-primary whitespace-pre-wrap">
-                    {analysis.summary}
-                  </div>
-                </div>
-
-                {/* Priority Actions */}
-                {analysis.priorities.length > 0 && (
-                  <div className="p-4 panel-surface/50 rounded-lg border border-border-subtle">
-                    <h4 className="font-medium mb-3 flex items-center gap-2">
-                      <svg className="w-4 h-4 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      Priority Actions
-                    </h4>
-                    <ul className="space-y-2">
-                      {analysis.priorities.map((priority, idx) => (
-                        <li key={idx} className="flex items-start gap-2 text-sm">
-                          <span className="text-yellow-400">•</span>
-                          <span className="text-text-primary">{priority}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Conflicts */}
-                {analysis.conflicts.length > 0 && (
-                  <div className="p-4 panel-surface/50 rounded-lg border border-border-subtle">
-                    <h4 className="font-medium mb-3 flex items-center gap-2">
-                      <svg className="w-4 h-4 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      State Conflicts ({analysis.conflicts.length})
-                    </h4>
-                    <div className="space-y-2">
-                      {analysis.conflicts.map((conflict, idx) => (
-                        <div
-                          key={idx}
-                          className={`p-3 rounded-lg border ${
-                            conflict.severity === 'high'
-                              ? 'bg-red-500/10 border-red-500/30'
-                              : conflict.severity === 'medium'
-                              ? 'bg-yellow-500/10 border-yellow-500/30'
-                              : 'bg-gray-500/10 border-gray-500/30'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded ${
-                              conflict.severity === 'high'
-                                ? 'bg-red-500/20 text-red-600 dark:text-red-400'
-                                : conflict.severity === 'medium'
-                                ? 'bg-yellow-500/20 text-yellow-400'
-                                : 'bg-gray-500/20 text-text-secondary'
-                            }`}>
-                              {conflict.severity.toUpperCase()}
-                            </span>
-                            <span className="font-mono text-sm">{conflict.variable}</span>
-                          </div>
-                          <p className="text-sm text-text-secondary">{conflict.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Metadata */}
-                <div className="text-xs text-text-muted flex items-center gap-4">
-                  <span>Analysis time: {analysis.metadata.analysisTimeMs}ms</span>
-                  <span>•</span>
-                  <span>{new Date(analysis.metadata.timestamp).toLocaleString()}</span>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'graph' && (
-              <div className="h-[500px]">
-                <DependencyGraph
-                  nodes={analysis.graph.nodes}
-                  edges={analysis.graph.edges}
-                  stats={analysis.stats}
-                />
-              </div>
-            )}
-
-            {activeTab === 'functions' && (
-              <div className="space-y-3">
-                {analysis.functions.map((func, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-4 rounded-lg border ${
-                      func.canParallelize
-                        ? 'bg-green-500/10 border-green-500/30'
-                        : 'bg-red-500/10 border-red-500/30'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full ${
-                          func.canParallelize ? 'bg-green-400' : 'bg-red-400'
-                        }`}></span>
-                        <span className="font-mono font-medium">{func.name}()</span>
-                        <span className="text-xs text-text-muted">{func.visibility}</span>
-                      </div>
-                      <span className={`text-xs px-2 py-0.5 rounded ${
-                        func.canParallelize
-                          ? 'bg-green-500/20 text-green-600 dark:text-green-400'
-                          : 'bg-red-500/20 text-red-600 dark:text-red-400'
-                      }`}>
-                        {func.canParallelize ? 'Parallelizable' : 'Sequential'}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-text-muted">Reads:</span>
-                        <span className="ml-2 text-blue-600 dark:text-blue-400">
-                          {func.reads.length > 0 ? func.reads.join(', ') : 'None'}
+    return (
+        <div className="flex h-full flex-col panel-surface">
+            <header className="flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-3">
+                <div className="flex min-w-0 items-center gap-2">
+                    <Activity className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.75} />
+                    <h2 className="truncate text-[14px] font-semibold text-text-primary">Parallel Execution</h2>
+                    {analysis?.contract && (
+                        <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 font-mono text-[11px] text-accent">
+                            {analysis.contract}
                         </span>
-                      </div>
-                      <div>
-                        <span className="text-text-muted">Writes:</span>
-                        <span className="ml-2 text-red-600 dark:text-red-400">
-                          {func.writes.length > 0 ? func.writes.join(', ') : 'None'}
-                        </span>
-                      </div>
-                    </div>
-                    {func.conflictsWith.length > 0 && (
-                      <div className="mt-2 text-sm">
-                        <span className="text-text-muted">Conflicts with:</span>
-                        <span className="ml-2 text-yellow-400">
-                          {func.conflictsWith.join(', ')}
-                        </span>
-                      </div>
                     )}
-                  </div>
-                ))}
-              </div>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-1.5">
+                    <button
+                        onClick={() => analyze(analysis?.contract)}
+                        disabled={loading}
+                        className="rounded-lg bg-accent px-3 py-1.5 text-[12.5px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                    >
+                        {loading ? 'Analysing…' : analysis ? 'Re-run' : 'Analyze'}
+                    </button>
+                    {onClose && (
+                        <button
+                            onClick={onClose}
+                            aria-label="Close profiler"
+                            className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-border-subtle hover:text-text-primary"
+                        >
+                            <X className="h-4 w-4" strokeWidth={1.75} />
+                        </button>
+                    )}
+                </div>
+            </header>
+
+            {error && (
+                <div className="mx-4 mt-3 rounded-lg border border-[var(--contention-serial-line)] bg-[var(--contention-serial-soft)] px-3 py-2 text-[12.5px] text-text-secondary">
+                    {error}
+                </div>
             )}
 
-            {activeTab === 'optimize' && (
-              <OptimizationPanel suggestions={analysis.suggestions} />
+            {!analysis && !loading && <EmptyState onStart={() => analyze()} />}
+            {loading && <LoadingState />}
+
+            {analysis && !loading && (
+                <div className="flex min-h-0 flex-1 flex-col">
+                    <ScoreHeader analysis={analysis} onSelectContract={(name) => analyze(name)} />
+
+                    <nav className="flex shrink-0 gap-1 border-b border-border-subtle px-2">
+                        {(Object.keys(TAB_LABELS) as Tab[]).map((value) => (
+                            <button
+                                key={value}
+                                onClick={() => setTab(value)}
+                                className={`relative px-3 py-2.5 text-[12.5px] font-medium transition-colors ${
+                                    tab === value ? 'text-text-primary' : 'text-text-muted hover:text-text-secondary'
+                                }`}
+                            >
+                                {TAB_LABELS[value]}
+                                {tab === value && <span className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-accent" />}
+                            </button>
+                        ))}
+                    </nav>
+
+                    <div className={`min-h-0 flex-1 ${tab === 'graph' ? 'flex flex-col p-3' : 'overflow-auto p-4'}`}>
+                        {tab === 'overview' && <Overview analysis={analysis} />}
+                        {tab === 'graph' && (
+                            <ParallelGraph graph={analysis.graph} analysisKey={`${analysis.contract}:${analysis.metadata.timestamp}`} />
+                        )}
+                        {tab === 'entrypoints' && <Entrypoints analysis={analysis} />}
+                        {tab === 'optimize' && (
+                            <OptimizationPanel
+                                suggestions={analysis.suggestions}
+                                code={code}
+                                contract={analysis.contract}
+                                onApply={onApplyCode}
+                            />
+                        )}
+                    </div>
+                </div>
             )}
-          </div>
         </div>
-      )}
-    </div>
-  );
+    );
+}
+
+function ScoreHeader({
+    analysis,
+    onSelectContract,
+}: {
+    analysis: Analysis;
+    onSelectContract: (name: string) => void;
+}) {
+    const circumference = 2 * Math.PI * 26;
+    const gradeColor = `var(${GRADE_VAR[analysis.grade]})`;
+
+    return (
+        <div className="shrink-0 border-b border-border-subtle px-4 py-4">
+            <div className="flex items-center gap-4">
+                <div className="relative h-16 w-16 shrink-0">
+                    <svg viewBox="0 0 64 64" className="h-full w-full -rotate-90">
+                        <circle cx="32" cy="32" r="26" fill="none" strokeWidth="5" stroke="var(--border-subtle)" />
+                        <circle
+                            cx="32"
+                            cy="32"
+                            r="26"
+                            fill="none"
+                            strokeWidth="5"
+                            stroke={gradeColor}
+                            strokeLinecap="round"
+                            strokeDasharray={`${(analysis.score / 100) * circumference} ${circumference}`}
+                            style={{ transition: 'stroke-dasharray 600ms cubic-bezier(0.22, 1, 0.36, 1)' }}
+                        />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-[17px] font-semibold leading-none tabular-nums text-text-primary">{analysis.score}</span>
+                        <span className="mt-0.5 text-[10px] font-medium" style={{ color: gradeColor }}>
+                            {analysis.grade}
+                        </span>
+                    </div>
+                </div>
+
+                <div className="min-w-0 flex-1">
+                    <p className="text-[13px] leading-relaxed text-text-primary">{analysis.headline}</p>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] text-text-muted">
+                        <span>
+                            <span className="tabular-nums text-text-secondary">{analysis.metrics.pairsBlocked}</span> blocked pairs
+                        </span>
+                        <span>
+                            <span className="tabular-nums text-text-secondary">{analysis.metrics.globalSlots}</span> shared slots
+                        </span>
+                        <span>
+                            <span className="tabular-nums text-text-secondary">{analysis.readOnlyFunctions.length}</span> view functions
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {analysis.availableContracts.length > 1 && (
+                <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-text-muted">In this file:</span>
+                    {analysis.availableContracts.map((option) => (
+                        <button
+                            key={option.name}
+                            onClick={() => onSelectContract(option.name)}
+                            className={`rounded-md px-2 py-0.5 font-mono text-[11px] transition-colors ${
+                                option.name === analysis.contract
+                                    ? 'bg-accent-soft text-accent'
+                                    : 'text-text-muted hover:bg-border-subtle hover:text-text-primary'
+                            }`}
+                        >
+                            {option.name}
+                            <span className="ml-1 opacity-60">{option.entrypoints}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function Overview({ analysis }: { analysis: Analysis }) {
+    return (
+        <div className="space-y-5">
+            <p className="text-[13px] leading-relaxed text-text-secondary">{analysis.summary}</p>
+
+            {analysis.priorities.length > 0 && (
+                <section>
+                    <SectionTitle>Do these first</SectionTitle>
+                    <ol className="space-y-1.5">
+                        {analysis.priorities.map((priority, index) => (
+                            <li key={index} className="flex gap-2.5 text-[12.5px] leading-relaxed text-text-secondary">
+                                <span className="shrink-0 tabular-nums text-text-muted">{index + 1}.</span>
+                                {priority}
+                            </li>
+                        ))}
+                    </ol>
+                </section>
+            )}
+
+            {analysis.hotspots.length > 0 && (
+                <section>
+                    <SectionTitle>Storage under contention ({analysis.hotspots.length})</SectionTitle>
+                    <div className="space-y-1.5">
+                        {analysis.hotspots.map((hotspot) => (
+                            <HotspotRow key={hotspot.variable} hotspot={hotspot} />
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {analysis.notes.length > 0 && (
+                <section>
+                    <SectionTitle>Already fine</SectionTitle>
+                    <ul className="space-y-1.5">
+                        {analysis.notes.map((note, index) => (
+                            <li key={index} className="flex gap-2 text-[12.5px] leading-relaxed text-text-secondary">
+                                <span
+                                    className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full"
+                                    style={{ background: 'var(--contention-parallel)' }}
+                                />
+                                {note}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
+
+            <p className="border-t border-border-subtle pt-3 text-[11px] text-text-muted">
+                Scored over {analysis.metrics.pairsTotal} entrypoint pairs, assuming even traffic across them. Analysed in{' '}
+                {analysis.metadata.analysisTimeMs}ms.
+            </p>
+        </div>
+    );
+}
+
+function HotspotRow({ hotspot }: { hotspot: Hotspot }) {
+    const tone = `var(${SCOPE_VAR[hotspot.scope]})`;
+
+    return (
+        <div
+            className="rounded-lg border px-3 py-2.5"
+            style={{ borderColor: `var(${SCOPE_VAR[hotspot.scope]}-line)`, background: `var(${SCOPE_VAR[hotspot.scope]}-soft)` }}
+        >
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <span className="font-mono text-[12.5px] font-medium text-text-primary">{hotspot.variable}</span>
+                <span className="font-mono text-[11px] text-text-muted">{hotspot.typeText}</span>
+                <span className="ml-auto text-[10.5px] font-medium uppercase tracking-wider" style={{ color: tone }}>
+                    {SCOPE_LABEL[hotspot.scope]}
+                </span>
+            </div>
+            <p className="mt-1 text-[12px] leading-relaxed text-text-secondary">{hotspot.impact}</p>
+        </div>
+    );
+}
+
+function Entrypoints({ analysis }: { analysis: Analysis }) {
+    return (
+        <div className="space-y-4">
+            <div className="space-y-2">
+                {analysis.entrypoints.map((entry) => (
+                    <EntrypointCard key={entry.name} entry={entry} />
+                ))}
+            </div>
+
+            {analysis.readOnlyFunctions.length > 0 && (
+                <section>
+                    <SectionTitle>Read-only, never contended</SectionTitle>
+                    <div className="flex flex-wrap gap-1.5">
+                        {analysis.readOnlyFunctions.map((func) => (
+                            <span
+                                key={func.name}
+                                className="rounded-md border border-border-subtle px-2 py-0.5 font-mono text-[11px] text-text-muted"
+                            >
+                                {func.name}()
+                            </span>
+                        ))}
+                    </div>
+                </section>
+            )}
+        </div>
+    );
+}
+
+function EntrypointCard({ entry }: { entry: Entrypoint }) {
+    const tone =
+        entry.contention === 'serial'
+            ? '--contention-serial'
+            : entry.contention === 'conditional'
+                ? '--contention-conditional'
+                : '--contention-parallel';
+
+    return (
+        <div className="rounded-xl border px-3.5 py-3" style={{ borderColor: `var(${tone}-line)` }}>
+            <div className="flex flex-wrap items-baseline gap-2">
+                <span className="font-mono text-[13px] font-medium text-text-primary">{entry.name}()</span>
+                <span className="text-[11px] text-text-muted">{entry.visibility}</span>
+                <span className="ml-auto text-[10.5px] font-medium uppercase tracking-wider" style={{ color: `var(${tone})` }}>
+                    {entry.contention === 'serial' ? 'serial' : entry.contention === 'conditional' ? 'same key only' : 'parallel'}
+                </span>
+            </div>
+
+            <p className="mt-1.5 text-[12px] leading-relaxed text-text-secondary">{entry.reason}</p>
+
+            {entry.writes.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10.5px] uppercase tracking-wider text-text-muted">Writes</span>
+                    {entry.writes.map((effect) => (
+                        <span
+                            key={effect.variable}
+                            className="rounded-md px-1.5 py-0.5 font-mono text-[11px]"
+                            style={{
+                                background: `var(${SCOPE_VAR[effect.scope]}-soft)`,
+                                color: `var(${SCOPE_VAR[effect.scope]})`,
+                            }}
+                        >
+                            {effect.variable}
+                        </span>
+                    ))}
+                </div>
+            )}
+
+            {entry.through.length > 0 && (
+                <p className="mt-1.5 text-[11px] text-text-muted">
+                    Through <span className="font-mono">{entry.through.join(', ')}</span>
+                </p>
+            )}
+        </div>
+    );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+    return <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-text-muted">{children}</h3>;
+}
+
+function EmptyState({ onStart }: { onStart: () => void }) {
+    return (
+        <div className="flex flex-1 items-center justify-center px-8">
+            <div className="max-w-xs text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-accent-soft">
+                    <Activity className="h-5 w-5 text-accent" strokeWidth={1.5} />
+                </div>
+                <h3 className="text-[14px] font-semibold text-text-primary">Parallel execution analysis</h3>
+                <p className="mt-1.5 text-[12.5px] leading-relaxed text-text-secondary">
+                    Find which transactions can run at the same time on Monad, and which storage slot is stopping the rest.
+                </p>
+                <button
+                    onClick={onStart}
+                    className="mt-4 rounded-lg bg-accent px-4 py-2 text-[13px] font-medium text-white transition-opacity hover:opacity-90"
+                >
+                    Analyze contract
+                </button>
+            </div>
+        </div>
+    );
+}
+
+function LoadingState() {
+    return (
+        <div className="flex flex-1 items-center justify-center">
+            <div className="text-center">
+                <div className="relative mx-auto h-8 w-8">
+                    <div className="absolute inset-0 rounded-full border-2 border-border-subtle" />
+                    <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-accent" />
+                </div>
+                <p className="mt-3 text-[12.5px] text-text-muted">Tracing storage dependencies…</p>
+            </div>
+        </div>
+    );
 }
 
 export default ParallelProfiler;

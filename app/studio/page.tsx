@@ -44,6 +44,7 @@ import {
   ArrowRightLeft,
   Gift,
   Gauge,
+  Scale,
 } from "lucide-react";
 import Link from "next/link";
 import { MonsmithMark } from "../landing/MonsmithMark";
@@ -57,6 +58,8 @@ import { MigrationWizard } from "./components/MigrationWizard";
 import { Markdown } from "./components/Markdown";
 import { ContractInteraction } from "./components/ContractInteraction";
 import { GasProfiler } from "./components/GasProfiler";
+import { ChainFitReport } from "./components/ChainFitReport";
+import { SAMPLE_CONTRACTS } from "../compare/samples";
 import { generateFromTemplate, ARCHITECT_TO_TEMPLATE, CONTRACT_TEMPLATES } from "@/lib/contractTemplates";
 import { track } from "@/lib/track";
 import { createPaymentHeader } from "@/utils/q402";
@@ -900,6 +903,7 @@ export default function StudioPage() {
   const [migrationOpen, setMigrationOpen] = useState(false);
   const [interactOpen, setInteractOpen] = useState(false);
   const [gasOpen, setGasOpen] = useState(false);
+  const [chainFitOpen, setChainFitOpen] = useState(false);
   // A constructor with parameters cannot be deployed blind; these hold the
   // prompt state until the user supplies them.
   const [ctorInputs, setCtorInputs] = useState<ConstructorInput[]>([]);
@@ -915,10 +919,11 @@ export default function StudioPage() {
   // Docked panels are drag-resizable; sizes persist per panel.
   const sidebarResize = useResizable({ initial: 200, min: 160, max: 420, edge: "right", storageKey: "ms.w.sidebar" });
   const aiResize = useResizable({ initial: 380, min: 300, max: 720, edge: "left", storageKey: "ms.w.ai" });
-  const profilerResize = useResizable({ initial: 500, min: 360, max: 900, edge: "left", storageKey: "ms.w.profiler" });
+  const profilerResize = useResizable({ initial: 620, min: 380, max: 1100, edge: "left", storageKey: "ms.w.profiler" });
   const migrationResize = useResizable({ initial: 450, min: 360, max: 860, edge: "left", storageKey: "ms.w.migration" });
   const interactResize = useResizable({ initial: 420, min: 340, max: 820, edge: "left", storageKey: "ms.w.interact" });
   const gasResize = useResizable({ initial: 460, min: 360, max: 860, edge: "left", storageKey: "ms.w.gas" });
+  const chainFitResize = useResizable({ initial: 560, min: 420, max: 980, edge: "left", storageKey: "ms.w.chainfit" });
   const terminalResize = useResizable({ initial: 180, min: 90, max: 520, edge: "top", storageKey: "ms.h.terminal" });
 
   /**
@@ -932,9 +937,10 @@ export default function StudioPage() {
     setMigrationOpen(false);
     setInteractOpen(false);
     setGasOpen(false);
+    setChainFitOpen(false);
   };
 
-  const openSidePanel = (panel: "ai" | "profiler" | "migration" | "interact" | "gas") => {
+  const openSidePanel = (panel: "ai" | "profiler" | "migration" | "interact" | "gas" | "chainfit") => {
     const aiNext = panel === "ai" ? !aiPanelOpen : false;
 
     if (aiNext !== aiPanelOpen) toggleAIPanel();
@@ -942,18 +948,21 @@ export default function StudioPage() {
     setMigrationOpen(panel === "migration" ? !migrationOpen : false);
     setInteractOpen(panel === "interact" ? !interactOpen : false);
     setGasOpen(panel === "gas" ? !gasOpen : false);
+    setChainFitOpen(panel === "chainfit" ? !chainFitOpen : false);
 
     // Opening a tool is the clearest signal of what people came for.
     const opening =
       (panel === "profiler" && !parallelProfilerOpen) ||
       (panel === "migration" && !migrationOpen) ||
       (panel === "gas" && !gasOpen) ||
+      (panel === "chainfit" && !chainFitOpen) ||
       (panel === "interact" && !interactOpen);
     if (opening) {
       const eventFor = {
         profiler: "parallel_analysis",
         migration: "migration",
         gas: "gas_profile",
+        chainfit: "chain_fit",
         interact: "interact_read",
         ai: "ai_generate",
       } as const;
@@ -962,8 +971,23 @@ export default function StudioPage() {
   };
 
   // One page view per mount, so visitor counts reflect people rather than renders.
+  //
+  // A `?sample=` parameter lets /compare hand the studio a specific contract, so
+  // "try this stage now" lands in the editor with the code already loaded rather
+  // than on an empty file the reader has to go and fill in themselves.
   useEffect(() => {
-    track("page_view", { detail: { page: "studio" } });
+    const requested = new URLSearchParams(window.location.search).get("sample");
+    const sample = requested === null
+      ? undefined
+      : SAMPLE_CONTRACTS.find((entry) => entry.id === requested);
+
+    if (sample !== undefined) {
+      setCode(sample.source);
+      setCurrentFileName(`${sample.id}.sol`);
+      setLanguage("solidity");
+    }
+
+    track("page_view", { detail: { page: "studio", sample: sample?.id ?? null } });
   }, []);
 
   // Seed the workspace with a starter file on first mount. `files` is read
@@ -1483,6 +1507,20 @@ contract ${fileName.replace('.sol', '')} {
     setNewFileName("");
     setShowNewFileModal(false);
     addConsoleOutput(`✅ Created new file: ${fileName}`);
+  };
+
+  /**
+   * Replaces the open file with a verified rewrite from the parallel profiler.
+   *
+   * The previous source stays in the file list only as the editor's undo
+   * history, so the console line is the record that it was swapped.
+   */
+  const applyOptimizedContract = (optimized: string) => {
+    setCode(optimized);
+    setUserFiles(prev => prev.map(f =>
+      f.name === currentFileName ? { ...f, code: optimized } : f
+    ));
+    addConsoleOutput(`Applied the parallel-optimized rewrite to ${currentFileName}. Compile and run your tests before deploying.`);
   };
 
   const switchFile = (fileName: string) => {
@@ -2162,6 +2200,16 @@ Be concise but thorough. Format your response with markdown for readability.`;
             title="Gas profiler"
           >
             <Gauge size={16} />
+          </motion.button>
+
+          {/* Chain Fit Toggle */}
+          <motion.button
+            onClick={() => openSidePanel("chainfit")}
+            className={`p-2 rounded-lg ${chainFitOpen ? "bg-accent text-white border border-transparent" : "panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"}`}
+            whileTap={{ scale: 0.95 }}
+            title="Chain Fit: cost and behaviour of this contract on Monad against other EVM chains"
+          >
+            <Scale size={16} />
           </motion.button>
 
           <motion.button
@@ -3037,6 +3085,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
               <ParallelProfiler
                 code={language === "python" ? (transpilledSolidity || code) : code}
                 onClose={() => setParallelProfilerOpen(false)}
+                onApplyCode={language === "python" ? undefined : applyOptimizedContract}
               />
             </motion.div>
           )}
@@ -3061,6 +3110,32 @@ Be concise but thorough. Format your response with markdown for readability.`;
               className="border-l border-border-subtle flex flex-col min-w-0 flex-shrink-0 overflow-hidden panel-surface"
             >
               <GasProfiler code={code} onClose={() => setGasOpen(false)} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {chainFitOpen && (
+          <ResizeHandle
+            edge="left"
+            label="Resize chain fit report"
+            isDragging={chainFitResize.isDragging}
+            onPointerDown={chainFitResize.onPointerDown}
+            onReset={chainFitResize.reset}
+          />
+        )}
+        <AnimatePresence>
+          {chainFitOpen && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: chainFitResize.size, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              style={{ width: chainFitResize.size }}
+              className="border-l border-border-subtle flex flex-col min-w-0 flex-shrink-0 overflow-hidden panel-surface"
+            >
+              <ChainFitReport
+                code={language === "python" ? (transpilledSolidity || code) : code}
+                onClose={() => setChainFitOpen(false)}
+              />
             </motion.div>
           )}
         </AnimatePresence>

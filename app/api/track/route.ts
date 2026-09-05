@@ -9,6 +9,7 @@ const KNOWN_EVENTS: EventType[] = [
   "audit",
   "parallel_analysis",
   "gas_profile",
+  "chain_fit",
   "migration",
   "ai_generate",
   "transpile",

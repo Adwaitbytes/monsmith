@@ -14,6 +14,7 @@
     ],
     "allowJs": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "incremental": true,
     "moduleResolution": "node",
     "isolatedModules": true,
