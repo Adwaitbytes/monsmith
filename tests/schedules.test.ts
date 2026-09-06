@@ -163,8 +163,17 @@ test("intrinsic gas counts calldata bytes and init code words", () => {
     assert.equal(intrinsicGas(new Uint8Array(0), false), 21_000);
     assert.equal(intrinsicGas(new Uint8Array([0, 0, 0]), false), 21_000 + 12);
     assert.equal(intrinsicGas(new Uint8Array([1, 2, 3]), false), 21_000 + 48);
-    // 32 non-zero bytes of init code: 21000 + 32*16 + 2*1 word.
-    assert.equal(intrinsicGas(new Uint8Array(32).fill(1), true), 21_000 + 512 + 2);
+    // A creation transaction also pays Gtxcreate, which is 32,000 on top of the
+    // base 21,000 and is separate from the EIP-3860 per-word init code charge.
+    // 32 non-zero bytes: 21000 + 32000 + 32*16 + 2*1 word.
+    assert.equal(intrinsicGas(new Uint8Array(32).fill(1), true), 21_000 + 32_000 + 512 + 2);
+    // Creating costs exactly 32,000 more than sending the same bytes as calldata.
+    const payload = new Uint8Array(64).fill(7);
+    assert.equal(
+        intrinsicGas(payload, true) - intrinsicGas(payload, false),
+        32_000 + 2 * 2,
+        "Gtxcreate plus the init code word charge",
+    );
 });
 
 test("gas cost keeps enough precision for the figures we print", async () => {

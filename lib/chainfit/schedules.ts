@@ -61,6 +61,13 @@ export const MONAD_USER_RESERVE_BALANCE_MON = 10;
 
 /** Intrinsic transaction costs. Identical on both chains. */
 export const TX_BASE_GAS = 21_000;
+/**
+ * Additional intrinsic cost of a transaction that creates a contract
+ * (Gtxcreate in the yellow paper). Charged on top of the base 21,000 and
+ * separate from the EIP-3860 per-word init code charge, which is easy to
+ * conflate and was the source of a 32,000 gas undercount on every deployment.
+ */
+export const TX_CREATE_GAS = 32_000;
 export const CALLDATA_ZERO_BYTE_GAS = 4;
 export const CALLDATA_NONZERO_BYTE_GAS = 16;
 
@@ -263,7 +270,8 @@ export function intrinsicGas(data: Uint8Array, isCreate: boolean): number {
     const calldata = zero * CALLDATA_ZERO_BYTE_GAS + nonZero * CALLDATA_NONZERO_BYTE_GAS;
     // EIP-3860 charges 2 gas per 32-byte word of init code, on top of calldata.
     const initCode = isCreate ? 2 * Math.ceil(data.length / 32) : 0;
-    return TX_BASE_GAS + calldata + initCode;
+    const create = isCreate ? TX_CREATE_GAS : 0;
+    return TX_BASE_GAS + create + calldata + initCode;
 }
 
 /**

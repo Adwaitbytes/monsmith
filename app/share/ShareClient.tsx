@@ -8,6 +8,7 @@ import { ChainFitReport } from '../studio/components/ChainFitReport';
 import { GasProfiler } from '../studio/components/GasProfiler';
 import { ParallelProfiler } from '../studio/components/ParallelProfiler';
 import { MonsmithMark } from '../landing/MonsmithMark';
+import { ThemeToggle } from '../ThemeToggle';
 
 /**
  * Renders an analysis someone was sent.
@@ -66,6 +67,7 @@ export function ShareClient() {
                     <span className="font-display text-[14px] font-semibold tracking-tight">Monsmith</span>
                 </Link>
                 <div className="flex items-center gap-3">
+                    <ThemeToggle />
                     {status === 'ready' && (
                         <span className="hidden text-[12px] text-text-muted sm:inline">
                             Shared {SHARE_VIEW_LABELS[view].toLowerCase()}

@@ -8,6 +8,7 @@ import { effectiveGasPriceWei, fetchNativePrices, probeAll } from "@/lib/chainfi
 import { absoluteUrl, siteUrl } from "@/lib/siteUrl";
 
 import { AuthControls } from "../AuthControls";
+import { ThemeToggle } from "../ThemeToggle";
 import { getViewer } from "@/lib/auth/server";
 import { MonsmithMark } from "../landing/MonsmithMark";
 import { ChainMatrix } from "./ChainMatrix";
@@ -96,6 +97,7 @@ export default async function ComparePage() {
                         </span>
                     </Link>
                     <div className="flex items-center gap-3">
+                        <ThemeToggle />
                         <AuthControls compact tier={viewer.tier} isAdmin={viewer.role === "admin"} />
                         <Link
                             href="/studio"

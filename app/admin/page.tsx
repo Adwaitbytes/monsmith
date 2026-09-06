@@ -8,6 +8,7 @@ import { can, TIER_LABELS, TIER_LIMITS, parseRole, parseTier } from "@/lib/auth/
 import { getViewer } from "@/lib/auth/server";
 
 import { MonsmithMark } from "../landing/MonsmithMark";
+import { ThemeToggle } from "../ThemeToggle";
 import { TierControl } from "./TierControl";
 
 /**
@@ -88,6 +89,7 @@ export default async function AdminPage() {
                         </span>
                     </Link>
                     <div className="flex items-center gap-4 text-[13px]">
+                        <ThemeToggle />
                         <Link href="/stats" className="text-text-muted transition-colors hover:text-text-primary">
                             Usage
                         </Link>

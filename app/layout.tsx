@@ -47,11 +47,13 @@ export default function RootLayout({
       <head>
         {/*
           Applied before paint so a reload does not flash the wrong theme.
-          Reads the same localStorage key the zustand store persists to.
+          Reads the same localStorage key the zustand store persists to, and
+          falls back to the operating system's preference rather than to light,
+          so a first visit in a dark environment does not arrive bright white.
         */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem('monsmith-theme');var t=s?JSON.parse(s).state.theme:'light';document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;}catch(e){}})();`,
+            __html: `(function(){try{var s=localStorage.getItem('monsmith-theme');var t=s?JSON.parse(s).state.theme:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.dataset.theme=t;document.documentElement.style.colorScheme=t;}catch(e){}})();`,
           }}
         />
       </head>

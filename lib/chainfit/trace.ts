@@ -468,6 +468,13 @@ export async function traceCall(
     calldata: Uint8Array,
     intrinsic: number,
     value = 0n,
+    /**
+     * Who is calling. Defaults to the address that deployed the contract in
+     * this EVM, which is what makes owner-guarded functions traceable at all.
+     * Overridable so a contract that was deployed elsewhere can be measured as
+     * its real owner rather than as a stranger who only reaches the revert.
+     */
+    caller: Address = CALLER,
 ): Promise<ExecutionTrace> {
     const collector = newCollector();
     const memory = new FrameMemoryTracker();
@@ -477,8 +484,8 @@ export async function traceCall(
 
     try {
         const result = await evm.runCall({
-            caller: CALLER,
-            origin: CALLER,
+            caller,
+            origin: caller,
             to: createAddressFromString(to),
             data: calldata,
             value,
