@@ -275,3 +275,61 @@ test("a contract with only view functions is unscored rather than graded", () =>
     assert.notEqual(result.score, 100);
     assert.deepEqual(result.readOnlyFunctions.map((f) => f.name), ["read"]);
 });
+
+test("identical footprints fold into one node once the graph is large", async () => {
+    const { buildParallelGraph } = await import("../lib/parallel/graph.ts");
+
+    // Twenty entrypoints, all writing the same two keyed slots. Drawing twenty
+    // boxes against two slots hides the finding rather than showing it.
+    const settlers = Array.from(
+        { length: 20 },
+        (_, i) => `
+        function settle${i}(uint256 amount, address who) external {
+            positions[keccak256(abi.encode(amount, ${i}))] = amount;
+            holders[keccak256(abi.encode(amount, ${i}))] = who;
+        }`,
+    ).join("\n");
+
+    const source = `
+        // SPDX-License-Identifier: MIT
+        pragma solidity ^0.8.24;
+        contract Settlement {
+            mapping(bytes32 => uint256) public positions;
+            mapping(bytes32 => address) public holders;
+            ${settlers}
+        }
+    `;
+
+    const analysis = analyzeParallelPotential(source);
+    assert.equal(analysis.totalFunctions, 20);
+
+    const graph = buildParallelGraph(analysis);
+    assert.equal(graph.grouped, true);
+    assert.equal(graph.entrypointCount, 20);
+
+    const entrypointNodes = graph.nodes.filter((node) => node.data.kind === "entrypoint");
+    assert.equal(entrypointNodes.length, 1, "one footprint, one node");
+    assert.equal(entrypointNodes[0].data.members?.length, 20);
+
+    // Edges are drawn once per group, not once per folded member.
+    assert.ok(graph.edges.length <= 4, `expected at most 4 edges, got ${graph.edges.length}`);
+});
+
+test("a small contract keeps one node per entrypoint", async () => {
+    const { buildParallelGraph } = await import("../lib/parallel/graph.ts");
+
+    const source = `
+        // SPDX-License-Identifier: MIT
+        pragma solidity ^0.8.24;
+        contract Small {
+            uint256 public total;
+            uint256 public count;
+            function addTotal(uint256 n) external { total += n; }
+            function addCount(uint256 n) external { count += n; }
+        }
+    `;
+
+    const graph = buildParallelGraph(analyzeParallelPotential(source));
+    assert.equal(graph.grouped, false, "folding must not kick in on a readable graph");
+    assert.equal(graph.nodes.filter((node) => node.data.kind === "entrypoint").length, 2);
+});

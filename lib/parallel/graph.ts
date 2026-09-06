@@ -7,6 +7,14 @@
  * a property of a slot, not a line between two boxes, so it is encoded in the
  * nodes here and the edges only carry what they can actually show: which
  * entrypoint touches which slot, and how.
+ *
+ * Past a certain size even that is too much. A settlement contract with two
+ * hundred entrypoints draws two hundred boxes against the same two slots, which
+ * is a wall rather than a diagram, and no amount of zooming fixes it. So above
+ * a threshold entrypoints with an identical storage footprint collapse into one
+ * node. That is not a simplification for display: "every entrypoint here writes
+ * the same two keyed slots" is the finding, and two hundred separate boxes hide
+ * it rather than showing it.
  */
 
 import type { Edge, Node } from 'reactflow';
@@ -24,6 +32,11 @@ export interface ParallelNodeData {
     related: string[];
     entrypoint?: Entrypoint;
     hotspot?: Hotspot;
+    /**
+     * Names of every entrypoint folded into this node. Length one for an
+     * ordinary node, so the inspector can read it without a special case.
+     */
+    members?: string[];
 }
 
 export type ParallelNode = Node<ParallelNodeData>;
@@ -33,6 +46,10 @@ export interface ParallelGraph {
     edges: Edge[];
     /** Height the laid-out graph occupies, so the view can size its canvas. */
     height: number;
+    /** True when entrypoints were folded by footprint, so the view can say so. */
+    grouped: boolean;
+    /** Entrypoints in the analysis, before any folding. */
+    entrypointCount: number;
 }
 
 const ROW = 84;
@@ -42,6 +59,68 @@ const SLOT_WIDTH = 212;
 
 /** Laid-out width of the two columns, used to fit the graph to the panel. */
 export const GRAPH_WIDTH = COLUMN_GAP + SLOT_WIDTH;
+
+/**
+ * Above this many entrypoints, identical footprints are folded together.
+ * Below it every function is worth its own box, because the reader is looking
+ * at named functions rather than at a shape.
+ */
+const GROUP_THRESHOLD = 12;
+
+interface EntryGroup {
+    id: string;
+    members: Entrypoint[];
+    tone: Entrypoint['contention'];
+    /** Variables written, then read, restricted to those that have slot nodes. */
+    writes: string[];
+    reads: string[];
+}
+
+/**
+ * Folds entrypoints whose storage footprint and contention are identical.
+ *
+ * The signature deliberately includes contention: two functions touching the
+ * same slots but serialising for different reasons are not the same story.
+ */
+function groupEntrypoints(
+    entrypoints: Entrypoint[],
+    slotIds: ReadonlySet<string>,
+    enabled: boolean,
+): EntryGroup[] {
+    const visible = (names: string[]) =>
+        [...new Set(names)].filter((variable) => slotIds.has(slotId(variable))).sort();
+
+    const groups: EntryGroup[] = [];
+    const byKey = new Map<string, EntryGroup>();
+
+    for (const entry of entrypoints) {
+        const writes = visible(entry.writes.map((effect) => effect.variable));
+        const reads = visible(entry.reads.map((effect) => effect.variable));
+
+        if (!enabled) {
+            groups.push({ id: entryId(entry.name), members: [entry], tone: entry.contention, writes, reads });
+            continue;
+        }
+
+        const key = `${entry.contention}|w:${writes.join(',')}|r:${reads.join(',')}`;
+        const existing = byKey.get(key);
+        if (existing === undefined) {
+            const group: EntryGroup = {
+                id: entryId(entry.name),
+                members: [entry],
+                tone: entry.contention,
+                writes,
+                reads,
+            };
+            byKey.set(key, group);
+            groups.push(group);
+        } else {
+            existing.members.push(entry);
+        }
+    }
+
+    return groups;
+}
 
 export function buildParallelGraph(analysis: ParallelAnalysisResult): ParallelGraph {
     const contentionRank: Record<Entrypoint['contention'], number> = {
@@ -56,34 +135,49 @@ export function buildParallelGraph(analysis: ParallelAnalysisResult): ParallelGr
         (a, b) => scopeRank[a.scope] - scopeRank[b.scope] || a.variable.localeCompare(b.variable)
     );
 
+    const slotIds = new Set(hotspots.map((hotspot) => slotId(hotspot.variable)));
+    const grouped = entrypoints.length > GROUP_THRESHOLD;
+    const groups = groupEntrypoints(entrypoints, slotIds, grouped);
+
+    // Which node an entrypoint ended up in, so a conflict with a folded peer
+    // still lights the node that peer is now part of.
+    const nodeOf = new Map<string, string>();
+    for (const group of groups) {
+        for (const member of group.members) nodeOf.set(member.name, group.id);
+    }
+
     // Two columns of different lengths look broken when both start at the top.
-    const rows = Math.max(entrypoints.length, hotspots.length);
+    const rows = Math.max(groups.length, hotspots.length);
     const offsetOf = (count: number) => TOP + ((rows - count) * ROW) / 2;
-    const entryTop = offsetOf(entrypoints.length);
+    const entryTop = offsetOf(groups.length);
     const slotTop = offsetOf(hotspots.length);
 
-    const slotIds = new Set(hotspots.map((hotspot) => slotId(hotspot.variable)));
     const nodes: ParallelNode[] = [];
     const edges: Edge[] = [];
 
-    entrypoints.forEach((entry, index) => {
-        const touched = [...entry.writes, ...entry.reads]
-            .map((effect) => slotId(effect.variable))
-            .filter((id) => slotIds.has(id));
-
-        const peers = [...entry.conflictsWith, ...entry.contendsOnKeyWith].map(entryId);
+    groups.forEach((group, index) => {
+        const lead = group.members[0];
+        const touched = [...group.writes, ...group.reads].map(slotId);
+        const peers = group.members
+            .flatMap((member) => [...member.conflictsWith, ...member.contendsOnKeyWith])
+            .map((name) => nodeOf.get(name))
+            .filter((id): id is string => id !== undefined);
 
         nodes.push({
-            id: entryId(entry.name),
+            id: group.id,
             type: 'entrypoint',
             position: { x: 0, y: entryTop + index * ROW },
             data: {
                 kind: 'entrypoint',
-                label: `${entry.name}()`,
-                detail: detailFor(entry),
-                tone: entry.contention,
-                related: [...new Set([entryId(entry.name), ...touched, ...peers])],
-                entrypoint: entry,
+                label: group.members.length === 1 ? `${lead.name}()` : `${lead.name}() +${group.members.length - 1}`,
+                detail:
+                    group.members.length === 1
+                        ? detailFor(lead)
+                        : `${group.members.length} functions · ${detailFor(lead)}`,
+                tone: group.tone,
+                related: [...new Set([group.id, ...touched, ...peers])],
+                entrypoint: lead,
+                members: group.members.map((member) => member.name),
             },
         });
     });
@@ -106,18 +200,16 @@ export function buildParallelGraph(analysis: ParallelAnalysisResult): ParallelGr
         });
     });
 
-    for (const entry of entrypoints) {
-        const written = new Set(entry.writes.map((effect) => effect.variable));
+    for (const group of groups) {
+        const written = new Set(group.writes);
 
-        for (const effect of entry.writes) {
-            const target = slotId(effect.variable);
-            if (!slotIds.has(target)) continue;
-            const alsoReads = entry.reads.some((read) => read.variable === effect.variable);
+        for (const variable of group.writes) {
+            const alsoReads = group.reads.includes(variable);
 
             edges.push({
-                id: `w-${entry.name}-${effect.variable}`,
-                source: entryId(entry.name),
-                target,
+                id: `w-${group.id}-${variable}`,
+                source: group.id,
+                target: slotId(variable),
                 sourceHandle: 'out',
                 targetHandle: 'in',
                 type: 'bezier',
@@ -126,15 +218,13 @@ export function buildParallelGraph(analysis: ParallelAnalysisResult): ParallelGr
             });
         }
 
-        for (const effect of entry.reads) {
-            if (written.has(effect.variable)) continue;
-            const source = slotId(effect.variable);
-            if (!slotIds.has(source)) continue;
+        for (const variable of group.reads) {
+            if (written.has(variable)) continue;
 
             edges.push({
-                id: `r-${entry.name}-${effect.variable}`,
-                source: entryId(entry.name),
-                target: source,
+                id: `r-${group.id}-${variable}`,
+                source: group.id,
+                target: slotId(variable),
                 sourceHandle: 'out',
                 targetHandle: 'in',
                 type: 'bezier',
@@ -144,7 +234,13 @@ export function buildParallelGraph(analysis: ParallelAnalysisResult): ParallelGr
         }
     }
 
-    return { nodes, edges, height: TOP * 2 + rows * ROW };
+    return {
+        nodes,
+        edges,
+        height: TOP * 2 + rows * ROW,
+        grouped: grouped && groups.length < entrypoints.length,
+        entrypointCount: entrypoints.length,
+    };
 }
 
 function detailFor(entry: Entrypoint): string {

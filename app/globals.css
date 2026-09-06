@@ -66,6 +66,8 @@
   --contention-parallel-line: rgba(4, 120, 87, 0.26);
   --graph-read: #2563eb;
   --graph-grid: rgba(16, 16, 29, 0.06);
+  /* Dims the part of the minimap that is outside the current viewport. */
+  --graph-minimap-mask: rgba(16, 16, 29, 0.1);
 }
 
 :root[data-theme="dark"] {
@@ -109,6 +111,7 @@
   --contention-parallel-line: rgba(52, 211, 153, 0.32);
   --graph-read: #60a5fa;
   --graph-grid: rgba(255, 255, 255, 0.05);
+  --graph-minimap-mask: rgba(0, 0, 0, 0.5);
 }
 
 @theme inline {
