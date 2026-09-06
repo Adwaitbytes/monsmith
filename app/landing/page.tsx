@@ -22,6 +22,8 @@ import { useThemeStore } from "@/lib/store";
 import { useHydrated } from "@/lib/useHydrated";
 import { track } from "@/lib/track";
 import { MonsmithMark } from "./MonsmithMark";
+import { AuthControls } from "../AuthControls";
+import { useViewer } from "@/lib/auth/useViewer";
 import { ExecutionGraph } from "./ExecutionGraph";
 import { LiveStats } from "./LiveStats";
 import {
@@ -88,6 +90,7 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
 export default function LandingPage() {
   const { theme, toggleTheme } = useThemeStore();
   const mounted = useHydrated();
+  const { viewer } = useViewer();
   const reduce = useReducedMotion();
   const [scrolled, setScrolled] = useState(false);
 
@@ -154,6 +157,7 @@ export default function LandingPage() {
             >
               {isDark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
+            <AuthControls compact tier={viewer.tier} isAdmin={viewer.role === "admin"} />
             <Magnetic strength={0.4}>
               <Link
                 href="/studio"

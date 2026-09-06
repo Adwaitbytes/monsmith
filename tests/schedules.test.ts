@@ -166,3 +166,23 @@ test("intrinsic gas counts calldata bytes and init code words", () => {
     // 32 non-zero bytes of init code: 21000 + 32*16 + 2*1 word.
     assert.equal(intrinsicGas(new Uint8Array(32).fill(1), true), 21_000 + 512 + 2);
 });
+
+test("gas cost keeps enough precision for the figures we print", async () => {
+    const { gasCostNative } = await import("../lib/chainfit/probe.ts");
+
+    // 1 gwei on 21,000 gas is exactly 0.000021 of the native token.
+    assert.equal(gasCostNative(21_000, 10n ** 9n), 0.000021);
+
+    // A payload far below one gwei of total cost must not round to zero, which
+    // is what dividing straight to gwei used to do.
+    assert.ok(gasCostNative(21_000, 1_000n) > 0);
+
+    // Agreement with exact arithmetic, on a real Ethereum-scale figure.
+    const gas = 8_636_254;
+    const priceWei = 71_972_000n;
+    const exact = (gas * Number(priceWei)) / 1e18;
+    assert.ok(
+        Math.abs(gasCostNative(gas, priceWei) - exact) < 1e-12,
+        "must agree with exact arithmetic to well below a printed digit",
+    );
+});

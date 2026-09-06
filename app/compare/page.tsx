@@ -7,6 +7,8 @@ import { buildJourney, REFERENCE_CALL_GAS } from "@/lib/chainfit/journey";
 import { effectiveGasPriceWei, fetchNativePrices, probeAll } from "@/lib/chainfit/probe";
 import { absoluteUrl, siteUrl } from "@/lib/siteUrl";
 
+import { AuthControls } from "../AuthControls";
+import { getViewer } from "@/lib/auth/server";
 import { MonsmithMark } from "../landing/MonsmithMark";
 import { ChainMatrix } from "./ChainMatrix";
 import { CompareClient } from "./CompareClient";
@@ -49,6 +51,7 @@ const METHOD_STEPS = [
 ];
 
 export default async function ComparePage() {
+    const viewer = await getViewer();
     const profiles = CHAINS.filter((chain) => DEFAULT_COMPARISON.includes(chain.id));
     const [probeList, prices] = await Promise.all([probeAll(), fetchNativePrices()]);
     const probes = new Map(probeList.map((probe) => [probe.chain, probe] as const));
@@ -92,12 +95,15 @@ export default async function ComparePage() {
                             Monsmith
                         </span>
                     </Link>
-                    <Link
-                        href="/studio"
-                        className="rounded-lg bg-text-primary px-4 py-1.5 text-[13px] font-semibold text-background transition-opacity hover:opacity-90"
-                    >
-                        Open studio
-                    </Link>
+                    <div className="flex items-center gap-3">
+                        <AuthControls compact tier={viewer.tier} isAdmin={viewer.role === "admin"} />
+                        <Link
+                            href="/studio"
+                            className="rounded-lg bg-text-primary px-4 py-1.5 text-[13px] font-semibold text-background transition-opacity hover:opacity-90"
+                        >
+                            Open studio
+                        </Link>
+                    </div>
                 </div>
             </nav>
 
@@ -204,7 +210,7 @@ export default async function ComparePage() {
                         </h3>
                         <ul className="mt-3 space-y-2">
                             {[
-                                "Rollups charge for publishing calldata to Ethereum on top of execution gas. That component moves with Ethereum's fee market rather than with your contract, and it is not included, so Base, Arbitrum and OP Mainnet are shown cheaper than they are.",
+                                "Rollups charge for publishing calldata to Ethereum on top of execution gas, and that is not included here. Measured against their live fee oracles it comes to about $0.0001 on Base and $0.00002 on Arbitrum for a 39 KB deployment, three to four orders of magnitude under the execution cost shown. Blobs made it nearly free; before EIP-4844 it would have dominated.",
                                 "Functions are called with synthesised arguments. One guarded by a balance or permission check reverts, and a reverted call is marked rather than folded into a total.",
                                 "Gas units are not money, and money is not the whole decision. Ecosystem depth, liquidity and the maturity of the tooling around a chain are real and are not on this page.",
                             ].map((line) => (

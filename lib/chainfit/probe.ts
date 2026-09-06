@@ -300,7 +300,18 @@ export function effectiveGasPriceWei(probe: ChainProbe): bigint | null {
     }
 }
 
-/** Cost of `gas` units in native token, as a float. */
+/**
+ * Cost of `gas` units in native token.
+ *
+ * Scaled to 1e-12 of a token before the integer division rather than to gwei.
+ * Dividing straight to gwei threw away up to a full gwei, which is around
+ * 1e-6 USD on Ethereum: invisible against a dollar, but the reports quote
+ * fractions of a cent to six places, so it was landing in a digit we print.
+ * At this scale the truncation is below 1e-8 USD on every chain compared, and
+ * a payload small enough to round to zero no longer does.
+ */
 export function gasCostNative(gas: number, priceWei: bigint): number {
-    return Number((BigInt(Math.round(gas)) * priceWei) / 10n ** 9n) / 1e9;
+    const PRECISION = 1_000_000_000_000n;
+    const scaled = (BigInt(Math.round(gas)) * priceWei * PRECISION) / 10n ** 18n;
+    return Number(scaled) / Number(PRECISION);
 }

@@ -531,7 +531,8 @@ export async function buildChainFitReport(options: ChainFitOptions): Promise<Cha
     const caveats = [
         "Gas figures come from executing the contract in a local EVM with synthesised arguments. A function guarded by a balance or permission check will revert, and reverted calls are marked rather than counted.",
         "Only state-changing functions are traced. View and pure functions cost nothing to call from outside a transaction.",
-        "Only execution and intrinsic gas is modelled. Rollups additionally charge for publishing calldata to Ethereum, which is not included.",
+        "Only execution and intrinsic gas is modelled. " +
+            "Rollups additionally charge for publishing calldata to Ethereum, which is not included. Measured against the live oracles, that fee is around $0.0001 on Base and $0.00002 on Arbitrum even for a 39 KB deployment, three to four orders of magnitude below the execution cost shown, because EIP-4844 blobs made data posting nearly free.",
         "Ethereum storage cost is measured from the EVM. The Monad figure is that measurement adjusted by the published MIP-8 schedule.",
     ];
     if (!prices.available) {

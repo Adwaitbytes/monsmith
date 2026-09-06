@@ -60,6 +60,8 @@ import { ContractInteraction } from "./components/ContractInteraction";
 import { GasProfiler } from "./components/GasProfiler";
 import { ChainFitReport } from "./components/ChainFitReport";
 import { SAMPLE_CONTRACTS } from "../compare/samples";
+import { AuthControls } from "../AuthControls";
+import { useViewer } from "@/lib/auth/useViewer";
 import { generateFromTemplate, ARCHITECT_TO_TEMPLATE, CONTRACT_TEMPLATES } from "@/lib/contractTemplates";
 import { track } from "@/lib/track";
 import { createPaymentHeader } from "@/utils/q402";
@@ -873,6 +875,7 @@ export default function StudioPage() {
   } = useIDEStore();
 
   const mounted = useHydrated();
+  const { viewer } = useViewer();
   const [code, setCode] = useState(DEFAULT_CONTRACT);
   const [currentFileName, setCurrentFileName] = useState("MyToken.sol");
   const [language, setLanguage] = useState<"solidity" | "python">("solidity");
@@ -2229,6 +2232,8 @@ Be concise but thorough. Format your response with markdown for readability.`;
           >
             <ArrowRightLeft size={16} />
           </motion.button>
+
+          <AuthControls compact tier={viewer.tier} isAdmin={viewer.role === "admin"} />
 
           {/* Wallet */}
           {!isConnected ? (

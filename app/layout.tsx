@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ThemeSync } from "./ThemeSync";
 import { PostHogProvider } from "./PostHogProvider";
+import { AuthProvider } from "./AuthProvider";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -58,7 +59,9 @@ export default function RootLayout({
         className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} antialiased font-sans`}
       >
         <ThemeSync />
-        <PostHogProvider>{children}</PostHogProvider>
+        <AuthProvider>
+          <PostHogProvider>{children}</PostHogProvider>
+        </AuthProvider>
       </body>
     </html>
   );

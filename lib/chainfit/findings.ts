@@ -439,14 +439,15 @@ export function deriveFindings(evidence: FindingEvidence): ChainFinding[] {
         findings.push({
             id: "l1-data-fee",
             stage: "deploy",
-            impact: "cost",
+            impact: "info",
             title: "Rollups charge for calldata on top of execution gas",
             detail:
                 `${dataFeeChains.map((chain) => chain.name).join(", ")} publish every transaction's calldata ` +
-                `to Ethereum and bill for it separately. The traced calls carry a median of ` +
-                `${evidence.medianCalldataBytes} bytes of calldata each. The gas figures in this report are ` +
-                `execution gas only, so the real cost on those chains is higher than shown, by an amount ` +
-                `that moves with Ethereum's fee market rather than with anything in your contract.`,
+                `to Ethereum and bill for it separately, and the figures here are execution gas only. ` +
+                `The traced calls carry a median of ${evidence.medianCalldataBytes} bytes each. Measured ` +
+                `against those chains' own fee oracles the omitted charge is fractions of a cent even for a ` +
+                `39 KB deployment, since EIP-4844 blobs made data posting nearly free, so it is a real gap ` +
+                `rather than a large one. It moves with Ethereum's fee market, not with your contract.`,
             affects: dataFeeChains.map((chain) => chain.id),
             clearedOn: (["monad", "ethereum", "polygon", "bnb"] as ChainId[]).filter(has),
             metric: { label: "Median calldata", value: `${evidence.medianCalldataBytes} B` },
