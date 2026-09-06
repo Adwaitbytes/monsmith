@@ -1,6 +1,10 @@
 'use client';
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+
+import { sourceKeyOf, useAnalysisStore, useCachedAnalysis } from '@/lib/analysisStore';
+import { ShareButton } from './ShareButton';
+import { StaleNotice } from './StaleNotice';
 import { Activity, X } from 'lucide-react';
 
 import type { ParallelGraph as GraphModel } from '@/lib/parallel/graph';
@@ -24,6 +28,8 @@ type Analysis = ParallelAnalysisResult & {
 interface ParallelProfilerProps {
     code: string;
     onClose?: () => void;
+    /** Run on mount. Used when a shared link supplies the contract. */
+    autoRun?: boolean;
     /** Replaces the editor's contents with an optimised rewrite. */
     onApplyCode?: (code: string) => void;
 }
@@ -57,11 +63,17 @@ const SCOPE_LABEL = {
     caller: 'per caller',
 } as const;
 
-export function ParallelProfiler({ code, onClose, onApplyCode }: ParallelProfilerProps) {
-    const [analysis, setAnalysis] = useState<Analysis | null>(null);
+export function ParallelProfiler({ code, onClose, onApplyCode, autoRun = false }: ParallelProfilerProps) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [tab, setTab] = useState<Tab>('overview');
+
+    // The result lives in the shared store, so closing this panel to look at
+    // another one does not throw the analysis away.
+    const sourceKey = sourceKeyOf(code);
+    const cached = useCachedAnalysis<Analysis>('parallel', sourceKey);
+    const save = useAnalysisStore((state) => state.save);
+    const analysis = cached.result;
 
     const analyze = useCallback(async (contract?: string) => {
         if (!code.trim()) {
@@ -80,13 +92,23 @@ export function ParallelProfiler({ code, onClose, onApplyCode }: ParallelProfile
             });
             const data = await response.json();
             if (!data.success) throw new Error(data.error || 'Analysis failed');
-            setAnalysis(data.analysis as Analysis);
+            save('parallel', sourceKeyOf(code), data.analysis as Analysis, contract);
         } catch (caught) {
             setError(caught instanceof Error ? caught.message : 'Could not analyse this contract.');
         } finally {
             setLoading(false);
         }
-    }, [code]);
+    }, [code, save]);
+
+    // A shared link arrives with the contract but no result, so the analysis is
+    // started once on mount. Guarded by a ref rather than a dependency list so a
+    // re-render can never fire a second run.
+    const started = useRef(false);
+    useEffect(() => {
+        if (!autoRun || started.current || code.trim().length === 0) return;
+        started.current = true;
+        void analyze();
+    }, [autoRun, code, analyze]);
 
     return (
         <div className="flex h-full flex-col panel-surface">
@@ -102,6 +124,7 @@ export function ParallelProfiler({ code, onClose, onApplyCode }: ParallelProfile
                 </div>
 
                 <div className="flex shrink-0 items-center gap-1.5">
+                    <ShareButton view="parallel" source={code} ready={analysis !== null} compact />
                     <button
                         onClick={() => analyze(analysis?.contract)}
                         disabled={loading}
@@ -125,6 +148,10 @@ export function ParallelProfiler({ code, onClose, onApplyCode }: ParallelProfile
                 <div className="mx-4 mt-3 rounded-lg border border-[var(--contention-serial-line)] bg-[var(--contention-serial-soft)] px-3 py-2 text-[12.5px] text-text-secondary">
                     {error}
                 </div>
+            )}
+
+            {analysis && cached.stale && (
+                <StaleNotice at={cached.at} onRerun={() => analyze(cached.contract)} busy={loading} />
             )}
 
             {!analysis && !loading && <EmptyState onStart={() => analyze()} />}

@@ -7,6 +7,7 @@ import type { ChainFitReport as Report } from '@/lib/chainfit/report';
 import type { FindingImpact } from '@/lib/chainfit/findings';
 import { track } from '@/lib/track';
 
+import { ShareButton } from '../studio/components/ShareButton';
 import { SAMPLE_CONTRACTS } from './samples';
 
 /**
@@ -142,13 +143,16 @@ export function CompareClient() {
           />
         </label>
 
-        <button
-          onClick={run}
-          disabled={loading}
-          className="w-full rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 lg:w-auto"
-        >
-          {loading ? 'Measuring' : 'Measure it'}
-        </button>
+        <div className="flex flex-col gap-2 lg:w-auto">
+          <button
+            onClick={run}
+            disabled={loading}
+            className="w-full rounded-xl bg-accent px-6 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 lg:w-auto"
+          >
+            {loading ? 'Measuring' : 'Measure it'}
+          </button>
+          <ShareButton view="chainfit" source={source} ready={report !== null} />
+        </div>
       </div>
 
       {error !== null && (

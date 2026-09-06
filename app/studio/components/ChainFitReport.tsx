@@ -1,12 +1,17 @@
 'use client';
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChainFitReport as Report, FunctionReport } from '@/lib/chainfit/report';
 import type { ChainFinding, FindingImpact } from '@/lib/chainfit/findings';
+import { sourceKeyOf, useAnalysisStore, useCachedAnalysis } from '@/lib/analysisStore';
+import { ShareButton } from './ShareButton';
+import { StaleNotice } from './StaleNotice';
 
 interface ChainFitReportProps {
   code: string;
   onClose?: () => void;
+  /** Run on mount. Used when a shared link supplies the contract. */
+  autoRun?: boolean;
 }
 
 /**
@@ -367,10 +372,15 @@ function FindingCard({ finding, chains }: { finding: ChainFinding; chains: Repor
   );
 }
 
-export function ChainFitReport({ code, onClose }: ChainFitReportProps) {
-  const [report, setReport] = useState<Report | null>(null);
+export function ChainFitReport({ code, onClose, autoRun = false }: ChainFitReportProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Kept in the shared store, so the report survives a trip to another panel.
+  const cached = useCachedAnalysis<Report>('chainFit', sourceKeyOf(code));
+  const save = useAnalysisStore((state) => state.save);
+  const clear = useAnalysisStore((state) => state.clear);
+  const report = cached.result;
 
   const run = useCallback(async () => {
     if (!code.trim()) {
@@ -387,14 +397,24 @@ export function ChainFitReport({ code, onClose }: ChainFitReportProps) {
       });
       const data = await response.json();
       if (!data.success) throw new Error(data.error || 'Chain Fit analysis failed');
-      setReport(data.report as Report);
+      save('chainFit', sourceKeyOf(code), data.report as Report);
     } catch (err) {
-      setReport(null);
+      clear('chainFit');
       setError(err instanceof Error ? err.message : 'Failed to analyse contract');
     } finally {
       setLoading(false);
     }
-  }, [code]);
+  }, [code, save, clear]);
+
+  // A shared link arrives with the contract but no result, so the analysis is
+  // started once on mount. Guarded by a ref rather than a dependency list so a
+  // re-render can never fire a second run.
+  const started = useRef(false);
+  useEffect(() => {
+      if (!autoRun || started.current || code.trim().length === 0) return;
+      started.current = true;
+      void run();
+  }, [autoRun, code, run]);
 
   // The headline compares Monad against the cheapest alternative rather than
   // against the most expensive one, because picking Ethereum as the baseline
@@ -438,6 +458,7 @@ export function ChainFitReport({ code, onClose }: ChainFitReportProps) {
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <ShareButton view="chainfit" source={code} ready={report !== null} compact />
           <button
             onClick={run}
             disabled={loading}
@@ -487,6 +508,10 @@ export function ChainFitReport({ code, onClose }: ChainFitReportProps) {
             {error}
           </p>
         </div>
+      )}
+
+      {report !== null && cached.stale && (
+        <StaleNotice at={cached.at} onRerun={run} busy={loading} />
       )}
 
       {report === null && !loading && !error && (

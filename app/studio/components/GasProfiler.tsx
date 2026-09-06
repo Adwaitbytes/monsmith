@@ -1,11 +1,17 @@
 'use client';
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+import { sourceKeyOf, useAnalysisStore, useCachedAnalysis } from '@/lib/analysisStore';
+import { ShareButton } from './ShareButton';
+import { StaleNotice } from './StaleNotice';
 import type { FunctionGas, GasClass, GasProfile } from '@/lib/gasProfiler';
 
 interface GasProfilerProps {
   code: string;
   onClose?: () => void;
+  /** Run on mount. Used when a shared link supplies the contract. */
+  autoRun?: boolean;
 }
 
 /** Severity ramp: green is safe to call in a loop, red is a function to redesign. */
@@ -97,11 +103,16 @@ function FunctionRow({ fn, maxGas }: { fn: FunctionGas; maxGas: number }) {
   );
 }
 
-export function GasProfiler({ code, onClose }: GasProfilerProps) {
-  const [profile, setProfile] = useState<GasProfile | null>(null);
+export function GasProfiler({ code, onClose, autoRun = false }: GasProfilerProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showInternal, setShowInternal] = useState(false);
+
+  // Held in the shared store so switching panels does not discard the profile.
+  const cached = useCachedAnalysis<GasProfile>('gas', sourceKeyOf(code));
+  const save = useAnalysisStore((state) => state.save);
+  const clear = useAnalysisStore((state) => state.clear);
+  const profile = cached.result;
 
   const runProfile = useCallback(async () => {
     if (!code.trim()) {
@@ -125,14 +136,24 @@ export function GasProfiler({ code, onClose }: GasProfilerProps) {
         throw new Error(data.error || 'Gas profiling failed');
       }
 
-      setProfile(data.profile as GasProfile);
+      save('gas', sourceKeyOf(code), data.profile as GasProfile);
     } catch (err) {
-      setProfile(null);
+      clear('gas');
       setError(err instanceof Error ? err.message : 'Failed to profile contract');
     } finally {
       setLoading(false);
     }
-  }, [code]);
+  }, [code, save, clear]);
+
+  // A shared link arrives with the contract but no result, so the analysis is
+  // started once on mount. Guarded by a ref rather than a dependency list so a
+  // re-render can never fire a second run.
+  const started = useRef(false);
+  useEffect(() => {
+      if (!autoRun || started.current || code.trim().length === 0) return;
+      started.current = true;
+      void runProfile();
+  }, [autoRun, code, runProfile]);
 
   const shown = useMemo(() => {
     if (!profile) return [];
@@ -159,6 +180,7 @@ export function GasProfiler({ code, onClose }: GasProfilerProps) {
           </span>
         </div>
         <div className="flex items-center gap-2">
+          <ShareButton view="gas" source={code} ready={profile !== null} compact />
           <button
             onClick={runProfile}
             disabled={loading}
@@ -206,6 +228,10 @@ export function GasProfiler({ code, onClose }: GasProfilerProps) {
       )}
 
       {/* Empty state */}
+      {profile && cached.stale && (
+        <StaleNotice at={cached.at} onRerun={runProfile} busy={loading} />
+      )}
+
       {!profile && !loading && (
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="text-center max-w-md">
