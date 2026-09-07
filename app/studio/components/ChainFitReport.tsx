@@ -516,6 +516,10 @@ export function ChainFitReport({ code, onClose, autoRun = false }: ChainFitRepor
   // would flatter the result.
   const headline = useMemo(() => {
     if (report === null) return null;
+    // A deployment that reverted still produces a gas number, for the work done
+    // before it failed. Printing that as what deploying costs is a wrong figure
+    // stated as a fact, so there is no headline unless the contract went on chain.
+    if (report.deployment.status !== 'ok') return null;
     const monadCost = report.deployment.cost['monad']?.usd ?? null;
     let best: { name: string; usd: number } | null = null;
     for (const chain of report.chains) {
@@ -671,6 +675,21 @@ export function ChainFitReport({ code, onClose, autoRun = false }: ChainFitRepor
       {report !== null && (
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
           {report.reproduction !== null && <ReproductionBanner report={report} />}
+          {report.deployment.status !== 'ok' && (
+            <section className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+              <p className="text-xs text-text-secondary leading-relaxed">
+                <span className="font-semibold text-text-primary">
+                  Deployment cost is not measured for this contract.
+                </span>{' '}
+                Its constructor did not complete with the arguments generated here
+                {report.deployment.revertReason === null
+                  ? ''
+                  : ` (${report.deployment.revertReason})`}
+                , so the gas below is from a deployment that failed rather than one that
+                worked. Everything else on this page is unaffected.
+              </p>
+            </section>
+          )}
           {headline !== null && (
             <section className="rounded-xl border border-accent-line bg-accent-soft px-4 py-3">
               <p className="text-xs text-text-secondary leading-relaxed">

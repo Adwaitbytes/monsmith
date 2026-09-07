@@ -31,7 +31,7 @@ import {
     callableFunctions,
     canonicalSignature,
     synthesiseCalls,
-    synthesiseConstructorArgs,
+    constructorAttempts,
     type ArgScale,
 } from "./args";
 import {
@@ -321,23 +321,55 @@ export async function buildChainFitReport(options: ChainFitOptions): Promise<Cha
     const networkPromise = Promise.all([probeAll(), fetchNativePrices()]);
 
     // ---- Deploy into a local EVM ----
-    let initCodeHex = `0x${bytecode.replace(/^0x/, "")}`;
-    try {
-        const constructorArgs = synthesiseConstructorArgs(abi);
-        initCodeHex = encodeDeployData({
-            abi,
-            bytecode: initCodeHex as `0x${string}`,
-            args: constructorArgs,
-        } as Parameters<typeof encodeDeployData>[0]);
-    } catch {
-        warnings.push(
-            "Constructor arguments could not be synthesised, so the contract was deployed without them.",
+    //
+    // Tried more than once. A constructor that reverts produces a gas figure
+    // for a deployment that did not happen, and reporting that as the cost of
+    // deploying is worse than reporting nothing, so each candidate argument set
+    // is tried until one gets the contract on chain.
+    const bare = `0x${bytecode.replace(/^0x/, "")}`;
+
+    // The EVM that produced the winning trace is the one the functions are
+    // measured against, so it is carried out of the loop with it. Measuring
+    // against a different instance would trace calls into a contract that the
+    // successful constructor never initialised.
+    let evm = await createTracingEvm();
+    let initCode = toBytes(bare);
+    let deploymentTrace = await traceDeployment(evm, initCode, intrinsicGas(initCode, true));
+    let deploymentArgs = "no arguments";
+
+    for (const attempt of constructorAttempts(abi)) {
+        let encoded: string;
+        try {
+            encoded = encodeDeployData({
+                abi,
+                bytecode: bare as `0x${string}`,
+                args: attempt.args,
+            } as Parameters<typeof encodeDeployData>[0]);
+        } catch {
+            continue;
+        }
+
+        const candidateEvm = await createTracingEvm();
+        const candidateCode = toBytes(encoded);
+        const candidate = await traceDeployment(
+            candidateEvm,
+            candidateCode,
+            intrinsicGas(candidateCode, true),
         );
+
+        evm = candidateEvm;
+        initCode = candidateCode;
+        deploymentTrace = candidate;
+        deploymentArgs = attempt.label;
+        if (candidate.status === "ok") break;
     }
 
-    const initCode = toBytes(initCodeHex);
-    const evm = await createTracingEvm();
-    const deploymentTrace = await traceDeployment(evm, initCode, intrinsicGas(initCode, true));
+    if (deploymentTrace.status === "ok" && deploymentArgs !== "no arguments") {
+        warnings.push(
+            `Deployment was measured with ${deploymentArgs}, since the real ones are not known here. ` +
+                "A constructor that writes more storage than the sample does costs more than this.",
+        );
+    }
 
     // Where the contract exists on chain, install its real runtime code and
     // measure that instead of whatever the local deployment managed to produce.

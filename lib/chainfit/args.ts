@@ -123,13 +123,51 @@ export function synthesiseCalls(abi: Abi, fn: AbiFunction): SynthesisedCall[] {
 }
 
 /** Constructor calldata appended to the deployment bytecode. */
-export function synthesiseConstructorArgs(abi: Abi): unknown[] {
+export function synthesiseConstructorArgs(abi: Abi, scale: ArgScale = "medium"): unknown[] {
     const constructor = abi.find(
         (entry): entry is Extract<Abi[number], { type: "constructor" }> =>
             entry.type === "constructor",
     );
     if (constructor === undefined) return [];
-    return constructor.inputs.map((input) => sampleValue(input, "medium"));
+    return constructor.inputs.map((input) => sampleValue(input, scale));
+}
+
+/**
+ * Argument sets to try for a constructor, in order, until one deploys.
+ *
+ * One guess is not enough. A constructor that sums an array and requires
+ * msg.value to equal the total reverts for any non-empty array, since a traced
+ * deployment sends no value; an escrow, a vesting schedule and a payment
+ * splitter are all shaped that way. Falling back to empty arrays makes that
+ * class deploy, and it is worth trying because the alternative is reporting the
+ * gas of a deployment that failed.
+ *
+ * Every set is a guess, so the caller still has to check what actually
+ * succeeded rather than assume the first one did.
+ */
+export function constructorAttempts(abi: Abi): { label: string; args: unknown[] }[] {
+    const constructor = abi.find(
+        (entry): entry is Extract<Abi[number], { type: "constructor" }> =>
+            entry.type === "constructor",
+    );
+    if (constructor === undefined || constructor.inputs.length === 0) {
+        return [{ label: "no arguments", args: [] }];
+    }
+
+    const attempts = [{ label: "sample arguments", args: synthesiseConstructorArgs(abi) }];
+
+    // Arrays emptied, everything else left alone: this is the set that gets a
+    // value-checking constructor past its own require.
+    if (constructor.inputs.some((input) => /\[\d*\]$/.test(input.type))) {
+        attempts.push({
+            label: "sample arguments with empty arrays",
+            args: constructor.inputs.map((input) =>
+                /\[\]$/.test(input.type) ? [] : sampleValue(input, "medium"),
+            ),
+        });
+    }
+
+    return attempts;
 }
 
 /** Public and external functions, which are the ones a user pays gas to call. */
