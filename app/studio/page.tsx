@@ -64,9 +64,9 @@ import { generateFromTemplate, ARCHITECT_TO_TEMPLATE, CONTRACT_TEMPLATES } from 
 import { track } from "@/lib/track";
 import { createPaymentHeader } from "@/utils/q402";
 import { getEthereumProvider } from "@/lib/ethereum";
-import { deployFromWallet, constructorInputs, type ConstructorInput } from "@/lib/deploy";
-import { coerceArgument } from "@/lib/contractInteraction";
-import type { Abi } from "viem";
+import { deployFromWallet, constructorInputs, isConstructorPayable, type ConstructorInput } from "@/lib/deploy";
+import { coerceArgument, placeholderFor } from "@/lib/contractInteraction";
+import { parseEther, type Abi } from "viem";
 import {
   errorMessage,
   readJson,
@@ -929,6 +929,11 @@ export default function StudioPage() {
   const [ctorInputs, setCtorInputs] = useState<ConstructorInput[]>([]);
   const [ctorArgs, setCtorArgs] = useState<string[]>([]);
   const [ctorError, setCtorError] = useState<string | null>(null);
+  // A payable constructor needs a value field even with no arguments, so the
+  // dialog's own open state cannot be inferred from the argument list alone.
+  const [ctorPayable, setCtorPayable] = useState(false);
+  const [ctorValue, setCtorValue] = useState("");
+  const ctorOpen = ctorInputs.length > 0 || ctorPayable;
   // Architect Chat State
   const [architectChatInput, setArchitectChatInput] = useState("");
   const [architectChatHistory, setArchitectChatHistory] = useState<{role: "user" | "assistant", content: string}[]>([]);
@@ -1292,11 +1297,17 @@ export default function StudioPage() {
     }
 
     // Ask for constructor arguments before touching the wallet. Deploying with
-    // the wrong number of them reverts on chain and costs gas for nothing.
+    // the wrong number of them reverts on chain and costs gas for nothing. A
+    // payable constructor opens the same dialog even with no arguments, because
+    // it still needs somewhere to say how much MON to send.
     const required = constructorInputs(compileResult.abi as Abi);
-    if (required.length > 0 && ctorInputs.length === 0) {
+    const payable = isConstructorPayable(compileResult.abi as Abi);
+
+    if ((required.length > 0 || payable) && !ctorOpen) {
       setCtorInputs(required);
+      setCtorPayable(payable);
       setCtorArgs(required.map(() => ""));
+      setCtorValue("");
       setCtorError(null);
       return;
     }
@@ -1304,18 +1315,31 @@ export default function StudioPage() {
     await performDeploy(required, ctorArgs);
   };
 
+  const closeCtorDialog = () => {
+    setCtorInputs([]);
+    setCtorPayable(false);
+    setCtorError(null);
+  };
+
   const performDeploy = async (required: ConstructorInput[], rawArgs: string[]) => {
     if (!compileResult?.abi || !compileResult.bytecode || !walletAddress) return;
 
     let typedArgs: unknown[];
+    let value = 0n;
     try {
       typedArgs = required.map((input, i) => coerceArgument(rawArgs[i] ?? "", input.type));
+      // Blank means zero. Anything else has to parse, or the deployment would
+      // go out with a value the person did not write.
+      if (ctorPayable && ctorValue.trim().length > 0) {
+        value = parseEther(ctorValue.trim());
+      }
     } catch (err) {
       setCtorError(errorMessage(err));
       return;
     }
 
     setCtorInputs([]);
+    setCtorPayable(false);
     setCtorError(null);
     setDeploying(true);
     addConsoleOutput(`🚀 Deploying ${language === "python" ? "Python" : "Solidity"} contract to Monad testnet...`);
@@ -1326,7 +1350,8 @@ export default function StudioPage() {
         compileResult.abi as Abi,
         compileResult.bytecode,
         walletAddress as `0x${string}`,
-        typedArgs
+        typedArgs,
+        value
       );
 
       addConsoleOutput(`✅ Contract deployed!`);
@@ -2863,13 +2888,13 @@ Be concise but thorough. Format your response with markdown for readability.`;
 
         {/* Constructor arguments. Shown only when the ABI says the contract needs them. */}
         <AnimatePresence>
-          {ctorInputs.length > 0 && (
+          {ctorOpen && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-              onClick={() => setCtorInputs([])}
+              onClick={closeCtorDialog}
             >
               <motion.div
                 initial={{ scale: 0.96, y: 8 }}
@@ -2878,10 +2903,13 @@ Be concise but thorough. Format your response with markdown for readability.`;
                 onClick={(e) => e.stopPropagation()}
                 className="w-full max-w-md rounded-2xl panel-surface border border-border-subtle p-5 shadow-[var(--shadow-panel)]"
               >
-                <h3 className="text-base font-bold text-text-primary mb-1">Constructor arguments</h3>
+                <h3 className="text-base font-bold text-text-primary mb-1">
+                  {ctorInputs.length > 0 ? "Constructor arguments" : "Deployment value"}
+                </h3>
                 <p className="text-xs text-text-secondary mb-4">
-                  This contract&apos;s constructor takes {ctorInputs.length} argument
-                  {ctorInputs.length === 1 ? "" : "s"}. Deploying without them reverts on chain.
+                  {ctorInputs.length > 0
+                    ? `This contract's constructor takes ${ctorInputs.length} argument${ctorInputs.length === 1 ? "" : "s"}. Deploying without them reverts on chain.`
+                    : "This constructor is payable, so it can receive MON on deployment."}
                 </p>
 
                 <div className="space-y-3">
@@ -2900,7 +2928,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
                             return next;
                           })
                         }
-                        placeholder={input.type === "string" ? "Hello Monad" : input.type}
+                        placeholder={placeholderFor(input.type)}
                         spellCheck={false}
                         className="w-full mt-1 px-3 py-2 rounded-lg text-xs font-mono panel-sunken border border-border-subtle outline-none focus:border-purple-500"
                       />
@@ -2908,13 +2936,33 @@ Be concise but thorough. Format your response with markdown for readability.`;
                   ))}
                 </div>
 
+                {ctorPayable && (
+                  <div className={ctorInputs.length > 0 ? "mt-3 pt-3 border-t border-border-subtle" : ""}>
+                    <label className="text-[10px] font-mono text-text-muted">
+                      msg.value: MON
+                    </label>
+                    <input
+                      autoFocus={ctorInputs.length === 0}
+                      value={ctorValue}
+                      onChange={(e) => setCtorValue(e.target.value)}
+                      placeholder="0.0"
+                      spellCheck={false}
+                      inputMode="decimal"
+                      className="w-full mt-1 px-3 py-2 rounded-lg text-xs font-mono panel-sunken border border-border-subtle outline-none focus:border-purple-500"
+                    />
+                    <p className="mt-1 text-[10px] text-text-muted">
+                      Sent with the deployment. In MON, not wei, so 0.3 means 0.3 MON.
+                    </p>
+                  </div>
+                )}
+
                 {ctorError && (
                   <p className="mt-3 text-[11px] text-red-600 dark:text-red-400">{ctorError}</p>
                 )}
 
                 <div className="flex gap-2 mt-5">
                   <button
-                    onClick={() => setCtorInputs([])}
+                    onClick={closeCtorDialog}
                     className="flex-1 py-2 rounded-lg text-xs font-semibold border border-border-subtle text-text-secondary hover:text-text-primary"
                   >
                     Cancel

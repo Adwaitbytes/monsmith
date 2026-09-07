@@ -5,6 +5,7 @@ import {
   createWalletClient,
   custom,
   defineChain,
+  formatEther,
   type Abi,
   type Address,
   type Hash,
@@ -39,6 +40,18 @@ export function constructorInputs(abi: Abi): ConstructorInput[] {
     name: ("name" in input && input.name) || `arg${i}`,
     type: "type" in input ? String(input.type) : "unknown",
   }));
+}
+
+/**
+ * Whether the constructor accepts MON.
+ *
+ * A payable constructor is usually payable because it checks `msg.value`, so
+ * the deploy form has to offer a value field. Without one the transaction is
+ * sent with zero and reverts, and the wallet reports only a generic failure.
+ */
+export function isConstructorPayable(abi: Abi): boolean {
+  const ctor = abi.find((entry) => entry.type === "constructor");
+  return ctor !== undefined && "stateMutability" in ctor && ctor.stateMutability === "payable";
 }
 
 export interface DeployResult {
@@ -91,7 +104,8 @@ export async function deployFromWallet(
   abi: Abi,
   bytecode: string,
   account: Address,
-  args: readonly unknown[] = []
+  args: readonly unknown[] = [],
+  value: bigint = 0n
 ): Promise<DeployResult> {
   const ethereum = getEthereumProvider();
   if (!ethereum) throw new Error("No wallet detected. Install MetaMask to deploy.");
@@ -106,6 +120,13 @@ export async function deployFromWallet(
   if (balance === 0n) {
     throw new Error(
       "This wallet has no testnet MON. Get some from https://faucet.monad.xyz and try again."
+    );
+  }
+  // Checked before the wallet opens, because the shortfall is knowable here and
+  // an insufficient-funds rejection inside MetaMask does not say by how much.
+  if (value > balance) {
+    throw new Error(
+      `This deployment sends ${formatEther(value)} MON but the wallet holds ${formatEther(balance)}.`
     );
   }
 
@@ -124,7 +145,7 @@ export async function deployFromWallet(
 
   let txHash: Hash;
   try {
-    txHash = await walletClient.deployContract({ abi, bytecode: hex, args });
+    txHash = await walletClient.deployContract({ abi, bytecode: hex, args, value });
   } catch (error) {
     if (isProviderRpcError(error) && error.code === USER_REJECTED) {
       throw new Error("Deployment cancelled in wallet.");
@@ -135,7 +156,13 @@ export async function deployFromWallet(
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
   if (receipt.status !== "success" || !receipt.contractAddress) {
-    throw new Error("Deployment transaction reverted on chain.");
+    // A payable constructor almost always reverts because it checked msg.value,
+    // and the receipt carries no reason string to say so.
+    const hint =
+      value === 0n && isConstructorPayable(abi)
+        ? " This constructor is payable, so it may require MON to be sent with the deployment."
+        : "";
+    throw new Error(`Deployment transaction reverted on chain.${hint}`);
   }
 
   return {

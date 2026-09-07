@@ -75,6 +75,80 @@ export function readableFunctions(abi: Abi): ContractFunction[] {
     });
 }
 
+/** `uint256[]`, `uint256[2]`, and the outer dimension of `uint256[][]`. */
+const ARRAY_SUFFIX = /\[(\d*)\]$/;
+
+/**
+ * Removes one pair of surrounding quotes.
+ *
+ * Quotes here are notation, never part of the value. A uint256 worth writing
+ * is usually past 2^53 already, so `["100000000000000000"]` is the only way to
+ * put one in a list without an unquoted JSON number rounding it. Exactly one
+ * pair comes off, which leaves a genuinely quoted string still expressible.
+ */
+function unquote(value: string): string {
+  const first = value[0];
+  const quoted =
+    value.length >= 2 && (first === '"' || first === "'") && value[value.length - 1] === first;
+
+  return quoted ? value.slice(1, -1).replace(/\\(["'\\])/g, "$1") : value;
+}
+
+/**
+ * Splits an array literal into its elements.
+ *
+ * Splitting on every comma is wrong twice over: `[[1,2],[3]]` and `["a,b"]`
+ * both contain commas that separate nothing. Tracking bracket depth and quote
+ * state is the smallest thing that reads either correctly.
+ */
+function splitElements(body: string): string[] {
+  const items: string[] = [];
+  let current = "";
+  let depth = 0;
+  let quote: string | null = null;
+
+  for (let i = 0; i < body.length; i += 1) {
+    const char = body[i];
+
+    if (quote !== null) {
+      if (char === "\\" && i + 1 < body.length) {
+        current += char + body[i + 1];
+        i += 1;
+        continue;
+      }
+      current += char;
+      if (char === quote) quote = null;
+      continue;
+    }
+
+    if (char === '"' || char === "'") quote = char;
+    else if (char === "[") depth += 1;
+    else if (char === "]") depth -= 1;
+    else if (char === "," && depth === 0) {
+      items.push(current);
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (quote !== null) throw new Error(`Unclosed quote in "${body}"`);
+  if (depth !== 0) throw new Error(`Unbalanced brackets in "${body}"`);
+
+  items.push(current);
+
+  // A single empty element is an empty list, not a list holding nothing.
+  if (items.length === 1 && items[0].trim().length === 0) return [];
+
+  return items.map((item) => {
+    const element = item.trim();
+    // Dropping it would quietly deploy with fewer values than were written.
+    if (element.length === 0) throw new Error(`Empty element in "[${body}]"`);
+    return element;
+  });
+}
+
 /**
  * Turns the raw strings from the form into the types viem expects.
  *
@@ -84,41 +158,81 @@ export function readableFunctions(abi: Abi): ContractFunction[] {
  */
 export function coerceArgument(value: string, type: string): unknown {
   const trimmed = value.trim();
+  const array = ARRAY_SUFFIX.exec(type);
 
-  if (type.endsWith("[]")) {
-    const inner = type.slice(0, -2);
-    const items = trimmed.replace(/^\[|\]$/g, "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (array !== null) {
+    const inner = type.slice(0, array.index);
+
+    const opens = trimmed.startsWith("[");
+    const closes = trimmed.endsWith("]");
+    if (opens !== closes) {
+      throw new Error(`Expected a bracketed list for ${type}, like ["1", "2"], got "${value}"`);
+    }
+
+    const items = splitElements(opens ? trimmed.slice(1, -1) : trimmed);
+
+    const fixed = array[1];
+    if (fixed.length > 0 && items.length !== Number(fixed)) {
+      throw new Error(`${type} needs exactly ${fixed} values, got ${items.length}`);
+    }
+
     return items.map((item) => coerceArgument(item, inner));
   }
 
+  const literal = unquote(trimmed);
+
   if (type === "bool") {
-    if (trimmed === "true") return true;
-    if (trimmed === "false") return false;
+    if (literal === "true") return true;
+    if (literal === "false") return false;
     throw new Error(`Expected true or false for a bool, got "${value}"`);
   }
 
   if (/^u?int/.test(type)) {
-    if (!/^-?\d+$/.test(trimmed)) {
+    if (!/^-?\d+$/.test(literal)) {
       throw new Error(`Expected a whole number for ${type}, got "${value}"`);
     }
-    return BigInt(trimmed);
+    return BigInt(literal);
   }
 
   if (type === "address") {
-    if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) {
+    if (!/^0x[a-fA-F0-9]{40}$/.test(literal)) {
       throw new Error(`Expected a 0x address, got "${value}"`);
     }
-    return trimmed as Address;
+    return literal as Address;
   }
 
   if (type.startsWith("bytes")) {
-    if (!trimmed.startsWith("0x")) {
+    if (!literal.startsWith("0x")) {
       throw new Error(`Expected 0x-prefixed hex for ${type}, got "${value}"`);
     }
-    return trimmed as `0x${string}`;
+    return literal as `0x${string}`;
   }
 
-  return trimmed;
+  return literal;
+}
+
+/**
+ * What to show in an empty argument field.
+ *
+ * A list is the one type people reliably get wrong, and the bare type name
+ * `uint256[]` does not tell anyone that the values want quoting. Showing the
+ * shape is cheaper than explaining it after the error.
+ */
+export function placeholderFor(type: string): string {
+  const array = ARRAY_SUFFIX.exec(type);
+  if (array !== null) {
+    const inner = type.slice(0, array.index);
+    if (/^u?int/.test(inner)) return '["1000000000000000000", "2000000000000000000"]';
+    if (inner === "address") return '["0x…", "0x…"]';
+    if (inner === "bool") return "[true, false]";
+    return '["a", "b"]';
+  }
+
+  if (type === "string") return "Hello Monad";
+  if (type === "address") return "0x…";
+  if (type === "bool") return "true";
+  if (/^u?int/.test(type)) return "0";
+  return type;
 }
 
 /** Renders a decoded return value without losing precision on big integers. */
