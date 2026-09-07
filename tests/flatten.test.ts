@@ -171,3 +171,31 @@ test("ordinary source is never mistaken for a concatenated document", () => {
     const plain = "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\ncontract A {}";
     assert.equal(repairConcatenated(plain), plain);
 });
+
+test("a single file of a multi-file project explains itself", async () => {
+    const { compileVersioned } = await import("../lib/solc/compile.ts");
+
+    // The shape of a file copied from a block explorer's source tab: the main
+    // contract, with imports naming siblings that were never copied with it.
+    const source = `// SPDX-License-Identifier: BUSL-1.1
+pragma solidity =0.7.6;
+import './interfaces/IUniswapV3Pool.sol';
+import './libraries/Tick.sol';
+import './libraries/Position.sol';
+contract UniswapV3Pool is IUniswapV3Pool {}`;
+
+    await assert.rejects(
+        () => compileVersioned(source),
+        (error: Error) => {
+            // The cause, not one error per import.
+            assert.match(error.message, /imports 3 other files that are not here/);
+            assert.match(error.message, /interfaces\/IUniswapV3Pool\.sol/);
+            assert.match(error.message, /by address/, "it has to say what does work");
+            assert.ok(
+                !/ParserError/.test(error.message),
+                "the compiler's symptoms are replaced by the explanation",
+            );
+            return true;
+        },
+    );
+});

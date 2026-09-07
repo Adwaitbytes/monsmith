@@ -171,6 +171,43 @@ async function acquire(
     };
 }
 
+/** Import paths solc could not resolve, from its diagnostics. */
+function unresolvedImports(errors: SolcError[]): string[] {
+    const paths = new Set<string>();
+    for (const entry of errors) {
+        for (const match of entry.formattedMessage.matchAll(/Source "([^"]+)" not found/g)) {
+            paths.add(match[1]);
+        }
+    }
+    return [...paths];
+}
+
+/**
+ * Turns a wall of "Source not found" into the one sentence that explains it.
+ *
+ * A file copied from a block explorer's source tab is one file of a project.
+ * Its imports name siblings that were never copied with it, so the compiler
+ * emits one error per import and the real problem, that the other files are
+ * missing, is nowhere in the output. No tool can compile that file, because the
+ * code it needs does not exist anywhere; what a tool can do is say so, and say
+ * what does work.
+ */
+function missingSourcesError(missing: string[]): Error {
+    const shown = missing.slice(0, 4).join(", ");
+    const rest = missing.length > 4 ? ` and ${missing.length - 4} more` : "";
+
+    return new Error(
+        `This file imports ${missing.length} other file${missing.length === 1 ? "" : "s"} that are not here: ` +
+            `${shown}${rest}.\n\n` +
+            "It is one file of a multi-file project, so it cannot be compiled on its own. " +
+            "Two ways round it:\n" +
+            "  1. Chain Fit, then \"measure a deployed contract by address\" - it fetches every file from " +
+            "Sourcify, picks the right compiler, and checks the result against the deployed bytecode.\n" +
+            "  2. Contract Migration, then import by address - it flattens all the files into one document " +
+            "you can edit and compile here.",
+    );
+}
+
 function readOutput(
     raw: string,
 ): { errors: SolcError[]; contracts: Record<string, Record<string, CompiledContract>> } {
@@ -180,6 +217,10 @@ function readOutput(
     };
     const errors = (output.errors ?? []).filter((entry) => entry.severity === "error");
     if (errors.length > 0) {
+        const missing = unresolvedImports(errors);
+        // Missing sources explain every other error they cause, so report the
+        // cause rather than the symptoms.
+        if (missing.length > 0) throw missingSourcesError(missing);
         throw new Error(errors.map((entry) => entry.formattedMessage).join("\n"));
     }
     return { errors: output.errors ?? [], contracts: output.contracts ?? {} };
