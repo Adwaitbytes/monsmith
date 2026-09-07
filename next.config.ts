@@ -1,6 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // solc is 24 MB of Emscripten output and is loaded through `require` at
+  // runtime. Bundling it is both pointless and slow.
+  serverExternalPackages: ["solc"],
+
   typescript: {
     ignoreBuildErrors: true,
   },

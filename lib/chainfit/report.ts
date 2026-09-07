@@ -18,7 +18,14 @@ import { encodeDeployData } from "viem";
 
 import { analyzeParallelPotential } from "../parallelAnalyzer";
 import { buildGasProfile } from "../gasProfiler";
-import { compileContract, type CompileOutput } from "../solc";
+import {
+    compileProject,
+    compileVersioned,
+    type CompilerUsed,
+    type SourceMap,
+    type VersionedCompileResult,
+} from "../solc/compile";
+import type { Reproduction } from "./verify";
 
 import {
     callableFunctions,
@@ -146,7 +153,15 @@ export interface ChainCard {
 export interface ChainFitReport {
     contractName: string;
     generatedAt: string;
-    compiledWith: string;
+    /** Which compiler ran, and why that one. */
+    compiler: CompilerUsed;
+    /**
+     * Present when the subject was a verified deployed contract: whether our
+     * recompilation matches the code actually on chain.
+     */
+    reproduction: Reproduction | null;
+    /** Address and chain, when the subject came from one. */
+    onchain: { address: string; chainId: number } | null;
     chains: ChainCard[];
     deployment: DeploymentReport;
     functions: FunctionReport[];
@@ -169,8 +184,37 @@ export interface ChainFitReport {
 }
 
 export interface ChainFitOptions {
+    /**
+     * Flattened text, used by the analyses that read source rather than compile
+     * it. Also compiled directly when `sources` is absent.
+     */
     source: string;
     chains?: readonly ChainId[];
+    /** Pin a compiler instead of resolving the pragma. */
+    compilerVersion?: string;
+    /**
+     * The project's real files, keyed by the paths they import each other
+     * under. Concatenating a multi-file project does not flatten it: the
+     * relative imports survive and no compiler can resolve them, so anything
+     * with more than one file has to arrive this way.
+     */
+    sources?: SourceMap;
+    /** Fully qualified `path:Name` of the contract to measure, when known. */
+    target?: string;
+    /** Verbatim compiler settings, for reproducing a verified build. */
+    settings?: Record<string, unknown>;
+    /** Set when the source came from a verified contract at an address. */
+    onchain?: { address: string; chainId: number; reproduction: Reproduction } | null;
+    /**
+     * The contract's deployed runtime code.
+     *
+     * When a contract already exists, this is better than re-deploying it here.
+     * A constructor that reads back from its deployer, as Uniswap V3 pools do,
+     * cannot run standalone at all, and re-deploying would report no function
+     * costs for exactly the contracts most worth measuring. Installing the code
+     * that is on chain sidesteps the constructor and is the ground truth anyway.
+     */
+    onchainRuntimeBytecode?: string;
 }
 
 function median(values: number[]): number {
@@ -248,12 +292,19 @@ export async function buildChainFitReport(options: ChainFitOptions): Promise<Cha
     const profiles = CHAINS.filter((chain) => selected.includes(chain.id));
     if (profiles.length === 0) throw new Error("No chains selected for comparison");
 
-    const compiled: CompileOutput = compileContract(options.source, [
-        "abi",
-        "evm.bytecode",
-        "evm.deployedBytecode",
-        "evm.gasEstimates",
-    ]);
+    const outputs = ["abi", "evm.bytecode", "evm.deployedBytecode", "evm.gasEstimates"];
+    const compiled: VersionedCompileResult =
+        options.sources !== undefined && Object.keys(options.sources).length > 0
+            ? await compileProject(options.sources, {
+                  version: options.compilerVersion,
+                  target: options.target,
+                  settings: options.settings,
+                  outputs,
+              })
+            : await compileVersioned(options.source, {
+                  version: options.compilerVersion,
+                  outputs,
+              });
     warnings.push(...compiled.warnings.slice(0, 5));
 
     const abi = compiled.contract.abi as Abi;
@@ -288,7 +339,29 @@ export async function buildChainFitReport(options: ChainFitOptions): Promise<Cha
     const evm = await createTracingEvm();
     const deploymentTrace = await traceDeployment(evm, initCode, intrinsicGas(initCode, true));
 
-    if (deploymentTrace.status !== "ok") {
+    // Where the contract exists on chain, install its real runtime code and
+    // measure that instead of whatever the local deployment managed to produce.
+    let subject: string | null =
+        deploymentTrace.status === "ok" ? deploymentTrace.address : null;
+    const deployedCode = options.onchainRuntimeBytecode?.replace(/^0x/, "") ?? "";
+
+    if (deployedCode.length > 0) {
+        const address = "0x" + "c0".repeat(20);
+        const { createAddressFromString, hexToBytes } = await import("@ethereumjs/util");
+        await evm.stateManager.putCode(
+            createAddressFromString(address),
+            hexToBytes(`0x${deployedCode}`),
+        );
+        subject = address;
+        if (deploymentTrace.status !== "ok") {
+            warnings.push(
+                "The constructor could not run outside its deployer, so functions were measured " +
+                    "against the runtime code deployed on chain instead. Deployment cost is not reported.",
+            );
+        }
+    }
+
+    if (deploymentTrace.status !== "ok" && deployedCode.length === 0) {
         warnings.push(
             `The constructor did not complete with synthesised arguments (${deploymentTrace.revertReason ?? deploymentTrace.status}). ` +
                 "Function-level numbers are unavailable; size and source findings still apply.",
@@ -303,7 +376,7 @@ export async function buildChainFitReport(options: ChainFitOptions): Promise<Cha
     const [probeList, prices] = await networkPromise;
     const probes = new Map(probeList.map((probe) => [probe.chain, probe] as const));
 
-    if (deploymentTrace.status === "ok" && deploymentTrace.address !== null) {
+    if (subject !== null) {
         for (const fn of callableFunctions(abi)) {
             const calls = synthesiseCalls(abi, fn);
             if (calls.length === 0) continue;
@@ -315,7 +388,7 @@ export async function buildChainFitReport(options: ChainFitOptions): Promise<Cha
                 const calldata = toBytes(call.calldata);
                 const trace = await traceCall(
                     evm,
-                    deploymentTrace.address,
+                    subject,
                     calldata,
                     intrinsicGas(calldata, false),
                 );
@@ -550,7 +623,12 @@ export async function buildChainFitReport(options: ChainFitOptions): Promise<Cha
     return {
         contractName: compiled.contractName,
         generatedAt: new Date().toISOString(),
-        compiledWith: "solc 0.8 with the optimizer enabled at 200 runs",
+        compiler: compiled.compiler,
+        reproduction: options.onchain?.reproduction ?? null,
+        onchain:
+            options.onchain === undefined || options.onchain === null
+                ? null
+                : { address: options.onchain.address, chainId: options.onchain.chainId },
         chains: chainCards,
         deployment,
         functions: functionReports,

@@ -372,15 +372,110 @@ function FindingCard({ finding, chains }: { finding: ChainFinding; chains: Repor
   );
 }
 
+/**
+ * Says whether the numbers below describe the contract that is actually
+ * deployed.
+ *
+ * A gas figure is always about a compilation. Whether that compilation is the
+ * one running on chain is a separate question, and most tools leave it
+ * unanswered. When the contract came from an address we recompile with the
+ * settings it was verified under and compare against the deployed code, so this
+ * is the difference between "we measured a contract like yours" and "we
+ * measured yours".
+ */
+function ReproductionBanner({ report }: { report: Report }) {
+  const r = report.reproduction;
+  if (r === null) return null;
+
+  const good =
+    r.status === 'exact' || r.status === 'exact-modulo-immutables' || r.status === 'exact-modulo-metadata';
+
+  const label =
+    r.status === 'exact'
+      ? 'Byte-for-byte match with the deployed contract'
+      : r.status === 'exact-modulo-immutables'
+        ? 'Matches the deployed contract, apart from immutable values'
+        : r.status === 'exact-modulo-metadata'
+          ? 'Every executed byte matches the deployed contract'
+          : r.status === 'mismatch'
+            ? 'Does not match the deployed contract'
+            : 'Could not be compared against the chain';
+
+  return (
+    <section
+      className={`rounded-xl border px-4 py-3 ${
+        good
+          ? 'border-emerald-500/40 bg-emerald-500/10'
+          : 'border-amber-500/40 bg-amber-500/10'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <p
+          className={`text-xs font-medium ${
+            good ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'
+          }`}
+        >
+          {label}
+        </p>
+        <span className="shrink-0 font-mono text-[10px] text-text-muted">
+          solc {report.compiler.version}
+        </span>
+      </div>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-text-secondary">{r.detail}</p>
+      {report.onchain !== null && (
+        <p className="mt-1.5 font-mono text-[10px] text-text-muted break-all">
+          {report.onchain.address} · chain {report.onchain.chainId}
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function ChainFitReport({ code, onClose, autoRun = false }: ChainFitReportProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [address, setAddress] = useState('');
+  const [addressChain, setAddressChain] = useState(1);
+  const [showAddress, setShowAddress] = useState(false);
 
   // Kept in the shared store, so the report survives a trip to another panel.
   const cached = useCachedAnalysis<Report>('chainFit', sourceKeyOf(code));
   const save = useAnalysisStore((state) => state.save);
   const clear = useAnalysisStore((state) => state.clear);
   const report = cached.result;
+
+  /**
+   * Measures a verified contract by address.
+   *
+   * Nothing has to be found, flattened or pasted, the compiler comes from the
+   * verified build rather than a guess, and the report can say whether what it
+   * measured is what is deployed. For something like Uniswap V3, spread over 96
+   * files and pinned to an old compiler, this is the only practical way in.
+   */
+  const runAddress = useCallback(async () => {
+    if (!/^0x[0-9a-fA-F]{40}$/.test(address.trim())) {
+      setError('That is not a contract address.');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/chain-fit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: address.trim(), chainId: addressChain }),
+      });
+      const data = await response.json();
+      if (!data.success) throw new Error(data.error || 'Analysis failed');
+      save('chainFit', sourceKeyOf(`${addressChain}:${address.trim()}`), data.report as Report);
+    } catch (err) {
+      clear('chainFit');
+      setError(err instanceof Error ? err.message : 'Failed to analyse that address');
+    } finally {
+      setLoading(false);
+    }
+  }, [address, addressChain, save, clear]);
 
   const run = useCallback(async () => {
     if (!code.trim()) {
@@ -525,12 +620,57 @@ export function ChainFitReport({ code, onClose, autoRun = false }: ChainFitRepor
               Nothing here is an estimate of what a contract like yours might cost. It is what this
               contract does cost.
             </p>
+
+            <button
+              onClick={() => setShowAddress((value) => !value)}
+              className="mt-4 text-[11px] text-accent hover:underline"
+            >
+              {showAddress ? 'Hide' : 'Or measure a deployed contract by address'}
+            </button>
+
+            {showAddress && (
+              <div className="mt-3 space-y-2 text-left">
+                <div className="flex gap-1.5">
+                  <input
+                    value={address}
+                    onChange={(event) => setAddress(event.target.value)}
+                    placeholder="0x…"
+                    spellCheck={false}
+                    className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-transparent px-2.5 py-1.5 font-mono text-[11px] text-text-primary outline-none focus:border-accent-line"
+                  />
+                  <select
+                    value={addressChain}
+                    onChange={(event) => setAddressChain(Number(event.target.value))}
+                    aria-label="Which chain the address is on"
+                    className="rounded-lg border border-border-subtle bg-transparent px-2 py-1.5 text-[11px] text-text-primary outline-none"
+                  >
+                    <option value={1}>Ethereum</option>
+                    <option value={143}>Monad</option>
+                    <option value={10143}>Monad testnet</option>
+                    <option value={8453}>Base</option>
+                    <option value={42161}>Arbitrum</option>
+                  </select>
+                </div>
+                <button
+                  onClick={runAddress}
+                  disabled={loading}
+                  className="w-full rounded-lg bg-accent px-3 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                >
+                  {loading ? 'Measuring' : 'Measure it'}
+                </button>
+                <p className="text-[10px] leading-relaxed text-text-muted">
+                  Any contract verified on Sourcify. Its build is recompiled with the settings it was
+                  verified under and checked against the code on chain.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
 
       {report !== null && (
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+          {report.reproduction !== null && <ReproductionBanner report={report} />}
           {headline !== null && (
             <section className="rounded-xl border border-accent-line bg-accent-soft px-4 py-3">
               <p className="text-xs text-text-secondary leading-relaxed">
@@ -653,7 +793,9 @@ export function ChainFitReport({ code, onClose, autoRun = false }: ChainFitRepor
               ))}
             </ul>
             <p className="mt-3 text-[10px] text-text-muted">
-              Generated {new Date(report.generatedAt).toLocaleString('en-US')} · {report.compiledWith}
+              Generated {new Date(report.generatedAt).toLocaleString('en-US')} · solc{' '}
+              {report.compiler.version}
+              {report.compiler.bundled ? '' : ' (fetched)'}
             </p>
           </section>
         </div>

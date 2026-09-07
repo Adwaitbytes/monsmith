@@ -10,7 +10,17 @@
 
 const CANDIDATE_SUFFIXES = [".ts", ".tsx", ".js", "/index.ts", "/index.js"];
 
+/**
+ * `server-only` throws on import outside a Next.js server build. Modules under
+ * test import it as a real guard, so it is stubbed here rather than removed
+ * from the source, which would drop the protection to make a test pass.
+ */
+const STUBS = new Map([["server-only", new URL("./server-only-stub.mjs", import.meta.url).href]]);
+
 export function resolve(specifier, context, nextResolve) {
+    const stub = STUBS.get(specifier);
+    if (stub !== undefined) return { url: stub, shortCircuit: true };
+
     try {
         return nextResolve(specifier, context);
     } catch (error) {

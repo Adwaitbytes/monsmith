@@ -33,7 +33,15 @@ export interface CompiledContract {
     abi: Abi;
     evm?: {
         bytecode?: { object?: string };
-        deployedBytecode?: { object?: string };
+        deployedBytecode?: {
+            object?: string;
+            /**
+             * Byte ranges the compiler left blank for `immutable` values, which
+             * are written in at construction. Needed to compare compiler output
+             * against deployed code without tripping over them.
+             */
+            immutableReferences?: Record<string, { start: number; length: number }[]>;
+        };
         gasEstimates?: SolcGasEstimates;
     };
 }
