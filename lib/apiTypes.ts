@@ -39,14 +39,29 @@ export interface CompilerDiagnostic {
   line?: number;
 }
 
+/** solc's record of where a library address has to be written in. */
+export type LinkReferences = Record<string, Record<string, { start: number; length: number }[]>>;
+
+export interface CompiledLibrary {
+  qualified: string;
+  name: string;
+  bytecode: string;
+  linkReferences?: LinkReferences;
+}
+
 export interface CompileResponse {
   success: boolean;
+  /** Which contract was built, which matters when the file declares several. */
+  contractName?: string;
   abi?: unknown[];
   bytecode?: string;
   contractSize?: number;
   errors?: CompilerDiagnostic[];
   message?: string;
   error?: string;
+  /** Present when the contract calls a library that must be deployed first. */
+  linkReferences?: LinkReferences;
+  libraries?: CompiledLibrary[];
 }
 
 export interface DeployResponse {

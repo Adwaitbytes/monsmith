@@ -6,6 +6,7 @@ import path from "node:path";
 import type { Abi } from "viem";
 
 import { repairConcatenated } from "../flatten";
+import { librariesRequired, type LinkReferences } from "../link";
 import { OPENZEPPELIN_SOURCES } from "../openzeppelin-bundle";
 import { fixAddressChecksums, VIRTUAL_SOURCE, type CompiledContract } from "../solc";
 import { chooseVersion } from "./pragma";
@@ -50,6 +51,12 @@ export interface VersionedCompileResult {
     contract: CompiledContract;
     warnings: string[];
     compiler: CompilerUsed;
+    /**
+     * Every contract the compilation produced, keyed `path:Name`. Libraries are
+     * in here too, and linking needs their bytecode, so the target alone is not
+     * enough to deploy something that uses one.
+     */
+    byQualifiedName: Record<string, CompiledContract>;
 }
 
 interface SolcError {
@@ -258,7 +265,19 @@ export async function compileVersioned(
         contract: contracts[contractName],
         warnings: warningsOf(errors),
         compiler: compiler.used,
+        byQualifiedName: qualify(all),
     };
+}
+
+/** Flattens solc's file/name nesting into the `path:Name` form linking uses. */
+function qualify(
+    contracts: Record<string, Record<string, CompiledContract>>,
+): Record<string, CompiledContract> {
+    const flat: Record<string, CompiledContract> = {};
+    for (const [file, defined] of Object.entries(contracts)) {
+        for (const [name, contract] of Object.entries(defined)) flat[`${file}:${name}`] = contract;
+    }
+    return flat;
 }
 
 /**
@@ -336,6 +355,7 @@ export async function compileProject(
         warnings: warningsOf(errors),
         compiler: compiler.used,
         allContracts: index,
+        byQualifiedName: qualify(contracts),
     };
 }
 
@@ -422,6 +442,26 @@ function pickDeployable(contracts: Record<string, CompiledContract>): string {
  * A workspace compiled as one project, keyed by the paths its files import
  * each other by.
  */
+/** A library the contract calls into, which has to be on chain before it. */
+export interface LibraryArtifact {
+    /** `path:Name`, matching the keys in the contract's linkReferences. */
+    qualified: string;
+    name: string;
+    bytecode: string;
+    linkReferences?: LinkReferences;
+}
+
+export interface DeployArtifact {
+    /** Which contract this is, when the source declared more than one. */
+    contractName: string;
+    abi: Abi;
+    bytecode: string;
+    compiler: CompilerUsed;
+    linkReferences?: LinkReferences;
+    /** Empty unless the contract calls a library with public or external functions. */
+    libraries: LibraryArtifact[];
+}
+
 export interface ProjectInput {
     sources: Record<string, string>;
     /** The open file, which is the contract the user means to deploy. */
@@ -431,43 +471,84 @@ export interface ProjectInput {
 export async function compileForDeploy(
     sourceCode: string,
     project?: ProjectInput,
-): Promise<{ abi: Abi; bytecode: string; compiler: CompilerUsed }> {
+): Promise<DeployArtifact> {
     // With more than one file in the workspace, compile the lot. `import
     // "./Ownable.sol"` can only resolve if the compiler is given Ownable.sol
     // under that path, so a single-source compile makes a file tree decorative.
-    if (project !== undefined && Object.keys(project.sources).length > 1) {
-        const sources: SourceMap = {};
-        for (const [path, content] of Object.entries(project.sources)) {
-            sources[path] = { content: path === project.entry ? sourceCode : content };
-        }
-
-        const result = await compileProject(sources, {
-            outputs: ["abi", "evm.bytecode", "evm.deployedBytecode"],
-            target: project.entry,
-        });
-
-        const projectBytecode = result.contract.evm?.bytecode?.object;
-        if (projectBytecode === undefined || projectBytecode.length === 0) {
-            throw new Error(
-                `${result.contractName} produced no bytecode. Abstract contracts and interfaces cannot be deployed.`,
-            );
-        }
-
-        return { abi: result.contract.abi, bytecode: projectBytecode, compiler: result.compiler };
-    }
-
-    const result = await compileVersioned(sourceCode, {
-        outputs: ["abi", "evm.bytecode", "evm.deployedBytecode"],
-    });
+    const result =
+        project !== undefined && Object.keys(project.sources).length > 1
+            ? await compileProject(projectSources(sourceCode, project), {
+                  outputs: ["abi", "evm.bytecode", "evm.deployedBytecode"],
+                  target: project.entry,
+              })
+            : await compileVersioned(sourceCode, {
+                  outputs: ["abi", "evm.bytecode", "evm.deployedBytecode"],
+              });
 
     const bytecode = result.contract.evm?.bytecode?.object;
     if (bytecode === undefined || bytecode.length === 0) {
         throw new Error(
-            "Contract compilation produced no bytecode. Abstract contracts and interfaces cannot be deployed.",
+            `${result.contractName} produced no bytecode. Abstract contracts and interfaces cannot be deployed.`,
         );
     }
 
-    return { abi: result.contract.abi, bytecode, compiler: result.compiler };
+    const linkReferences = result.contract.evm?.bytecode?.linkReferences;
+
+    return {
+        contractName: result.contractName,
+        abi: result.contract.abi,
+        bytecode,
+        compiler: result.compiler,
+        linkReferences,
+        libraries: collectLibraries(linkReferences, result.byQualifiedName),
+    };
+}
+
+function projectSources(sourceCode: string, project: ProjectInput): SourceMap {
+    const sources: SourceMap = {};
+    for (const [path, content] of Object.entries(project.sources)) {
+        sources[path] = { content: path === project.entry ? sourceCode : content };
+    }
+    return sources;
+}
+
+/**
+ * The libraries a contract needs on chain, and anything they need in turn.
+ *
+ * A library may itself call another library, so following only the target's own
+ * references would leave a hole in a library that is about to be deployed.
+ */
+function collectLibraries(
+    references: LinkReferences | undefined,
+    compiled: Record<string, CompiledContract>,
+): LibraryArtifact[] {
+    const found = new Map<string, LibraryArtifact>();
+    const pending = librariesRequired(references);
+
+    while (pending.length > 0) {
+        const required = pending.pop()!;
+        if (found.has(required.qualified)) continue;
+
+        const contract = compiled[required.qualified];
+        const bytecode = contract?.evm?.bytecode?.object;
+        if (contract === undefined || bytecode === undefined || bytecode.length === 0) {
+            throw new Error(
+                `This contract links against library ${required.name}, which is not in the compiled output. ` +
+                    "Make sure the file declaring it is in the workspace.",
+            );
+        }
+
+        const nested = contract.evm?.bytecode?.linkReferences;
+        found.set(required.qualified, {
+            qualified: required.qualified,
+            name: required.name,
+            bytecode,
+            linkReferences: nested,
+        });
+        pending.push(...librariesRequired(nested));
+    }
+
+    return [...found.values()];
 }
 
 export type { Abi };

@@ -32,7 +32,15 @@ export interface SolcGasEstimates {
 export interface CompiledContract {
     abi: Abi;
     evm?: {
-        bytecode?: { object?: string };
+        bytecode?: {
+            object?: string;
+            /**
+             * Where the compiler left 20-byte holes for library addresses it
+             * cannot know until they are deployed. Bytecode carrying one of
+             * these is not deployable as-is.
+             */
+            linkReferences?: Record<string, Record<string, { start: number; length: number }[]>>;
+        };
         deployedBytecode?: {
             object?: string;
             /**

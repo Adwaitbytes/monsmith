@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { CompilerDiagnostic } from './apiTypes';
+import type { CompiledLibrary, CompilerDiagnostic, LinkReferences } from './apiTypes';
 
 export type Theme = 'dark' | 'light';
 
@@ -119,6 +119,9 @@ interface CompileResult {
   warnings?: CompilerDiagnostic[];
   bytecode?: string;
   abi?: unknown[];
+  /** Carried through to deployment, which cannot link without them. */
+  linkReferences?: LinkReferences;
+  libraries?: CompiledLibrary[];
 }
 
 interface IDEState {

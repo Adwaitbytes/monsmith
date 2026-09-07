@@ -474,13 +474,18 @@ Provide a structured audit report with:
             console.log("🔨 Compiling contract...");
 
             try {
-                const { abi, bytecode } = await compileForDeploy(code, readProject(body));
+                const { abi, bytecode, contractName, linkReferences, libraries } =
+                    await compileForDeploy(code, readProject(body));
 
                 return NextResponse.json({
                     success: true,
+                    contractName,
                     abi,
                     bytecode: bytecode.startsWith('0x') ? bytecode : `0x${bytecode}`,
-                    contractSize: bytecode.length / 2
+                    contractSize: bytecode.length / 2,
+                    // Only sent when there is something to link, so the client
+                    // does not have to distinguish absent from empty.
+                    ...(libraries.length > 0 ? { linkReferences, libraries } : {}),
                 });
             } catch (error) {
                 const message = error instanceof Error ? error.message : "Compilation failed";

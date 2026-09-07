@@ -14,6 +14,7 @@ import {
 } from "viem";
 import { getEthereumProvider, isProviderRpcError } from "./ethereum";
 import { monadTestnet } from "./deploy";
+import { explainRevert } from "./revert";
 
 /** MetaMask's "user rejected the request" code. */
 const USER_REJECTED = 4001;
@@ -149,14 +150,75 @@ function splitElements(body: string): string[] {
   });
 }
 
+/** A parameter's struct fields, when it has any. */
+function componentsOf(input: AbiParameter): AbiComponent[] | undefined {
+  return "components" in input && Array.isArray(input.components)
+    ? (input.components as AbiComponent[])
+    : undefined;
+}
+
+/** The fields of a struct, as the ABI describes them. */
+export interface AbiComponent {
+  name: string;
+  type: string;
+  components?: AbiComponent[];
+}
+
+/**
+ * Reads an integer, in any of the forms people actually write.
+ *
+ * Hex because that is how every explorer prints a number, and underscores
+ * because Solidity's own literals allow them, so `1_000_000` copied out of the
+ * source should not have to be edited to be used.
+ */
+function parseInteger(literal: string, type: string, original: string): bigint {
+  const cleaned = literal.replace(/_/g, "");
+
+  let parsed: bigint;
+  if (/^-?0x[0-9a-fA-F]+$/.test(cleaned)) {
+    parsed = cleaned.startsWith("-") ? -BigInt(cleaned.slice(1)) : BigInt(cleaned);
+  } else if (/^-?\d+$/.test(cleaned)) {
+    parsed = BigInt(cleaned);
+  } else {
+    throw new Error(`Expected a whole number for ${type}, got "${original}"`);
+  }
+
+  // Range is checked here rather than left to the encoder, because viem reports
+  // it as a size error against the ABI with no mention of which argument.
+  const signed = !type.startsWith("u");
+  const bits = Number(/\d+$/.exec(type)?.[0] ?? 256);
+
+  if (!signed && parsed < 0n) {
+    throw new Error(`${type} cannot be negative, got "${original}"`);
+  }
+
+  const limit = signed ? 2n ** BigInt(bits - 1) : 2n ** BigInt(bits);
+  const min = signed ? -limit : 0n;
+  const max = signed ? limit - 1n : limit - 1n;
+
+  if (parsed < min || parsed > max) {
+    throw new Error(`${parsed} does not fit in ${type}, whose range is ${min} to ${max}.`);
+  }
+
+  return parsed;
+}
+
 /**
  * Turns the raw strings from the form into the types viem expects.
  *
  * The form cannot know the difference between the string "123" and the number
  * 123, and passing the wrong one produces an opaque encoding error deep inside
  * viem rather than something the user can act on.
+ *
+ * `components` describes a struct's fields. A tuple arrives as the bare type
+ * name "tuple", which says nothing about what is in it, so without them a
+ * struct argument cannot be encoded at all.
  */
-export function coerceArgument(value: string, type: string): unknown {
+export function coerceArgument(
+  value: string,
+  type: string,
+  components?: AbiComponent[]
+): unknown {
   const trimmed = value.trim();
   const array = ARRAY_SUFFIX.exec(type);
 
@@ -176,7 +238,39 @@ export function coerceArgument(value: string, type: string): unknown {
       throw new Error(`${type} needs exactly ${fixed} values, got ${items.length}`);
     }
 
-    return items.map((item) => coerceArgument(item, inner));
+    return items.map((item) => coerceArgument(item, inner, components));
+  }
+
+  if (type === "tuple") {
+    if (components === undefined) {
+      throw new Error(`Cannot read a value for ${type}: the ABI does not describe its fields.`);
+    }
+
+    // Solidity writes a struct literal in parentheses and JSON writes it in
+    // brackets. Both turn up in the wild, so both are read.
+    const bracketed = /^[[(].*[\])]$/s.test(trimmed);
+    const fields = splitElements(bracketed ? trimmed.slice(1, -1) : trimmed);
+
+    if (fields.length !== components.length) {
+      throw new Error(
+        `This struct has ${components.length} field${components.length === 1 ? "" : "s"} ` +
+          `(${components.map((c) => `${c.name || c.type}`).join(", ")}), but ${fields.length} were given.`
+      );
+    }
+
+    const values = fields.map((field, i) =>
+      coerceArgument(field, components[i].type, components[i].components)
+    );
+
+    // viem keys a tuple by field name when the ABI names them, and takes a
+    // positional array when it does not.
+    if (components.some((component) => component.name.length === 0)) return values;
+
+    const object: Record<string, unknown> = {};
+    components.forEach((component, i) => {
+      object[component.name] = values[i];
+    });
+    return object;
   }
 
   const literal = unquote(trimmed);
@@ -188,10 +282,7 @@ export function coerceArgument(value: string, type: string): unknown {
   }
 
   if (/^u?int/.test(type)) {
-    if (!/^-?\d+$/.test(literal)) {
-      throw new Error(`Expected a whole number for ${type}, got "${value}"`);
-    }
-    return BigInt(literal);
+    return parseInteger(literal, type, value);
   }
 
   if (type === "address") {
@@ -202,9 +293,21 @@ export function coerceArgument(value: string, type: string): unknown {
   }
 
   if (type.startsWith("bytes")) {
-    if (!literal.startsWith("0x")) {
+    if (!/^0x[0-9a-fA-F]*$/.test(literal)) {
       throw new Error(`Expected 0x-prefixed hex for ${type}, got "${value}"`);
     }
+
+    const digits = literal.length - 2;
+    if (digits % 2 !== 0) {
+      throw new Error(`Hex comes in pairs, so ${type} needs an even number of digits.`);
+    }
+
+    // bytesN is exactly N bytes. Padding it here would change the value.
+    const width = /^bytes(\d+)$/.exec(type);
+    if (width !== null && digits !== Number(width[1]) * 2) {
+      throw new Error(`${type} is exactly ${width[1]} bytes, got ${digits / 2}.`);
+    }
+
     return literal as `0x${string}`;
   }
 
@@ -218,14 +321,24 @@ export function coerceArgument(value: string, type: string): unknown {
  * `uint256[]` does not tell anyone that the values want quoting. Showing the
  * shape is cheaper than explaining it after the error.
  */
-export function placeholderFor(type: string): string {
+export function placeholderFor(type: string, components?: AbiComponent[]): string {
   const array = ARRAY_SUFFIX.exec(type);
   if (array !== null) {
     const inner = type.slice(0, array.index);
+    if (inner === "tuple") return `[${placeholderFor("tuple", components)}]`;
     if (/^u?int/.test(inner)) return '["1000000000000000000", "2000000000000000000"]';
     if (inner === "address") return '["0x…", "0x…"]';
     if (inner === "bool") return "[true, false]";
     return '["a", "b"]';
+  }
+
+  // A struct's placeholder is built from its own fields, since the type name
+  // is only ever "tuple" and says nothing about what goes in it.
+  if (type === "tuple") {
+    const fields = (components ?? []).map((component) =>
+      placeholderFor(component.type, component.components)
+    );
+    return `[${fields.join(", ")}]`;
   }
 
   if (type === "string") return "Hello Monad";
@@ -233,6 +346,17 @@ export function placeholderFor(type: string): string {
   if (type === "bool") return "true";
   if (/^u?int/.test(type)) return "0";
   return type;
+}
+
+/** How a struct reads in a label, since the ABI only ever calls it "tuple". */
+export function describeType(type: string, components?: AbiComponent[]): string {
+  if (!type.startsWith("tuple") || components === undefined) return type;
+
+  const fields = components
+    .map((component) => `${describeType(component.type, component.components)} ${component.name}`.trim())
+    .join(", ");
+
+  return `(${fields})${type.slice("tuple".length)}`;
 }
 
 /** Renders a decoded return value without losing precision on big integers. */
@@ -263,14 +387,23 @@ export async function callRead(
   fn: ContractFunction,
   args: string[]
 ): Promise<CallResult> {
-  const typedArgs = fn.inputs.map((input, i) => coerceArgument(args[i] ?? "", input.type));
+  const typedArgs = fn.inputs.map((input, i) =>
+    coerceArgument(args[i] ?? "", input.type, componentsOf(input))
+  );
 
-  const result = await publicClient().readContract({
-    address,
-    abi,
-    functionName: fn.name,
-    args: typedArgs,
-  });
+  let result: unknown;
+  try {
+    result = await publicClient().readContract({
+      address,
+      abi,
+      functionName: fn.name,
+      args: typedArgs,
+    });
+  } catch (error) {
+    const reason = explainRevert(error, abi);
+    if (reason !== null) throw new Error(`${fn.name} ${reason}`);
+    throw error;
+  }
 
   // A single unnamed output comes back bare rather than in a tuple.
   const values = fn.outputs.length === 1 ? [result] : (result as unknown[]);
@@ -297,7 +430,9 @@ export async function sendWrite(
   const ethereum = getEthereumProvider();
   if (!ethereum) throw new Error("No wallet detected. Install MetaMask to send transactions.");
 
-  const typedArgs = fn.inputs.map((input, i) => coerceArgument(args[i] ?? "", input.type));
+  const typedArgs = fn.inputs.map((input, i) =>
+    coerceArgument(args[i] ?? "", input.type, componentsOf(input))
+  );
   const transport = custom(ethereum);
   const wallet = createWalletClient({ account, chain: monadTestnet, transport });
   const reader = createPublicClient({ chain: monadTestnet, transport });
@@ -314,6 +449,11 @@ export async function sendWrite(
       value: valueWei,
     });
   } catch (error) {
+    // The contract's own error name beats viem's wrapper text, which reports a
+    // custom error as an undecoded selector.
+    const reason = explainRevert(error, abi);
+    if (reason !== null) throw new Error(`This call ${reason}`);
+
     const message = error instanceof Error ? error.message.split("\n")[0] : String(error);
     throw new Error(`This call would revert: ${message}`);
   }

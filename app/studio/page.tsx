@@ -65,7 +65,7 @@ import { track } from "@/lib/track";
 import { createPaymentHeader } from "@/utils/q402";
 import { getEthereumProvider } from "@/lib/ethereum";
 import { deployFromWallet, constructorInputs, isConstructorPayable, type ConstructorInput } from "@/lib/deploy";
-import { coerceArgument, placeholderFor } from "@/lib/contractInteraction";
+import { coerceArgument, describeType, placeholderFor } from "@/lib/contractInteraction";
 import { parseEther, type Abi } from "viem";
 import {
   errorMessage,
@@ -1207,13 +1207,26 @@ export default function StudioPage() {
       const compileTime = Date.now() - startTime;
 
       if (result.success) {
-        addConsoleOutput(`✅ Compiled successfully in ${compileTime}ms`);
+        // Named, because a file can declare several contracts and only one is
+        // built. Silently deploying the wrong one is worse than not deploying.
+        const built = result.contractName === undefined ? "" : ` ${result.contractName}`;
+        addConsoleOutput(`✅ Compiled${built} in ${compileTime}ms`);
         addConsoleOutput(`📦 Bytecode size: ${(result.bytecode?.length || 0) / 2} bytes`);
         setCompileResult({
           success: true,
           bytecode: result.bytecode,
           abi: result.abi,
+          linkReferences: result.linkReferences,
+          libraries: result.libraries,
         });
+
+        if (result.libraries !== undefined && result.libraries.length > 0) {
+          const names = result.libraries.map((library) => library.name).join(", ");
+          addConsoleOutput(
+            `🔗 Links against ${result.libraries.length} librar${result.libraries.length === 1 ? "y" : "ies"}: ${names}. ` +
+            `Deploying will put ${result.libraries.length === 1 ? "it" : "them"} on chain first.`
+          );
+        }
         
         track("compile", {
           durationMs: compileTime,
@@ -1327,7 +1340,9 @@ export default function StudioPage() {
     let typedArgs: unknown[];
     let value = 0n;
     try {
-      typedArgs = required.map((input, i) => coerceArgument(rawArgs[i] ?? "", input.type));
+      typedArgs = required.map((input, i) =>
+        coerceArgument(rawArgs[i] ?? "", input.type, input.components)
+      );
       // Blank means zero. Anything else has to parse, or the deployment would
       // go out with a value the person did not write.
       if (ctorPayable && ctorValue.trim().length > 0) {
@@ -1350,8 +1365,13 @@ export default function StudioPage() {
         compileResult.abi as Abi,
         compileResult.bytecode,
         walletAddress as `0x${string}`,
-        typedArgs,
-        value
+        {
+          args: typedArgs,
+          value,
+          linkReferences: compileResult.linkReferences,
+          libraries: compileResult.libraries,
+          onStep: addConsoleOutput,
+        }
       );
 
       addConsoleOutput(`✅ Contract deployed!`);
@@ -2916,7 +2936,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
                   {ctorInputs.map((input, i) => (
                     <div key={input.name}>
                       <label className="text-[10px] font-mono text-text-muted">
-                        {input.name}: {input.type}
+                        {input.name}: {describeType(input.type, input.components)}
                       </label>
                       <input
                         autoFocus={i === 0}
@@ -2928,7 +2948,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
                             return next;
                           })
                         }
-                        placeholder={placeholderFor(input.type)}
+                        placeholder={placeholderFor(input.type, input.components)}
                         spellCheck={false}
                         className="w-full mt-1 px-3 py-2 rounded-lg text-xs font-mono panel-sunken border border-border-subtle outline-none focus:border-purple-500"
                       />
