@@ -5,6 +5,7 @@ import path from "node:path";
 
 import type { Abi } from "viem";
 
+import { repairConcatenated } from "../flatten";
 import { OPENZEPPELIN_SOURCES } from "../openzeppelin-bundle";
 import { fixAddressChecksums, VIRTUAL_SOURCE, type CompiledContract } from "../solc";
 import { chooseVersion } from "./pragma";
@@ -189,7 +190,10 @@ export async function compileVersioned(
     sourceCode: string,
     options: CompileOptions = {},
 ): Promise<VersionedCompileResult> {
-    const source = fixAddressChecksums(sourceCode);
+    // A document the old importer concatenated rather than flattened still has
+    // its relative imports and cannot compile. It is recognisable and
+    // repairable, and repairing beats making someone import the contract again.
+    const source = fixAddressChecksums(repairConcatenated(sourceCode));
     const compiler = await acquire(source, options);
 
     const input = {

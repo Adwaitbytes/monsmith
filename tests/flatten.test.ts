@@ -10,7 +10,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { flattenSources } from "../lib/flatten.ts";
+import { flattenSources, repairConcatenated } from "../lib/flatten.ts";
 
 test("imports are removed in every form the language allows", () => {
     const files = new Map([
@@ -120,4 +120,54 @@ test("a string that merely mentions import is not stripped", () => {
     ]);
     const { source } = flattenSources(files);
     assert.ok(source.includes(`string s = "import './x.sol';"`), "only leading imports are directives");
+});
+
+test("a document the old importer concatenated is repaired rather than rejected", () => {
+    // Exactly the old shape: every file end to end, headers kept, imports left
+    // in place. These are saved in people's projects and cannot compile.
+    const broken = [
+        "// File: contracts/Main.sol",
+        "// SPDX-License-Identifier: MIT",
+        "pragma solidity ^0.8.0;",
+        "import './Base.sol';",
+        "contract Main is Base { uint256 x; }",
+        "",
+        "// File: contracts/Base.sol",
+        "// SPDX-License-Identifier: GPL-2.0-or-later",
+        "pragma solidity ^0.8.0;",
+        "contract Base { uint256 y; }",
+    ].join("\n");
+
+    const repaired = repairConcatenated(broken);
+
+    assert.ok(!/^\s*import\s/m.test(repaired), "the unresolvable import is gone");
+    assert.equal((repaired.match(/SPDX-License-Identifier/g) ?? []).length, 1);
+    assert.ok(repaired.includes("contract Main is Base"));
+    assert.ok(repaired.includes("contract Base"));
+    assert.ok(
+        repaired.indexOf("contract Base") < repaired.indexOf("contract Main is Base"),
+        "the base still has to precede the derived contract",
+    );
+});
+
+test("an already-flattened document is left alone", () => {
+    // Same headers, no imports left, so there is nothing to repair and nothing
+    // should be touched.
+    const good = [
+        "// SPDX-License-Identifier: MIT",
+        "pragma solidity ^0.8.0;",
+        "",
+        "// File: contracts/Base.sol",
+        "contract Base { uint256 y; }",
+        "",
+        "// File: contracts/Main.sol",
+        "contract Main is Base { uint256 x; }",
+    ].join("\n");
+
+    assert.equal(repairConcatenated(good), good);
+});
+
+test("ordinary source is never mistaken for a concatenated document", () => {
+    const plain = "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\ncontract A {}";
+    assert.equal(repairConcatenated(plain), plain);
 });

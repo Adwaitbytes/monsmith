@@ -88,6 +88,59 @@ function stripDirectives(source: string): {
     return { body, license, pragmas };
 }
 
+/** The header the old concatenating importer wrote before each file. */
+const FILE_MARKER = /^\/\/ File: (.+)$/gm;
+
+/**
+ * Recovers a file map from a document the old importer produced.
+ *
+ * Before flattening existed, importing a multi-file contract wrote every file
+ * end to end with a `// File: path` header and left the imports in place. Those
+ * documents are saved in people's projects and will not compile, and telling
+ * someone to import again is a worse answer than repairing what they have. The
+ * header makes the shape recognisable, so the map can be rebuilt and flattened
+ * properly.
+ *
+ * Returns null for anything that is not that shape, including a correctly
+ * flattened document, which has the same headers but no imports left to fail on.
+ */
+export function recoverFileMap(source: string): Map<string, string> | null {
+    const markers = [...source.matchAll(FILE_MARKER)];
+    if (markers.length < 2) return null;
+
+    // Only worth recovering when there is something actually broken.
+    const hasRelativeImport = /^\s*import\s+(?:[^;'"]*\s+from\s+)?["']\.[^"']*["']\s*;/m.test(
+        source,
+    );
+    if (!hasRelativeImport) return null;
+
+    const files = new Map<string, string>();
+    for (let i = 0; i < markers.length; i += 1) {
+        const marker = markers[i];
+        const start = (marker.index ?? 0) + marker[0].length;
+        const end = i + 1 < markers.length ? (markers[i + 1].index ?? source.length) : source.length;
+        const path = marker[1].trim();
+        if (path.length > 0) files.set(path, source.slice(start, end).trim());
+    }
+
+    return files.size > 1 ? files : null;
+}
+
+/**
+ * Flattens a document that was concatenated rather than flattened, or returns
+ * it unchanged when there is nothing to repair.
+ */
+export function repairConcatenated(source: string): string {
+    const files = recoverFileMap(source);
+    if (files === null) return source;
+
+    // The last section is the contract the document was assembled for under the
+    // old scheme, which put the primary first; either way the flattener will
+    // order by dependency, so only the primary hint differs.
+    const primary = [...files.keys()][0];
+    return flattenSources(files, primary).source;
+}
+
 /** Normalises a relative import against the importing file's directory. */
 function resolveImport(fromPath: string, importPath: string): string {
     if (!importPath.startsWith(".")) return importPath;
