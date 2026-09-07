@@ -195,27 +195,29 @@ const COMPATIBILITY_PATTERNS: CompatibilityPattern[] = [
 
   // LOW - Best practices
   {
-    pattern: /pragma\s+solidity\s+(\^?\s*)0\.[0-7]\.\d+/g,
-    severity: 'low',
+    // Any comparator, not just the caret. A pinned `=0.7.6`, which is what
+    // Uniswap V3 and most of its era use, was matching nothing at all.
+    pattern: /pragma\s+solidity\s+[^;]*0\.[0-7]\.\d+[^;]*/g,
+    severity: 'info',
     type: 'compiler_version',
-    title: 'Old Solidity Version',
-    description: 'Solidity versions before 0.8.0 lack built-in overflow/underflow protection. Upgrade for better security and gas efficiency.',
+    title: 'Built before Solidity 0.8',
+    description:
+      'Monad runs this as it is; the EVM does not care which compiler produced the bytecode. Worth knowing rather than fixing: before 0.8 the compiler had no built-in overflow checks, so the contract relies on SafeMath or on the arithmetic being provably safe.',
     fix: {
-      description: 'Update pragma to ^0.8.24 for latest features and built-in overflow protection',
-      replacement: 'pragma solidity ^0.8.24',
-      autoFixable: true,
+      description:
+        'Upgrading to 0.8 is a choice, not a migration step, and it is not mechanical: the same code often needs explicit conversions and its SafeMath calls removed.',
+      autoFixable: false,
     },
   },
   {
-    pattern: /pragma\s+solidity\s+(\^?\s*)0\.8\.([0-9]|1[0-9]|2[0-3])\s*;/g,
+    pattern: /pragma\s+solidity\s+[^;]*0\.8\.([0-9]|1[0-9]|2[0-3])\s*;/g,
     severity: 'info',
     type: 'compiler_version',
     title: 'Older 0.8.x Version',
-    description: 'Consider upgrading to Solidity 0.8.24 for latest optimizations and features.',
+    description: 'A later 0.8 release carries optimiser and codegen improvements. Nothing about Monad requires it.',
     fix: {
-      description: 'Update to pragma solidity ^0.8.24',
-      replacement: 'pragma solidity ^0.8.24;',
-      autoFixable: true,
+      description: 'Raise the pragma if you want the newer codegen; the contract compiles either way.',
+      autoFixable: false,
     },
   },
 
@@ -357,26 +359,19 @@ export function transformForMonad(
     }
   }
 
-  // Auto-fix: Update old pragma versions
-  if (autoFix) {
-    // Match every pragma form, including `=0.6.6` and `>=0.4.0 <0.6.0`, not
-    // just the caret style. A range pragma left in place fails the version check
-    // even after the rest of the contract has been migrated.
-    const oldPragmaMatch = migratedCode.match(/pragma\s+solidity\s+[^;]*0\.[0-7]\.\d+[^;]*;/);
-    if (oldPragmaMatch) {
-      const lineNum = migratedCode.substring(0, migratedCode.indexOf(oldPragmaMatch[0])).split('\n').length;
-      migratedCode = migratedCode.replace(oldPragmaMatch[0], 'pragma solidity ^0.8.24;');
-      changes.push({
-        type: 'pragma',
-        line: lineNum,
-        original: oldPragmaMatch[0],
-        replacement: 'pragma solidity ^0.8.24;',
-        reason: 'Updated to Solidity 0.8.24 for built-in overflow protection',
-        autoFixed: true,
-      });
-      autoFixedCount++;
-    }
-  }
+  // The pragma is deliberately left alone.
+  //
+  // Monad is EVM compatible and runs bytecode from any compiler, so raising the
+  // version is not a migration step. Doing it anyway broke things twice over.
+  // On a flattened project the rewrite hit only the first of several pragmas
+  // and left `^0.8.24` sitting above `=0.7.6`, which no compiler satisfies. And
+  // even done correctly across every pragma it would produce code that does not
+  // build, because moving Uniswap V3 from 0.7.6 to 0.8 means explicit
+  // conversions and unwinding SafeCast, which no regex does.
+  //
+  // The same reasoning already governs the legacy syntax rules above: migrating
+  // the pragma without migrating the code is worse than doing nothing, because
+  // it looks like it worked. The version is reported as a finding instead.
 
   // Auto-fix: Replace tx.origin with msg.sender
   if (autoFix) {
