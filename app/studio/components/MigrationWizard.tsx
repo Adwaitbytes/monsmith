@@ -48,11 +48,77 @@ interface MigrationResult {
     changes: CodeChange[];
     autoFixedCount: number;
     manualFixCount: number;
+    /** Whether the migrated source actually compiles. */
+    compiles?: boolean;
+    compileErrors?: string[];
   };
   metadata: {
     analysisTimeMs: number;
     timestamp: string;
   };
+}
+
+/**
+ * Import paths the compiler could not resolve, read from its diagnostics.
+ */
+function missingImports(errors: string[] | undefined): string[] {
+  const paths = new Set<string>();
+  for (const message of errors ?? []) {
+    for (const match of message.matchAll(/Source "([^"]+)" not found/g)) paths.add(match[1]);
+  }
+  return [...paths];
+}
+
+/**
+ * Warns before someone imports a file that cannot be built.
+ *
+ * Pasting one file of a multi-file project is the easy mistake to make, because
+ * a block explorer's source tab shows exactly that and it looks complete. The
+ * analysis still runs, the compatibility issues are still real, and the import
+ * still produces a file, which then fails to compile for a reason that has
+ * nothing to do with the migration. The analysis already knew; it just was not
+ * being shown.
+ */
+function BuildWarning({ result }: { result: MigrationResult }) {
+  if (result.migration.compiles !== false) return null;
+
+  const missing = missingImports(result.migration.compileErrors);
+  const isMultiFile = missing.length > 0;
+
+  return (
+    <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4">
+      <h4 className="text-sm font-medium text-amber-700 dark:text-amber-300">
+        {isMultiFile
+          ? 'This is one file of a multi-file project'
+          : 'The migrated contract does not compile'}
+      </h4>
+
+      {isMultiFile ? (
+        <>
+          <p className="mt-1.5 text-[12.5px] leading-relaxed text-text-secondary">
+            It imports {missing.length} file{missing.length === 1 ? '' : 's'} that were not pasted
+            with it, so importing it here produces something that cannot be compiled. A block
+            explorer&apos;s source tab shows one file at a time, which is the usual way to end up
+            here.
+          </p>
+          <p className="mt-2 text-[12.5px] leading-relaxed text-text-secondary">
+            Use <span className="font-medium text-text-primary">Address</span> mode above with the
+            contract&apos;s address instead. Every file is fetched and flattened into one document
+            that compiles.
+          </p>
+          <p className="mt-2 font-mono text-[11px] text-text-muted break-all">
+            {missing.slice(0, 3).join(', ')}
+            {missing.length > 3 ? ` and ${missing.length - 3} more` : ''}
+          </p>
+        </>
+      ) : (
+        <p className="mt-1.5 text-[12.5px] leading-relaxed text-text-secondary">
+          {result.migration.compileErrors?.[0]?.split('\n')[0] ??
+            'The compiler rejected the migrated source.'}
+        </p>
+      )}
+    </div>
+  );
 }
 
 interface MigrationWizardProps {
@@ -480,6 +546,8 @@ contract MyContract {
 
           {/* Content */}
           <div className="flex-1 overflow-auto p-4 space-y-4">
+            <BuildWarning result={result} />
+
             {/* Changes Summary */}
             <div className="p-4 panel-surface/50 rounded-lg border border-border-subtle">
               <h4 className="font-medium mb-3 flex items-center gap-2">
