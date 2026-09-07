@@ -465,11 +465,11 @@ function calculateCompatibilityScore(issues: CompatibilityIssue[]): { score: num
 /**
  * Full migration analysis - combines all analysis steps
  */
-export function analyzeForMigration(
+export async function analyzeForMigration(
   sourceCode: string,
   contractInfo?: Partial<FetchedContract>,
   autoFix: boolean = true
-): MigrationResult {
+): Promise<MigrationResult> {
   const startTime = Date.now();
 
   // Check compatibility issues
@@ -484,7 +484,7 @@ export function analyzeForMigration(
   // Verify the rewrite rather than assume it. A contract that still fails to
   // compile after migration is the single most useful thing to report, and
   // claiming a compatibility score for it would be misleading.
-  const compileCheck = checkCompiles(migration.migratedCode);
+  const compileCheck = await checkCompiles(migration.migratedCode);
 
   // Get parallel execution analysis
   let parallelScore = 0;

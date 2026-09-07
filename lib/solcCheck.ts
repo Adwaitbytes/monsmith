@@ -1,14 +1,6 @@
-import * as fs from "fs";
-import * as path from "path";
-import solc from "solc";
-import { OPENZEPPELIN_SOURCES } from "./openzeppelin-bundle";
+import "server-only";
 
-const VIRTUAL_SOURCE = "Migrated.sol";
-
-interface SolcDiagnostic {
-  severity: "error" | "warning" | "info";
-  formattedMessage: string;
-}
+import { compileVersioned } from "./solc/compile";
 
 export interface CompileCheck {
   compiles: boolean;
@@ -24,42 +16,25 @@ export interface CompileCheck {
  * and then failed on the first removed keyword. Reporting what still breaks is
  * far more useful than reporting a compatibility score for something that
  * cannot compile at all.
+ *
+ * It has to use the same compiler the studio would. Checking with the bundled
+ * 0.8 against a contract pinned to 0.7.6 reported that Uniswap V3 does not
+ * compile when it compiles fine, and a false negative here is worse than no
+ * check: it puts a warning on correct output, which teaches people to ignore
+ * the warning.
  */
-export function checkCompiles(sourceCode: string): CompileCheck {
-  const input = {
-    language: "Solidity",
-    sources: { [VIRTUAL_SOURCE]: { content: sourceCode } },
-    settings: { outputSelection: { "*": { "*": ["abi"] } } },
-  };
-
-  function findImports(importPath: string): { contents: string } | { error: string } {
-    if (OPENZEPPELIN_SOURCES[importPath]) {
-      return { contents: OPENZEPPELIN_SOURCES[importPath] };
-    }
-    if (importPath.startsWith("@openzeppelin/")) {
-      try {
-        const full = path.join(process.cwd(), "node_modules", importPath);
-        if (fs.existsSync(full)) return { contents: fs.readFileSync(full, "utf8") };
-      } catch {
-        /* fall through to the not-found result */
-      }
-    }
-    return { error: `File not found: ${importPath}` };
-  }
-
+export async function checkCompiles(sourceCode: string): Promise<CompileCheck> {
   try {
-    const output = JSON.parse(solc.compile(JSON.stringify(input), { import: findImports }));
-    const diagnostics: SolcDiagnostic[] = output.errors ?? [];
-    const errors = diagnostics.filter((d) => d.severity === "error");
-
-    return {
-      compiles: errors.length === 0,
-      errors: errors.slice(0, 5).map((e) => e.formattedMessage.split("\n").slice(0, 2).join(" ").trim()),
-    };
+    await compileVersioned(sourceCode, { outputs: ["abi"] });
+    return { compiles: true, errors: [] };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     return {
       compiles: false,
-      errors: [error instanceof Error ? error.message : String(error)],
+      errors: message
+        .split("\n")
+        .filter((line) => line.trim().length > 0)
+        .slice(0, 5),
     };
   }
 }

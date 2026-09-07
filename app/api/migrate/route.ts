@@ -91,7 +91,7 @@ export async function POST(req: Request) {
         );
 
         // Analyze for migration
-        const result = analyzeForMigration(
+        const result = await analyzeForMigration(
           contractInfo.sourceCode,
           contractInfo,
           autoFix
@@ -152,7 +152,7 @@ export async function POST(req: Request) {
       }
 
       // Analyze the code
-      const result = analyzeForMigration(code, undefined, autoFix);
+      const result = await analyzeForMigration(code, undefined, autoFix);
 
       return NextResponse.json({
         success: true,
