@@ -128,28 +128,26 @@ async function getJson(url: string): Promise<JsonResponse> {
   }
 }
 
+import { flattenSources } from './flatten';
+
 // ============= SOURCE ASSEMBLY =============
 
 /**
- * Flatten a verified contract's file map into a single analysable document.
+ * Flatten a verified contract's file map into a single compilable document.
  *
- * The primary file goes first so `extractContractName` and the compatibility
- * scanner see the contract under analysis before its dependencies. Solidity has
- * no declaration-order requirement, so this costs nothing and reads better.
+ * This used to concatenate the files with a header comment each, which left
+ * every relative import in place. For a contract like Uniswap V3, spread over
+ * 96 files, the result was a document with 20-odd unresolvable imports and
+ * several conflicting SPDX identifiers: readable, and rejected by the compiler
+ * before it parsed anything. Real flattening strips what only makes sense per
+ * file, so the imported contract compiles.
  */
 function assembleSources(files: Map<string, string>, primaryPath?: string): string {
   if (files.size === 1) {
     return files.values().next().value ?? '';
   }
 
-  const paths = [...files.keys()].sort();
-  const ordered = primaryPath && files.has(primaryPath)
-    ? [primaryPath, ...paths.filter((path) => path !== primaryPath)]
-    : paths;
-
-  return ordered
-    .map((path) => `// File: ${path}\n${files.get(path) ?? ''}`)
-    .join('\n\n');
+  return flattenSources(files, primaryPath).source;
 }
 
 /** Solidity compiler versions are quoted both with and without the `v` prefix

@@ -3,7 +3,7 @@ import { randomBytes } from "crypto";
 import { verifyPayment, settlePayment } from "../../../lib/q402";
 import { createWalletClient, createPublicClient, http, defineChain, getAddress, parseEther, isAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { compileSolidity } from "../../../lib/solc";
+import { compileForDeploy } from "@/lib/solc/compile";
 import { CONTRACT_TEMPLATES, generateFromTemplate } from "../../../lib/contractTemplates";
 import { REQUEST_BUDGET_MS, callAI, hasAIProvider } from "../../../lib/aiClient";
 
@@ -163,7 +163,7 @@ async function generateVerifiedContract(
         const code = repairCommonMistakes(cleanGeneratedCode(raw));
 
         try {
-            await compileSolidity(code);
+            await compileForDeploy(code);
             return { code, attempts: attempt, repaired: attempt > 1 };
         } catch (error) {
             lastError = (error instanceof Error ? error.message : String(error)).slice(0, 600);
@@ -178,7 +178,7 @@ async function generateVerifiedContract(
     console.warn(`⚠️ Falling back to template "${fallbackId}" after ${lastError.slice(0, 120)}`);
 
     const templateCode = generateFromTemplate(fallbackId, CONTRACT_TEMPLATES[fallbackId].defaults);
-    await compileSolidity(templateCode);
+    await compileForDeploy(templateCode);
 
     return { code: templateCode, attempts: 3, repaired: true, fromTemplate: fallbackId };
 }
@@ -450,7 +450,7 @@ Provide a structured audit report with:
             console.log("🔨 Compiling contract...");
 
             try {
-                const { abi, bytecode } = await compileSolidity(code);
+                const { abi, bytecode } = await compileForDeploy(code);
 
                 return NextResponse.json({
                     success: true,
@@ -525,7 +525,7 @@ Format as JSON:
             try {
                 // Compile
                 console.log("📦 Compiling contract...");
-                const { abi, bytecode } = await compileSolidity(code);
+                const { abi, bytecode } = await compileForDeploy(code);
 
                 if (!bytecode || bytecode.length < 10) {
                     throw new Error("Compilation produced invalid bytecode");

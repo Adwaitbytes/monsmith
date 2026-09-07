@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { compileContract } from "@/lib/solc";
+import { compileVersioned } from "@/lib/solc/compile";
 import { buildGasProfile } from "@/lib/gasProfiler";
 
 /**
@@ -28,12 +28,9 @@ export async function POST(req: Request) {
     try {
         // deployedBytecode is requested for the EIP-170 size figure; bytecode is
         // what makes solc emit creation estimates at all.
-        const compiled = compileContract(code, [
-            'abi',
-            'evm.bytecode',
-            'evm.deployedBytecode',
-            'evm.gasEstimates',
-        ]);
+        const compiled = await compileVersioned(code, {
+            outputs: ['abi', 'evm.bytecode', 'evm.deployedBytecode', 'evm.gasEstimates'],
+        });
 
         const profile = buildGasProfile(code, compiled);
 

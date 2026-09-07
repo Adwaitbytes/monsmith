@@ -21,7 +21,7 @@ import { create } from "zustand";
  * numbers for very little.
  */
 
-export type AnalysisKind = "parallel" | "gas" | "chainFit" | "security";
+export type AnalysisKind = "parallel" | "gas" | "chainFit" | "security" | "migration";
 
 export interface AnalysisEntry<T> {
     result: T;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { callAI, hasAIProvider, MISSING_PROVIDER_MESSAGE } from "@/lib/aiClient";
-import { compileContract } from "@/lib/solc";
+import { compileVersioned } from "@/lib/solc/compile";
 import { analyzeParallelPotential } from "@/lib/parallelAnalyzer";
 import { checkCompatibility, describeIncompatibility } from "@/lib/parallel/compatibility";
 import { parseSolidity } from "@/lib/parallel/parser";
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
         // Whether the original compiles decides whether compilation can be used
         // as a gate at all: a contract pinned to an older compiler than the one
         // bundled here is still worth optimising, just not verifiable that way.
-        const baseline = tryCompile(code);
+        const baseline = await tryCompile(code);
 
         const attempts: string[] = [];
         let feedback = "";
@@ -107,7 +107,7 @@ export async function POST(req: Request) {
             if (!compatibility.compatible) problems.push(describeIncompatibility(compatibility));
 
             if (baseline.ok) {
-                const rebuilt = tryCompile(optimized);
+                const rebuilt = await tryCompile(optimized);
                 if (!rebuilt.ok) {
                     problems.push(`Your rewrite does not compile. The compiler reported:\n${rebuilt.error.slice(0, 1200)}`);
                 }
@@ -234,9 +234,11 @@ function extractNotes(raw: string): string[] {
         .slice(0, 12);
 }
 
-function tryCompile(source: string): { ok: true } | { ok: false; error: string } {
+async function tryCompile(
+    source: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
     try {
-        compileContract(source, ["abi"]);
+        await compileVersioned(source, { outputs: ["abi"] });
         return { ok: true };
     } catch (error) {
         return { ok: false, error: error instanceof Error ? error.message : String(error) };

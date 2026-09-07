@@ -86,6 +86,8 @@ export interface CompileOptions {
     optimizerEnabled?: boolean;
     /** Passed straight through when reproducing a verified build. */
     evmVersion?: string;
+    /** Name of the contract to measure, when the caller knows it. */
+    preferContract?: string;
     /**
      * Complete compiler settings, used verbatim except for `outputSelection`.
      *
@@ -204,11 +206,7 @@ export async function compileVersioned(
         throw new Error("No contracts found in compilation output");
     }
 
-    const declared = source.match(/contract\s+(\w+)/)?.[1];
-    const contractName =
-        declared !== undefined && contracts[declared] !== undefined
-            ? declared
-            : pickDeployable(contracts);
+    const contractName = chooseContract(source, contracts, options.preferContract);
 
     return {
         contractName,
@@ -313,9 +311,34 @@ function warningsOf(errors: SolcError[]): string[] {
 }
 
 /**
- * The contract most likely to be the subject of a flattened file: the largest
- * one that actually produces bytecode. Interfaces and libraries produce little
- * or none, and leading with one of those is the common shape.
+ * Which of a file's contracts the report is about.
+ *
+ * The last declaration wins, not the first. A flattened document ends with the
+ * contract it was flattened for, because its dependencies had to precede it,
+ * and taking the first would report on some interface it imports. A file with
+ * one contract gives the same answer either way, and a hand-written file that
+ * ends with a helper is the case this gets wrong, which is why an explicit name
+ * takes priority over the guess.
+ */
+function chooseContract(
+    source: string,
+    contracts: Record<string, CompiledContract>,
+    preferred?: string,
+): string {
+    if (preferred !== undefined && contracts[preferred] !== undefined) return preferred;
+
+    const declared = [...source.matchAll(/^\s*(?:abstract\s+)?contract\s+(\w+)/gm)]
+        .map((match) => match[1])
+        .filter((name) => contracts[name] !== undefined);
+
+    const last = declared[declared.length - 1];
+    return last ?? pickDeployable(contracts);
+}
+
+/**
+ * Fallback when no declaration matched a compiled contract: the largest one
+ * that actually produces bytecode, since interfaces and libraries produce
+ * little or none.
  */
 function pickDeployable(contracts: Record<string, CompiledContract>): string {
     let best = Object.keys(contracts)[0];
@@ -330,6 +353,29 @@ function pickDeployable(contracts: Record<string, CompiledContract>): string {
     }
 
     return best;
+}
+
+/**
+ * Compiles for deployment, choosing the compiler from the pragma.
+ *
+ * The shape `compileSolidity` returned, so the callers that only wanted an ABI
+ * and bytecode can move across without caring how the version was resolved.
+ */
+export async function compileForDeploy(
+    sourceCode: string,
+): Promise<{ abi: Abi; bytecode: string; compiler: CompilerUsed }> {
+    const result = await compileVersioned(sourceCode, {
+        outputs: ["abi", "evm.bytecode", "evm.deployedBytecode"],
+    });
+
+    const bytecode = result.contract.evm?.bytecode?.object;
+    if (bytecode === undefined || bytecode.length === 0) {
+        throw new Error(
+            "Contract compilation produced no bytecode. Abstract contracts and interfaces cannot be deployed.",
+        );
+    }
+
+    return { abi: result.contract.abi, bytecode, compiler: result.compiler };
 }
 
 export type { Abi };

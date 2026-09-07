@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useCallback } from 'react';
+
+import { sourceKeyOf, useAnalysisStore } from '@/lib/analysisStore';
 import { DiffViewer } from './DiffViewer';
 import type { CodeChange } from '@/lib/migrationTool';
 
@@ -59,14 +61,27 @@ interface MigrationWizardProps {
 }
 
 export function MigrationWizard({ onImportCode, onClose }: MigrationWizardProps) {
-  const [step, setStep] = useState<WizardStep>('input');
+  /**
+   * The analysis lives in the shared store rather than in this component.
+   *
+   * Only one panel can be docked at a time, so opening the gas profiler
+   * unmounts this one, and with the result in component state a migration that
+   * took several seconds and a round trip to Sourcify was simply gone. Coming
+   * back showed an empty form, which reads as though nothing had been run.
+   */
+  const cachedEntry = useAnalysisStore((state) => state.entries.migration);
+  const saveEntry = useAnalysisStore((state) => state.save);
+  const clearEntry = useAnalysisStore((state) => state.clear);
+  const cachedResult = (cachedEntry?.result ?? null) as MigrationResult | null;
+
+  const [step, setStep] = useState<WizardStep>(cachedResult === null ? 'input' : 'results');
   // Address import resolves through Sourcify and Blockscout, so it needs no API
   // key and is the faster path for the common case of an already-verified contract.
   const [inputMode, setInputMode] = useState<InputMode>('address');
   const [network, setNetwork] = useState<NetworkType>('ethereum');
   const [address, setAddress] = useState('');
   const [pastedCode, setPastedCode] = useState('');
-  const [result, setResult] = useState<MigrationResult | null>(null);
+  const result = cachedResult;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
@@ -144,7 +159,10 @@ export function MigrationWizard({ onImportCode, onClose }: MigrationWizardProps)
         throw new Error(data.error || 'Migration analysis failed');
       }
 
-      setResult(data);
+      // Keyed by the input, so a different address or a different paste is a
+      // different analysis rather than a silent overwrite.
+      const identity = inputMode === 'address' ? `${network}:${address}` : pastedCode;
+      saveEntry('migration', sourceKeyOf(identity), data as MigrationResult);
       setStep('results');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to analyze contract');
@@ -152,7 +170,7 @@ export function MigrationWizard({ onImportCode, onClose }: MigrationWizardProps)
     } finally {
       setLoading(false);
     }
-  }, [inputMode, address, network, pastedCode]);
+  }, [inputMode, address, network, pastedCode, saveEntry]);
 
   const handleImportOriginal = () => {
     if (result) {
@@ -170,7 +188,7 @@ export function MigrationWizard({ onImportCode, onClose }: MigrationWizardProps)
 
   const resetWizard = () => {
     setStep('input');
-    setResult(null);
+    clearEntry('migration');
     setError(null);
     setProgress(0);
   };
