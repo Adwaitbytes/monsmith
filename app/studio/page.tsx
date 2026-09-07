@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -12,10 +12,7 @@ import {
   Brain,
   Terminal,
   FileCode,
-  FolderOpen,
-  Plus,
   ChevronRight,
-  ChevronDown,
   X,
   CheckCircle2,
   Loader2,
@@ -28,7 +25,6 @@ import {
   Copy,
   ExternalLink,
   ArrowLeft,
-  Trash2,
   Coins,
   Image as ImageIcon,
   Users,
@@ -48,7 +44,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { MonsmithMark } from "../landing/MonsmithMark";
-import { useThemeStore, useUserStore, useProjectStore, useIDEStore } from "@/lib/store";
+import { useThemeStore, useUserStore, useIDEStore } from "@/lib/store";
+import { basenameOf, seedWorkspace, solidityFiles, useWorkspace } from "@/lib/workspace";
+import { FileExplorer } from "./components/FileExplorer";
 import { useHydrated } from "@/lib/useHydrated";
 import { useResizable } from "@/lib/useResizable";
 import { ResizeHandle } from "./components/ResizeHandle";
@@ -856,7 +854,6 @@ const MONAD_KNOWLEDGE = {
 export default function StudioPage() {
   const { theme, toggleTheme } = useThemeStore();
   const { walletAddress, isConnected, network, setUser, disconnect, setNetwork } = useUserStore();
-  const { setActiveFile, addFile } = useProjectStore();
   const { 
     isCompiling, 
     isDeploying, 
@@ -876,8 +873,33 @@ export default function StudioPage() {
 
   const mounted = useHydrated();
   const { viewer } = useViewer();
-  const [code, setCode] = useState(DEFAULT_CONTRACT);
-  const [currentFileName, setCurrentFileName] = useState("MyToken.sol");
+
+  // The editor reads and writes the persisted workspace directly. It used to
+  // hold the source in component state beside a second, unpersisted store,
+  // which is why a reload restored the starter contract and a deliberate
+  // delete could not be told apart from closing the tab.
+  const files = useWorkspace((state) => state.files);
+  const activePath = useWorkspace((state) => state.activePath);
+  const writeFile = useWorkspace((state) => state.writeFile);
+  const addFiles = useWorkspace((state) => state.addFiles);
+
+  const code = (activePath === null ? undefined : files[activePath]) ?? "";
+  const currentFileName = activePath === null ? "" : basenameOf(activePath);
+
+  const setCode = useCallback(
+    (next: string) => {
+      if (activePath !== null) writeFile(activePath, next);
+    },
+    [activePath, writeFile],
+  );
+
+  /** Opens a path at the given contents, creating it if it is not there yet. */
+  const openWith = useCallback(
+    (path: string, content: string) => {
+      addFiles({ [path]: content }, path);
+    },
+    [addFiles],
+  );
   const [language, setLanguage] = useState<"solidity" | "python">("solidity");
   const [transpilledSolidity, setTranspiledSolidity] = useState<string | null>(null);
   const [aiResponse, setAIResponse] = useState<string | null>(null);
@@ -885,11 +907,6 @@ export default function StudioPage() {
   const [teachModeContent, setTeachModeContent] = useState<TeachModeContent | null>(null);
   const [showDeployModal, setShowDeployModal] = useState(false);
   const [deployedAddress, setDeployedAddress] = useState<string | null>(null);
-  const [showNewFileModal, setShowNewFileModal] = useState(false);
-  const [newFileName, setNewFileName] = useState("");
-  const [userFiles, setUserFiles] = useState<{name: string, code: string}[]>([
-    { name: "MyToken.sol", code: DEFAULT_CONTRACT }
-  ]);
 
   // ============= AI MODES STATE =============
   const [aiMode, setAIMode] = useState<"architect" | "researcher">("architect");
@@ -984,28 +1001,21 @@ export default function StudioPage() {
       ? undefined
       : SAMPLE_CONTRACTS.find((entry) => entry.id === requested);
 
+    // Seeding runs before the sample is applied, and only fills a workspace
+    // that is genuinely empty, so returning to the studio reopens your files
+    // instead of overwriting them with the starter contract.
+    seedWorkspace(DEFAULT_CONTRACT);
+
     if (sample !== undefined) {
-      setCode(sample.source);
-      setCurrentFileName(`${sample.id}.sol`);
+      useWorkspace.getState().addFiles(
+        { [`contracts/${sample.id}.sol`]: sample.source },
+        `contracts/${sample.id}.sol`,
+      );
       setLanguage("solidity");
     }
 
     track("page_view", { detail: { page: "studio", sample: sample?.id ?? null } });
   }, []);
-
-  // Seed the workspace with a starter file on first mount. `files` is read
-  // through the store's getState so re-adding is not retriggered by its own write.
-  useEffect(() => {
-    if (useProjectStore.getState().files.length > 0) return;
-    addFile({
-      id: "main",
-      path: "contracts/MyToken.sol",
-      content: DEFAULT_CONTRACT,
-      language: "solidity",
-      isModified: false,
-    });
-    setActiveFile("main");
-  }, [addFile, setActiveFile]);
 
   // Connect wallet
   const connectWallet = async () => {
@@ -1043,6 +1053,15 @@ export default function StudioPage() {
     }
 
     const source = sourceOverride ?? code;
+
+    // Every .sol file in the workspace goes to the compiler, not just the open
+    // one, so `import "./Ownable.sol"` resolves against a file the user wrote.
+    // `entry` names the contract they mean to build; without it the compiler
+    // would guess, and on a workspace with several contracts it would guess wrong.
+    const project =
+      activePath !== null && sourceOverride === undefined
+        ? { sources: solidityFiles(files), entry: activePath }
+        : undefined;
 
     setCompiling(true);
     clearConsole();
@@ -1154,6 +1173,7 @@ export default function StudioPage() {
           action: "compile",
           userAddress: walletAddress,
           code: source,
+          ...project,
         }),
       });
 
@@ -1173,6 +1193,7 @@ export default function StudioPage() {
             action: "compile",
             userAddress: walletAddress,
             code: source,
+            ...project,
           }),
         });
       }
@@ -1340,13 +1361,13 @@ export default function StudioPage() {
     setTranspiledSolidity(null);
     setCompileResult(null);
 
+    // Opens the language's starter file rather than overwriting whatever is
+    // in the editor. Switching back and forth used to destroy both.
     if (newLang === "python") {
-      setCode(DEFAULT_PYTHON_CONTRACT);
-      setCurrentFileName("MyContract.py");
+      openWith("contracts/MyContract.py", DEFAULT_PYTHON_CONTRACT);
       addConsoleOutput("🐍 Switched to Python mode (PyMon)");
     } else {
-      setCode(DEFAULT_CONTRACT);
-      setCurrentFileName("MyToken.sol");
+      openWith("contracts/MyToken.sol", DEFAULT_CONTRACT);
       addConsoleOutput("📜 Switched to Solidity mode");
     }
   };
@@ -1446,119 +1467,27 @@ export default function StudioPage() {
   // ============= TEMPLATE LOADING =============
   const loadTemplate = (templateKey: keyof typeof TEMPLATES) => {
     const template = TEMPLATES[templateKey];
-    setCode(template.code);
     setLanguage("solidity");
-    const fileName = `${template.name.replace(/\s+/g, '')}.sol`;
-    setCurrentFileName(fileName);
+    openWith(`contracts/${template.name.replace(/\s+/g, '')}.sol`, template.code);
     addConsoleOutput(`📄 Loaded template: ${template.name}`);
-
-    // Add to files list if not exists
-    if (!userFiles.find(f => f.name === fileName)) {
-      setUserFiles(prev => [...prev, { name: fileName, code: template.code }]);
-    }
   };
 
   const loadPythonTemplate = (templateKey: keyof typeof PYTHON_TEMPLATES) => {
     const template = PYTHON_TEMPLATES[templateKey];
-    setCode(template.code);
     setLanguage("python");
-    const fileName = `${template.name.replace(/\s+/g, '')}.py`;
-    setCurrentFileName(fileName);
+    openWith(`contracts/${template.name.replace(/\s+/g, '')}.py`, template.code);
     addConsoleOutput(`🐍 Loaded Python template: ${template.name}`);
-
-    // Add to files list if not exists
-    if (!userFiles.find(f => f.name === fileName)) {
-      setUserFiles(prev => [...prev, { name: fileName, code: template.code }]);
-    }
-  };
-
-  // ============= FILE MANAGEMENT =============
-  const createNewFile = () => {
-    if (!newFileName.trim()) return;
-    
-    let fileName = newFileName.trim();
-    if (!fileName.endsWith('.sol')) {
-      fileName += '.sol';
-    }
-    
-    // Check if file already exists
-    if (userFiles.find(f => f.name === fileName)) {
-      addConsoleOutput(`❌ File "${fileName}" already exists`);
-      return;
-    }
-    
-    const newCode = `// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.24;
-
-/**
- * @title ${fileName.replace('.sol', '')}
- * @dev Your contract description here
- * @notice Built with Monsmith for Monad Network
- */
-contract ${fileName.replace('.sol', '')} {
-    // Your code here
-    
-    constructor() {
-        // Initialize your contract
-    }
-}
-`;
-    
-    setUserFiles(prev => [...prev, { name: fileName, code: newCode }]);
-    setCurrentFileName(fileName);
-    setCode(newCode);
-    setNewFileName("");
-    setShowNewFileModal(false);
-    addConsoleOutput(`✅ Created new file: ${fileName}`);
   };
 
   /**
    * Replaces the open file with a verified rewrite from the parallel profiler.
    *
-   * The previous source stays in the file list only as the editor's undo
-   * history, so the console line is the record that it was swapped.
+   * The previous source stays only as the editor's undo history, so the console
+   * line is the record that it was swapped.
    */
   const applyOptimizedContract = (optimized: string) => {
     setCode(optimized);
-    setUserFiles(prev => prev.map(f =>
-      f.name === currentFileName ? { ...f, code: optimized } : f
-    ));
     addConsoleOutput(`Applied the parallel-optimized rewrite to ${currentFileName}. Compile and run your tests before deploying.`);
-  };
-
-  const switchFile = (fileName: string) => {
-    // Save current file
-    setUserFiles(prev => prev.map(f => 
-      f.name === currentFileName ? { ...f, code } : f
-    ));
-    
-    // Switch to new file
-    const file = userFiles.find(f => f.name === fileName);
-    if (file) {
-      setCurrentFileName(fileName);
-      setCode(file.code);
-      addConsoleOutput(`📂 Opened: ${fileName}`);
-    }
-  };
-
-  const deleteFile = (fileName: string) => {
-    if (userFiles.length <= 1) {
-      addConsoleOutput(`❌ Cannot delete the last file`);
-      return;
-    }
-    
-    setUserFiles(prev => prev.filter(f => f.name !== fileName));
-    
-    // If deleting current file, switch to first available
-    if (currentFileName === fileName) {
-      const remaining = userFiles.filter(f => f.name !== fileName);
-      if (remaining.length > 0) {
-        setCurrentFileName(remaining[0].name);
-        setCode(remaining[0].code);
-      }
-    }
-    
-    addConsoleOutput(`🗑️ Deleted: ${fileName}`);
   };
 
   // ============= QUICK ACTIONS =============
@@ -1827,17 +1756,8 @@ NO markdown, NO explanations, NO code blocks.`;
         .replace(/Ownable\(\)/g, "Ownable(msg.sender)")
         .replace(/pragma solidity \^0\.8\.\d+;/g, "pragma solidity ^0.8.24;");
 
-      // Set the code
-      setCode(generatedCode);
       const fileName = `${contractType.name.replace(/\s+/g, '')}.sol`;
-      setCurrentFileName(fileName);
-
-      // Add to files if not exists
-      if (!userFiles.find(f => f.name === fileName)) {
-        setUserFiles(prev => [...prev, { name: fileName, code: generatedCode }]);
-      } else {
-        setUserFiles(prev => prev.map(f => f.name === fileName ? { ...f, code: generatedCode } : f));
-      }
+      openWith(`contracts/${fileName}`, generatedCode);
 
       addConsoleOutput(`✅ ${contractType.name} contract generated successfully!`);
       addConsoleOutput(`📄 File: ${fileName}`);
@@ -1946,16 +1866,7 @@ NO markdown, NO explanations, NO code blocks, JUST THE CODE.`;
       const contractName = contractNameMatch ? contractNameMatch[1] : "GeneratedContract";
       const fileName = `${contractName}.sol`;
 
-      // Set the code
-      setCode(generatedCode);
-      setCurrentFileName(fileName);
-
-      // Add to files
-      if (!userFiles.find(f => f.name === fileName)) {
-        setUserFiles(prev => [...prev, { name: fileName, code: generatedCode }]);
-      } else {
-        setUserFiles(prev => prev.map(f => f.name === fileName ? { ...f, code: generatedCode } : f));
-      }
+      openWith(`contracts/${fileName}`, generatedCode);
 
       // Add assistant response to chat
       setArchitectChatHistory(prev => [...prev, {
@@ -2282,58 +2193,10 @@ Be concise but thorough. Format your response with markdown for readability.`;
               style={{ width: sidebarResize.size }}
               className={`border-r flex flex-col min-w-0 flex-shrink-0 overflow-hidden ${"panel-surface border"}`}
             >
-              <div className="p-4">
-                <div className="flex items-center justify-between mb-4">
-                  <span className={`text-xs font-bold uppercase tracking-wider ${isDark ? "text-gray-500" : "text-gray-400"}`}>
-                    Explorer
-                  </span>
-                  <button
-                    onClick={() => setShowNewFileModal(true)}
-                    className={`p-1 rounded hover:bg-white/10 transition-colors`}
-                    title="New File"
-                  >
-                    <Plus size={14} className="text-purple-400" />
-                  </button>
-                </div>
-                
-                {/* File Tree */}
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <ChevronDown size={14} />
-                    <FolderOpen size={14} className="text-yellow-500" />
-                    <span>contracts</span>
-                  </div>
-                  
-                  {/* Dynamic file list */}
-                  {userFiles.map((file) => (
-                    <div
-                      key={file.name}
-                      className={`ml-6 flex items-center justify-between group text-sm py-1 px-2 rounded-lg cursor-pointer transition-colors ${
-                        currentFileName === file.name
-                          ? isDark ? "bg-purple-500/10 text-purple-400" : "bg-purple-50 text-purple-600"
-                          : isDark ? "hover:bg-white/5 text-gray-400" : "hover:bg-gray-100 text-gray-600"
-                      }`}
-                      onClick={() => switchFile(file.name)}
-                    >
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <FileCode size={14} className="flex-shrink-0" />
-                        <span className="truncate text-xs">{file.name}</span>
-                      </div>
-                      {userFiles.length > 1 && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteFile(file.name);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
-                        >
-                          <Trash2 size={12} className="text-red-400" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <FileExplorer
+                onOpen={(path) => addConsoleOutput(`📂 Opened: ${path}`)}
+                onNotify={addConsoleOutput}
+              />
 
               {/* Solidity Templates */}
               {language === "solidity" && (
@@ -3195,14 +3058,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
             >
               <MigrationWizard
                 onImportCode={(importedCode, fileName) => {
-                  setCode(importedCode);
-                  setCurrentFileName(fileName);
-                  // Add to files if not exists
-                  if (!userFiles.find(f => f.name === fileName)) {
-                    setUserFiles(prev => [...prev, { name: fileName, code: importedCode }]);
-                  } else {
-                    setUserFiles(prev => prev.map(f => f.name === fileName ? { ...f, code: importedCode } : f));
-                  }
+                  openWith(`contracts/${fileName}`, importedCode);
                   // Auto-switch to Solidity mode
                   if (language !== "solidity") {
                     setLanguage("solidity");
@@ -3274,77 +3130,6 @@ Be concise but thorough. Format your response with markdown for readability.`;
 
       {/* New File Modal */}
       <AnimatePresence>
-        {showNewFileModal && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50"
-            onClick={() => setShowNewFileModal(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className={`w-[400px] rounded-2xl p-6 ${"panel-surface"}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center">
-                  <Plus size={20} className="text-white" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold">Create New File</h3>
-                  <p className={`text-sm ${isDark ? "text-gray-400" : "text-gray-500"}`}>
-                    Add a new Solidity contract
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className={`block text-sm font-medium mb-2 ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-                    File Name
-                  </label>
-                  <input
-                    value={newFileName}
-                    onChange={(e) => setNewFileName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && createNewFile()}
-                    placeholder="MyContract.sol"
-                    className={`w-full px-4 py-3 rounded-xl text-sm ${
-                      isDark 
-                        ? "bg-white/5 border border-white/10 focus:border-purple-500" 
-                        : "bg-gray-100 border border-gray-200 focus:border-purple-500"
-                    } outline-none transition-colors`}
-                    autoFocus
-                  />
-                  <p className={`text-xs mt-2 ${isDark ? "text-gray-500" : "text-gray-400"}`}>
-                    .sol extension will be added automatically
-                  </p>
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    onClick={() => setShowNewFileModal(false)}
-                    className={`flex-1 py-3 rounded-xl text-sm font-medium ${
-                      isDark ? "bg-white/5 hover:bg-white/10" : "bg-gray-100 hover:bg-gray-200"
-                    }`}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={createNewFile}
-                    disabled={!newFileName.trim()}
-                    className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-sm font-medium flex items-center justify-center gap-2"
-                  >
-                    <Plus size={16} />
-                    Create File
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
       </AnimatePresence>
     </div>
   );

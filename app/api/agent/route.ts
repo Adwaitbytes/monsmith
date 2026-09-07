@@ -3,7 +3,7 @@ import { randomBytes } from "crypto";
 import { verifyPayment, settlePayment } from "../../../lib/q402";
 import { createWalletClient, createPublicClient, http, defineChain, getAddress, parseEther, isAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { compileForDeploy } from "@/lib/solc/compile";
+import { compileForDeploy, type ProjectInput } from "@/lib/solc/compile";
 import { CONTRACT_TEMPLATES, generateFromTemplate } from "../../../lib/contractTemplates";
 import { REQUEST_BUDGET_MS, callAI, hasAIProvider } from "../../../lib/aiClient";
 
@@ -198,6 +198,30 @@ function pickTemplateFor(request: string): string {
     return "defi-token";
 }
 
+
+/**
+ * The caller's whole workspace, when it sent one.
+ *
+ * The studio compiles every Solidity file it holds rather than just the open
+ * one, so a contract can import another file the user wrote. Validated here
+ * rather than trusted: this is request data, and a malformed `sources` would
+ * otherwise reach solc as-is.
+ */
+function readProject(body: unknown): ProjectInput | undefined {
+    if (typeof body !== "object" || body === null) return undefined;
+    const { sources, entry } = body as { sources?: unknown; entry?: unknown };
+
+    if (typeof sources !== "object" || sources === null) return undefined;
+    if (typeof entry !== "string" || entry.length === 0) return undefined;
+
+    const clean: Record<string, string> = {};
+    for (const [path, content] of Object.entries(sources)) {
+        if (typeof content === "string" && path.endsWith(".sol")) clean[path] = content;
+    }
+
+    if (clean[entry] === undefined) return undefined;
+    return { sources: clean, entry };
+}
 
 export async function POST(req: Request) {
     // Every AI path shares one wall-clock budget so the function returns JSON
@@ -450,7 +474,7 @@ Provide a structured audit report with:
             console.log("🔨 Compiling contract...");
 
             try {
-                const { abi, bytecode } = await compileForDeploy(code);
+                const { abi, bytecode } = await compileForDeploy(code, readProject(body));
 
                 return NextResponse.json({
                     success: true,
@@ -523,9 +547,10 @@ Format as JSON:
             }
 
             try {
-                // Compile
+                // The same project the studio compiled. Deploying from a
+                // single-source build would silently drop the user's imports.
                 console.log("📦 Compiling contract...");
-                const { abi, bytecode } = await compileForDeploy(code);
+                const { abi, bytecode } = await compileForDeploy(code, readProject(body));
 
                 if (!bytecode || bytecode.length < 10) {
                     throw new Error("Compilation produced invalid bytecode");

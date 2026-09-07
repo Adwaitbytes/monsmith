@@ -289,20 +289,32 @@ export async function compileProject(
     const index: Record<string, string[]> = {};
     for (const [file, defined] of Object.entries(contracts)) index[file] = Object.keys(defined);
 
-    // `target` is a fully qualified name, `path:Name`, as metadata records it.
+    // `target` is a fully qualified name, `path:Name`, as metadata records it,
+    // or a bare path. The studio only knows which file is open, not which of
+    // the contracts inside it the user means, so a path narrows the search to
+    // that file and the size rule below picks within it.
     let file: string | undefined;
     let name: string | undefined;
-    if (options.target !== undefined && options.target.includes(":")) {
-        const [targetFile, targetName] = options.target.split(":");
-        if (contracts[targetFile]?.[targetName] !== undefined) {
-            file = targetFile;
-            name = targetName;
+    let searchIn = contracts;
+
+    if (options.target !== undefined) {
+        if (options.target.includes(":")) {
+            const [targetFile, targetName] = options.target.split(":");
+            if (contracts[targetFile]?.[targetName] !== undefined) {
+                file = targetFile;
+                name = targetName;
+            }
+        } else if (contracts[options.target] !== undefined) {
+            searchIn = { [options.target]: contracts[options.target] };
         }
     }
 
     if (file === undefined || name === undefined) {
+        // The largest deployed bytecode. Interfaces and abstract contracts
+        // produce none, and a project's entry point is almost always the
+        // biggest thing in it, so this beats "first declared".
         let bestSize = -1;
-        for (const [candidateFile, defined] of Object.entries(contracts)) {
+        for (const [candidateFile, defined] of Object.entries(searchIn)) {
             for (const [candidateName, contract] of Object.entries(defined)) {
                 const size = (contract.evm?.deployedBytecode?.object ?? "").length;
                 if (size > bestSize) {
@@ -406,9 +418,44 @@ function pickDeployable(contracts: Record<string, CompiledContract>): string {
  * The shape `compileSolidity` returned, so the callers that only wanted an ABI
  * and bytecode can move across without caring how the version was resolved.
  */
+/**
+ * A workspace compiled as one project, keyed by the paths its files import
+ * each other by.
+ */
+export interface ProjectInput {
+    sources: Record<string, string>;
+    /** The open file, which is the contract the user means to deploy. */
+    entry: string;
+}
+
 export async function compileForDeploy(
     sourceCode: string,
+    project?: ProjectInput,
 ): Promise<{ abi: Abi; bytecode: string; compiler: CompilerUsed }> {
+    // With more than one file in the workspace, compile the lot. `import
+    // "./Ownable.sol"` can only resolve if the compiler is given Ownable.sol
+    // under that path, so a single-source compile makes a file tree decorative.
+    if (project !== undefined && Object.keys(project.sources).length > 1) {
+        const sources: SourceMap = {};
+        for (const [path, content] of Object.entries(project.sources)) {
+            sources[path] = { content: path === project.entry ? sourceCode : content };
+        }
+
+        const result = await compileProject(sources, {
+            outputs: ["abi", "evm.bytecode", "evm.deployedBytecode"],
+            target: project.entry,
+        });
+
+        const projectBytecode = result.contract.evm?.bytecode?.object;
+        if (projectBytecode === undefined || projectBytecode.length === 0) {
+            throw new Error(
+                `${result.contractName} produced no bytecode. Abstract contracts and interfaces cannot be deployed.`,
+            );
+        }
+
+        return { abi: result.contract.abi, bytecode: projectBytecode, compiler: result.compiler };
+    }
+
     const result = await compileVersioned(sourceCode, {
         outputs: ["abi", "evm.bytecode", "evm.deployedBytecode"],
     });

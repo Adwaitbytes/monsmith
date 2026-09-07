@@ -1,7 +1,0 @@
-[     114ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2489
-[     132ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2489
-[    2015ms] [INFO] The configured chains are not supported by Coinbase Smart Wallet: 10143, 10143 @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2489
-[    6090ms] [ERROR] Framing 'https://auth.privy.io/' violates the following Content Security Policy directive: "frame-ancestors 'self' https://paylox.vercel.app https://www.paylox.vercel.app https://auth.privy.io". The request has been blocked.
- @ :0
-[   46977ms] [WARNING] Privy iframe failed to load:  Error: Exceeded max attempts before resolving function
-    at http://localhost:3000/_next/static/chunks/node_modules_%40privy-io_react-auth_dist_esm_14g36qd._.js:1776:16 @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_1ybzpk2._.js:2489
