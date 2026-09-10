@@ -126,7 +126,7 @@ export default async function TermPage({ params }: { params: Promise<Params> }) 
         )}
 
         <p className="mt-12 text-sm text-text-muted">
-          Definition by <Link href="/about" rel="author" className="underline decoration-accent-line underline-offset-4">{FOUNDER.name}</Link>, founder of Monsmith.
+          Definition by <Link href="/adwait-keshari" rel="author" className="underline decoration-accent-line underline-offset-4">{FOUNDER.name}</Link>, founder of Monsmith.
         </p>
 
         <section className="mt-12 rounded-3xl border border-border-subtle bg-surface-sunken/40 p-8 text-center">

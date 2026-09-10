@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 
 import { MonsmithMark } from "./landing/MonsmithMark";
 import { ThemeToggle } from "./ThemeToggle";
-import { FOUNDER, FOUNDER_SOCIAL_LINKS, PRODUCT_SOCIALS, SITE_NAME } from "@/lib/seo";
+import { FOUNDER, SITE_NAME } from "@/lib/seo";
 
 /**
  * Server-rendered navigation and footer for content pages (guides, glossary,
@@ -56,7 +56,7 @@ const FOOTER_COLUMNS: ReadonlyArray<{ title: string; links: ReadonlyArray<{ labe
       { label: "Studio (IDE)", href: "/studio" },
       { label: "Chain Fit gas comparison", href: "/compare" },
       { label: "Live stats", href: "/stats" },
-      { label: "Source on GitHub", href: PRODUCT_SOCIALS.github, external: true },
+      { label: "Tutorials", href: "/tutorials" },
     ],
   },
   {
@@ -71,23 +71,22 @@ const FOOTER_COLUMNS: ReadonlyArray<{ title: string; links: ReadonlyArray<{ labe
     ],
   },
   {
+    // One link to the person, not a column of seven personal profiles. The
+    // socials live on his own page, which is where someone who followed the
+    // credit line is actually looking for them.
     title: "Company",
     links: [
       { label: "About Monsmith", href: "/about" },
-      { label: `Founder: ${FOUNDER.name}`, href: "/about#adwait-keshari" },
+      { label: `Creator: ${FOUNDER.name}`, href: "/adwait-keshari" },
       { label: "Monad docs", href: "https://docs.monad.xyz", external: true },
     ],
-  },
-  {
-    title: "Follow Adwait",
-    links: FOUNDER_SOCIAL_LINKS.map((s) => ({ label: s.label, href: s.href, external: true })),
   },
 ];
 
 export function SiteFooter() {
   return (
     <footer className="border-t border-border-subtle px-6 py-14">
-      <div className="mx-auto grid max-w-6xl gap-10 sm:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1fr_1fr_1fr]">
+      <div className="mx-auto grid max-w-6xl gap-10 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr_1fr]">
         <div>
           <div className="flex items-center gap-2.5">
             <MonsmithMark size={22} />
@@ -97,8 +96,8 @@ export function SiteFooter() {
             The AI-powered smart contract IDE for Monad. Write, audit, profile, and deploy Solidity in your browser.
           </p>
           <p className="mt-4 text-xs text-text-muted">
-            Founded and built by{" "}
-            <Link href="/about" className="font-medium text-text-secondary hover:text-text-primary">
+            Created by{" "}
+            <Link href="/adwait-keshari" className="font-medium text-text-secondary hover:text-text-primary">
               {FOUNDER.name}
             </Link>
             . © 2026 {SITE_NAME}.

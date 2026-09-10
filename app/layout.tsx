@@ -44,7 +44,7 @@ export const metadata: Metadata = {
   description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
   keywords: [...SITE_KEYWORDS],
-  authors: [{ name: FOUNDER.name, url: absoluteUrl("/about") }],
+  authors: [{ name: FOUNDER.name, url: absoluteUrl("/adwait-keshari") }],
   creator: FOUNDER.name,
   publisher: SITE_NAME,
   category: "technology",

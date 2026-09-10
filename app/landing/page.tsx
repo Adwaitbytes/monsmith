@@ -25,7 +25,7 @@ import { AuthControls } from "../AuthControls";
 import { useViewer } from "@/lib/auth/useViewer";
 import { ExecutionGraph } from "./ExecutionGraph";
 import { LiveStats } from "./LiveStats";
-import { FAQ, FOUNDER, FOUNDER_SOCIAL_LINKS } from "@/lib/seo";
+import { FAQ, FOUNDER } from "@/lib/seo";
 import { SiteFooter } from "../SiteChrome";
 import {
   SmoothScroll,
@@ -210,11 +210,7 @@ export default function LandingPage() {
               transition={{ ...REVEAL.show, delay: 0.4 }}
               className="mt-4 text-sm text-text-muted"
             >
-              Free and open source. Founded and built by{" "}
-              <Link href="/about" className="font-medium text-text-secondary underline decoration-accent-line underline-offset-4 hover:text-text-primary">
-                {FOUNDER.name}
-              </Link>
-              .
+              Free to use. Nothing to install, no account to open.
             </motion.p>
 
             <motion.div {...reveal} transition={{ ...REVEAL.show, delay: 0.45 }} className="mt-9 flex flex-wrap items-center gap-3">
@@ -559,37 +555,25 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ------------------------------------------------------------ Founder */}
-      <section id="founder" className="border-t border-border-subtle bg-surface-sunken/30 px-6 py-20">
-        <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1fr_1.4fr] lg:items-center">
-          <motion.div {...reveal}>
-            <Eyebrow>Built by</Eyebrow>
-            <h2 className="mt-6 font-display text-4xl font-semibold tracking-tight sm:text-5xl">
-              <RevealWords text={FOUNDER.name} />
-            </h2>
-            <p className="mt-3 font-mono text-xs uppercase tracking-wide text-text-muted">{FOUNDER.title}</p>
-          </motion.div>
-          <motion.div {...reveal} transition={{ ...REVEAL.show, delay: 0.1 }}>
-            <p className="text-lg leading-relaxed text-text-secondary">{FOUNDER.headline}</p>
-            <div className="mt-6 flex flex-wrap gap-2">
-              {FOUNDER_SOCIAL_LINKS.map((s) => (
-                <a
-                  key={s.href}
-                  href={s.href}
-                  target="_blank"
-                  rel="me noopener"
-                  className="inline-flex items-center gap-1 rounded-full border border-border-subtle px-3 py-1.5 text-xs font-medium transition-colors hover:border-accent-line hover:bg-accent-soft"
-                >
-                  {s.label}
-                  <ArrowUpRight size={12} />
-                </a>
-              ))}
-            </div>
-            <Link href="/about" className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">
-              Read the full story
-              <ArrowRight size={14} />
+      {/* ------------------------------------------------------------- Credit */}
+      {/*
+        A single line, near the bottom, on purpose. Who built a tool is worth
+        stating plainly and worth nothing shouted: the authorship that search
+        and answer engines read comes from the Person schema and /adwait-keshari,
+        not from the size of the type here.
+      */}
+      <section id="founder" className="border-t border-border-subtle px-6 py-10">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
+          <p className="text-sm text-text-muted">
+            Built by{" "}
+            <Link
+              href="/adwait-keshari"
+              className="font-medium text-text-secondary underline decoration-border-strong underline-offset-4 transition-colors hover:text-text-primary hover:decoration-accent"
+            >
+              {FOUNDER.name}
             </Link>
-          </motion.div>
+            , in Bhopal, India.
+          </p>
         </div>
       </section>
 

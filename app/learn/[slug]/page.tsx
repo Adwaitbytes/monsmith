@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
     description: g.description,
     keywords: g.keywords,
     alternates: { canonical: url },
-    authors: [{ name: FOUNDER.name, url: absoluteUrl("/about") }],
+    authors: [{ name: FOUNDER.name, url: absoluteUrl("/adwait-keshari") }],
     openGraph: {
       type: "article",
       title: g.title,
@@ -34,7 +34,7 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
       url,
       publishedTime: g.published,
       modifiedTime: g.updated,
-      authors: [absoluteUrl("/about")],
+      authors: [absoluteUrl("/adwait-keshari")],
       section: g.category,
       tags: g.keywords,
     },
@@ -120,7 +120,7 @@ export default async function GuidePage({ params }: { params: Promise<Params> })
             <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-text-muted">
               <span>
                 By{" "}
-                <Link href="/about" rel="author" className="font-medium text-text-secondary hover:text-text-primary">{FOUNDER.name}</Link>
+                <Link href="/adwait-keshari" rel="author" className="font-medium text-text-secondary hover:text-text-primary">{FOUNDER.name}</Link>
                 , founder of Monsmith
               </span>
               <span aria-hidden>·</span>

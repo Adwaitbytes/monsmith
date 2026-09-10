@@ -444,7 +444,10 @@ Contributions welcome. To contribute:
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+Proprietary. Copyright (c) 2026 Adwait Keshari. All rights reserved.
+
+Monsmith is a hosted product, not an open-source project. No licence is granted
+to copy, modify, redistribute, or run this source, in whole or in part.
 
 ## Acknowledgments
 
@@ -482,7 +485,10 @@ Built with:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Proprietary. Copyright (c) 2026 Adwait Keshari. All rights reserved.
+
+Monsmith is a hosted product, not an open-source project. No licence is granted
+to copy, modify, redistribute, or run this source, in whole or in part.
 
 ---
 

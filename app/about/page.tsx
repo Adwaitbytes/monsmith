@@ -1,60 +1,53 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
-import { ArrowUpRight } from "lucide-react";
-import { existsSync } from "node:fs";
-import path from "node:path";
+import { ArrowRight } from "lucide-react";
 
 import { JsonLd } from "../JsonLd";
 import { SiteFooter, SiteNav } from "../SiteChrome";
 import {
   FOUNDER,
-  FOUNDER_ID,
-  FOUNDER_SOCIAL_LINKS,
   SITE_NAME,
   absoluteUrl,
   breadcrumbJsonLd,
   founderJsonLd,
   jsonLdGraph,
   organizationJsonLd,
+  softwareJsonLd,
 } from "@/lib/seo";
 
-const title = `About Monsmith and founder ${FOUNDER.name}`;
-const description = `${FOUNDER.name} is the founder of Monsmith, the AI-powered smart contract IDE for Monad. IIT Madras Data Science student, full-stack and blockchain engineer, community builder in Bhopal, India. The story behind Monsmith and where to follow Adwait.`;
+/**
+ * The page about the product.
+ *
+ * It used to open with the founder's name as its h1, which made the whole site
+ * read as a personal project and put an identity page in front of anyone
+ * searching for the tool. The person now has his own page; this one answers
+ * "what is Monsmith and why does it exist", and credits him at the end where a
+ * reader who has finished the story is the one who cares.
+ */
+
+const title = `About ${SITE_NAME}`;
+const description = `${SITE_NAME} is the free, AI-powered smart contract IDE for Monad: write, compile, audit, profile for parallel execution, and deploy Solidity in the browser. Why it exists, what it does differently, and who built it.`;
 
 export const metadata: Metadata = {
   title,
   description,
   keywords: [
-    FOUNDER.name,
-    `${FOUNDER.name} founder`,
-    `${FOUNDER.name} Monsmith`,
+    "about Monsmith",
+    "what is Monsmith",
+    "Monsmith IDE",
+    "Monad smart contract IDE",
+    "smart contract IDE for Monad",
     "Monsmith founder",
-    "who founded Monsmith",
-    "Adwaitbytes",
-    "Adwait Keshari IIT Madras",
-    "Adwait Keshari Bhopal",
-    "Adwait Keshari developer",
-    "Monad developer",
-    "smart contract IDE founder",
+    "who created Monsmith",
   ],
   alternates: { canonical: absoluteUrl("/about") },
   openGraph: {
-    type: "profile",
+    type: "website",
     title,
     description,
     url: absoluteUrl("/about"),
-    firstName: FOUNDER.givenName,
-    lastName: FOUNDER.familyName,
-    username: "AdwaitKeshari",
-    images: [{ url: absoluteUrl(FOUNDER.image), width: 460, height: 460, alt: `${FOUNDER.name}, founder of Monsmith` }],
   },
-  twitter: {
-    card: "summary_large_image",
-    title,
-    description,
-    creator: FOUNDER.socials.twitterHandle,
-  },
+  twitter: { card: "summary_large_image", title, description },
 };
 
 const MILESTONES = [
@@ -71,34 +64,47 @@ const MILESTONES = [
     what: "Monsmith shipped with a Monaco editor, an AI-assisted auditor, the Monad parallel profiler, Chain Fit live gas comparison, and one-click testnet deploys.",
   },
   {
-    when: "In the open",
-    what: "The code is public on GitHub and the roadmap is shaped by the developers using it. Every feature is built and documented in public.",
+    when: "The measure",
+    what: "Every number the studio prints is measured, not modelled from a datasheet: contracts are executed in a real EVM and repriced under each chain's published gas schedule.",
+  },
+];
+
+const PRINCIPLES = [
+  {
+    title: "Measured, not claimed",
+    body: "Chain Fit runs your contract and reprices that exact execution under each chain's gas rules at the current gas price. When a number cannot be measured honestly, the studio says so instead of printing one.",
+  },
+  {
+    title: "Built for one chain, properly",
+    body: "Monad's parallel execution changes how storage layout affects throughput. The profiler reads the dependencies between your functions and says which ones can actually run at the same time.",
+  },
+  {
+    title: "Nothing to install",
+    body: "Every compiler version from 0.4 upward runs in the browser session, imports resolve, and deployment is one wallet confirmation. Contracts stay plain Solidity, so nothing locks you in.",
   },
 ];
 
 export default function AboutPage() {
-  // A second photo is optional; the page only references it when the file is present.
-  const hasPortrait = existsSync(path.join(process.cwd(), "public", FOUNDER.portrait));
-
   return (
     <main className="min-h-screen bg-background text-text-primary">
       <JsonLd
         data={jsonLdGraph(
           {
-            "@type": "ProfilePage",
+            "@type": "AboutPage",
             "@id": absoluteUrl("/about"),
             url: absoluteUrl("/about"),
             name: title,
             description,
-            mainEntity: { "@id": FOUNDER_ID },
-            about: { "@id": FOUNDER_ID },
             isPartOf: { "@id": `${absoluteUrl("/")}#website` },
-            dateModified: "2026-09-10",
-            speakable: { "@type": "SpeakableSpecification", cssSelector: ["h1", ".founder-headline"] },
-            primaryImageOfPage: { "@type": "ImageObject", url: absoluteUrl(FOUNDER.image) },
+            dateModified: "2026-09-11",
+            speakable: { "@type": "SpeakableSpecification", cssSelector: ["h1", ".about-lede"] },
           },
-          founderJsonLd(),
+          softwareJsonLd(),
           organizationJsonLd(),
+          // The Person stays in the graph even though the page leads with the
+          // product: this is the page an engine lands on for "about Monsmith",
+          // and the founder edge is how it answers "who made it" from here.
+          founderJsonLd(),
           breadcrumbJsonLd([
             { name: "Home", path: "/" },
             { name: "About", path: "/about" },
@@ -117,103 +123,30 @@ export default function AboutPage() {
           </ol>
         </nav>
 
-        {/* ---------------------------------------------------------- Founder */}
-        <section id="adwait-keshari" className="mt-10 grid gap-12 lg:grid-cols-[320px_1fr]">
-          <div>
-            <figure>
-              <Image
-                src={FOUNDER.image}
-                alt={`${FOUNDER.name}, founder of Monsmith, speaking at a Monad community event`}
-                width={460}
-                height={460}
-                priority
-                className="w-full max-w-[320px] rounded-3xl border border-border-subtle object-cover"
-              />
-              <figcaption className="mt-2 text-xs text-text-muted">Speaking at a Monad community event</figcaption>
-            </figure>
-            {hasPortrait && (
-              <Image
-                src={FOUNDER.portrait}
-                alt={`${FOUNDER.name}, founder of Monsmith`}
-                width={640}
-                height={853}
-                className="mt-4 w-full max-w-[320px] rounded-3xl border border-border-subtle object-cover"
-              />
-            )}
-            <ul className="mt-6 flex flex-wrap gap-2">
-              {FOUNDER_SOCIAL_LINKS.map((s) => (
-                <li key={s.href}>
-                  <a
-                    href={s.href}
-                    target="_blank"
-                    rel="me noopener"
-                    className="inline-flex items-center gap-1 rounded-full border border-border-subtle px-3 py-1.5 text-xs font-medium transition-colors hover:border-accent-line hover:bg-accent-soft"
-                  >
-                    {s.label}
-                    <ArrowUpRight size={12} />
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div>
-            <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">Founder</p>
-            <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight sm:text-6xl">
-              {FOUNDER.name}
-            </h1>
-            <p className="mt-2 text-lg text-text-secondary">{FOUNDER.title} · {FOUNDER.role}</p>
-            <p className="founder-headline mt-8 text-xl leading-relaxed">{FOUNDER.headline}</p>
-            {FOUNDER.bio.map((paragraph) => (
-              <p key={paragraph.slice(0, 32)} className="mt-5 leading-relaxed text-text-secondary">
-                {paragraph}
-              </p>
-            ))}
-
-            <dl className="mt-10 grid gap-6 sm:grid-cols-2">
-              <div>
-                <dt className="font-mono text-xs uppercase tracking-wide text-text-muted">Builds</dt>
-                <dd className="mt-1 font-medium">
-                  <Link href="/" className="underline decoration-accent-line underline-offset-4 hover:decoration-accent">
-                    Monsmith, the smart contract IDE for Monad
-                  </Link>
-                </dd>
-              </div>
-              <div>
-                <dt className="font-mono text-xs uppercase tracking-wide text-text-muted">Based in</dt>
-                <dd className="mt-1 font-medium">{FOUNDER.location}</dd>
-              </div>
-              <div>
-                <dt className="font-mono text-xs uppercase tracking-wide text-text-muted">Education</dt>
-                <dd className="mt-1 font-medium">{FOUNDER.education}</dd>
-              </div>
-              <div>
-                <dt className="font-mono text-xs uppercase tracking-wide text-text-muted">Community</dt>
-                <dd className="mt-1 font-medium">{FOUNDER.communities.join(" · ")}</dd>
-              </div>
-              <div className="sm:col-span-2">
-                <dt className="font-mono text-xs uppercase tracking-wide text-text-muted">Expertise</dt>
-                <dd className="mt-2 flex flex-wrap gap-2">
-                  {FOUNDER.knowsAbout.map((k) => (
-                    <span key={k} className="rounded-md bg-surface-sunken px-2 py-1 text-xs">{k}</span>
-                  ))}
-                </dd>
-              </div>
-            </dl>
-          </div>
-        </section>
+        {/* ---------------------------------------------------------- Product */}
+        <header className="mt-10 max-w-3xl">
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">About</p>
+          <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight sm:text-6xl">
+            {SITE_NAME}
+          </h1>
+          <p className="about-lede mt-8 text-xl leading-relaxed text-text-secondary">
+            {SITE_NAME} is a browser-based studio for building smart contracts on Monad. Write,
+            compile against any Solidity version, audit, profile for parallel execution, compare the
+            cost across EVM chains, and deploy, without installing a toolchain.
+          </p>
+        </header>
 
         {/* ------------------------------------------------------------ Story */}
-        <section className="mt-24 border-t border-border-subtle pt-16">
+        <section className="mt-20 border-t border-border-subtle pt-16">
           <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">The story</p>
           <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
             Why {SITE_NAME} exists
           </h2>
           <p className="mt-6 max-w-3xl leading-relaxed text-text-secondary">
-            Monsmith started from a simple frustration: shipping a contract to Monad should not require
-            installing a toolchain, reverse-engineering how parallel execution treats your storage, and
-            choosing a chain from a comparison table that someone else wrote. {FOUNDER.name} built the
-            tool he wanted to use, then put it on the web for everyone.
+            Shipping a contract to Monad should not require installing a toolchain,
+            reverse-engineering how parallel execution treats your storage, and choosing a chain
+            from a comparison table that somebody else wrote. {SITE_NAME} is the tool that answers
+            those three questions in one place, from measurements rather than marketing.
           </p>
           <div className="mt-12 grid gap-px overflow-hidden rounded-2xl border border-border-subtle bg-border-subtle sm:grid-cols-2 lg:grid-cols-4">
             {MILESTONES.map((m) => (
@@ -225,27 +158,73 @@ export default function AboutPage() {
           </div>
         </section>
 
+        {/* ------------------------------------------------------- Principles */}
+        <section className="mt-24 border-t border-border-subtle pt-16">
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">How it is built</p>
+          <h2 className="mt-4 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
+            What {SITE_NAME} does differently
+          </h2>
+          <div className="mt-12 grid gap-10 sm:grid-cols-3">
+            {PRINCIPLES.map((p) => (
+              <div key={p.title}>
+                <h3 className="font-display text-lg font-semibold tracking-tight">{p.title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-text-secondary">{p.body}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* ---------------------------------------------------------- Creator */}
+        {/*
+          Last, and small. The question "who made this" deserves a real answer
+          and a real page; it does not deserve the top of the page about the
+          product.
+        */}
+        <section className="mt-24 border-t border-border-subtle pt-16">
+          <h2 className="font-display text-2xl font-semibold tracking-tight">
+            Who built {SITE_NAME}
+          </h2>
+          <p className="mt-4 max-w-3xl leading-relaxed text-text-secondary">
+            {SITE_NAME} was created and is developed by{" "}
+            <Link
+              href="/adwait-keshari"
+              className="font-medium text-text-primary underline decoration-accent-line underline-offset-4 hover:decoration-accent"
+            >
+              {FOUNDER.name}
+            </Link>
+            , a full-stack and blockchain engineer based in {FOUNDER.location}.
+          </p>
+          <Link
+            href="/adwait-keshari"
+            className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-accent hover:underline"
+          >
+            More about {FOUNDER.name}
+            <ArrowRight size={14} />
+          </Link>
+        </section>
+
         {/* -------------------------------------------------------------- CTA */}
         <section className="mt-24 rounded-3xl border border-border-subtle bg-surface-sunken/40 p-10 text-center">
-          <h2 className="font-display text-3xl font-semibold tracking-tight">Try what Adwait built</h2>
+          <h2 className="font-display text-3xl font-semibold tracking-tight">
+            Open the studio
+          </h2>
           <p className="mx-auto mt-3 max-w-xl text-text-secondary">
-            Open the studio, paste a contract, and see how it runs on Monad. Free, in the browser, no account required.
+            Paste a contract and see how it runs on Monad. Free, in the browser, no account
+            required.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <Link
               href="/studio"
               className="rounded-full bg-accent px-7 py-3 text-base font-medium text-white transition-transform hover:-translate-y-0.5"
             >
-              Open Monsmith
+              Open {SITE_NAME}
             </Link>
-            <a
-              href={FOUNDER.socials.twitter}
-              target="_blank"
-              rel="me noopener"
+            <Link
+              href="/learn"
               className="rounded-full border border-border-strong px-7 py-3 text-base font-medium transition-colors hover:bg-surface-raised"
             >
-              Follow {FOUNDER.socials.twitterHandle}
-            </a>
+              Read the guides
+            </Link>
           </div>
         </section>
       </article>

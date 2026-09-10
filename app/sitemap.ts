@@ -8,6 +8,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const pages: MetadataRoute.Sitemap = [
     { url: absoluteUrl("/"), lastModified: now, changeFrequency: "weekly", priority: 1 },
     { url: absoluteUrl("/about"), lastModified: now, changeFrequency: "monthly", priority: 0.9 },
+    // Lower priority than any product page, because it answers a question far
+    // fewer people ask. It is here so the identity query has somewhere to land,
+    // not to compete with the pages that should rank.
+    { url: absoluteUrl("/adwait-keshari"), lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     { url: absoluteUrl("/studio"), lastModified: now, changeFrequency: "weekly", priority: 0.9 },
     { url: absoluteUrl("/compare"), lastModified: now, changeFrequency: "daily", priority: 0.8 },
     { url: absoluteUrl("/learn"), lastModified: now, changeFrequency: "weekly", priority: 0.9 },

@@ -11,10 +11,18 @@ import { absoluteUrl, siteUrl } from "./siteUrl";
 
 export const SITE_NAME = "Monsmith";
 export const SITE_TAGLINE = "Build. Learn. Ship to Monad.";
-/** Under 60 characters so Google shows it whole, and carries the founder's name. */
-export const SITE_TITLE = "Monsmith | AI Smart Contract IDE for Monad by Adwait Keshari";
+/**
+ * Under 60 characters so Google shows it whole.
+ *
+ * The product's name and what it does, nothing else. A title carrying a
+ * person's name spends the most valuable text on the page on a term almost
+ * nobody searches for, and reads as a personal project rather than a tool.
+ * Authorship is answered by the Person and Organization schema below, which is
+ * what search and answer engines actually read for "who made this".
+ */
+export const SITE_TITLE = "Monsmith | AI Smart Contract IDE for Monad";
 export const SITE_DESCRIPTION =
-  "Monsmith is the free, browser-based, AI-powered smart contract IDE for Monad. Write, compile, audit, profile for parallel execution, and deploy Solidity contracts with zero setup. Founded by Adwait Keshari.";
+  "Monsmith is the free, browser-based, AI-powered smart contract IDE for Monad. Write, compile, audit, profile for parallel execution, and deploy Solidity contracts with zero setup.";
 
 export const SITE_KEYWORDS = [
   "Monsmith",
@@ -63,7 +71,7 @@ export const FOUNDER = {
   bio: [
     "Adwait Keshari is a software engineer and founder who builds at the seam of AI, cryptography, and product. He created Monsmith to remove the friction between an idea and a verified contract running on Monad: no local toolchain, no guesswork about parallel execution, and no chain choice made on marketing instead of measurement.",
     "He is a BS Data Science student at IIT Madras and a three-time hackathon builder who has shipped multiple production products across Web3 and AI, spanning Solidity, the EVM, zero-knowledge proofs, Next.js, Rust, and applied AI for code analysis. His work is open on GitHub under Adwaitbytes.",
-    "Beyond the keyboard he organises ETH Builders Day Bhopal, leads Bhopal DAO and AarambhLabs, runs developer workshops for the Sahyog Club at IIT Madras, and speaks at Monad community events about building for parallel execution. He documents the journey of building Monsmith in public on YouTube, X, LinkedIn, Instagram, and TikTok.",
+    "Beyond the keyboard he organises ETH Builders Day Bhopal, leads Bhopal DAO and AarambhLabs, runs developer workshops for the Sahyog Club at IIT Madras, and speaks at Monad community events about building for parallel execution. He documents the journey of building Monsmith in public on X, LinkedIn, and Instagram.",
     "He believes the best developer tools disappear into the workflow, and Monsmith is built on that conviction: an editor, an auditor, a profiler, and a deploy console that live in one view and answer the question every builder actually has, which is whether the code is ready to ship.",
   ],
   location: "Bhopal, India",
@@ -80,9 +88,7 @@ export const FOUNDER = {
     twitterHandle: "@AdwaitKeshari",
     github: "https://github.com/Adwaitbytes",
     portfolio: "https://adwait-portfolio-blond.vercel.app/",
-    youtube: "https://www.youtube.com/@Iitmbs2024",
     instagram: "https://www.instagram.com/adwaitkeshari",
-    tiktok: "https://www.tiktok.com/@adwait503",
   },
   knowsAbout: [
     "Smart contracts",
@@ -106,13 +112,18 @@ export const FOUNDER_SOCIAL_LINKS: ReadonlyArray<{ label: string; href: string }
   { label: "X (Twitter)", href: FOUNDER.socials.twitter },
   { label: "GitHub", href: FOUNDER.socials.github },
   { label: "Portfolio", href: FOUNDER.socials.portfolio },
-  { label: "YouTube", href: FOUNDER.socials.youtube },
   { label: "Instagram", href: FOUNDER.socials.instagram },
-  { label: "TikTok", href: FOUNDER.socials.tiktok },
 ];
 
+/**
+ * The product's own accounts.
+ *
+ * There is deliberately no repository link: Monsmith is not open source, and
+ * the URL this used to point at returned 404. A dead link in `sameAs` is worse
+ * than no link, because an engine following it to verify the entity finds
+ * nothing and trusts the rest of the graph less.
+ */
 export const PRODUCT_SOCIALS = {
-  github: "https://github.com/Adwaitbytes/monsmith",
   twitter: FOUNDER.socials.twitter,
 };
 
@@ -152,8 +163,12 @@ export const FAQ: ReadonlyArray<{ q: string; a: string }> = [
     a: "Monsmith (monsmith.com) is a free, browser-based, AI-powered IDE for building smart contracts on Monad. It lets you write, compile, audit, profile for parallel execution, deploy, and migrate Solidity contracts without installing anything locally.",
   },
   {
-    q: "Who founded Monsmith?",
-    a: "Monsmith was founded and built by Adwait Keshari, a full-stack and blockchain engineer and IIT Madras Data Science student based in Bhopal, India. He builds developer tools in public; you can follow him on GitHub (Adwaitbytes), X (@AdwaitKeshari), LinkedIn, and YouTube.",
+    // Phrased once, answered with every word the question gets asked in:
+    // created, founded, built, developer, author. Two near-identical entries in
+    // FAQPage schema read as keyword stuffing; one that covers the variants
+    // does not.
+    q: "Who created Monsmith?",
+    a: "Monsmith was created, founded, and developed by Adwait Keshari. He is the author and sole developer of the product: a full-stack and blockchain engineer and IIT Madras Data Science student based in Bhopal, India, who built Monsmith to make shipping to Monad measurable rather than guesswork. He builds in public on GitHub (Adwaitbytes), X (@AdwaitKeshari), and LinkedIn.",
   },
   {
     q: "Is Monsmith free to use?",
@@ -180,8 +195,11 @@ export const FAQ: ReadonlyArray<{ q: string; a: string }> = [
     a: "You can write, compile, audit, and profile contracts with no wallet at all. A wallet such as MetaMask connected to Monad testnet (chain ID 10143) is only needed when you deploy.",
   },
   {
+    // People do search this, so it is answered rather than avoided. Claiming
+    // otherwise would also be false: there is no public repository and no
+    // licence granting anyone rights to the source.
     q: "Is Monsmith open source?",
-    a: "Yes. The source code is published on GitHub under the Adwaitbytes account, and the roadmap is built in the open with the developers who use it.",
+    a: "No. Monsmith is a free hosted product, not an open-source project: the source code is proprietary and is not published under an open-source licence. Using it is free and needs no account, and the contracts you write stay yours, in plain Solidity, with nothing locking you in.",
   },
   {
     q: "Can I use Monsmith to learn Solidity?",
@@ -219,7 +237,7 @@ export const TUTORIALS: ReadonlyArray<{
 export const ORG_ID = `${CANONICAL_ORIGIN}/#organization`;
 export const SITE_ID = `${CANONICAL_ORIGIN}/#website`;
 export const APP_ID = `${CANONICAL_ORIGIN}/#software`;
-export const FOUNDER_ID = `${CANONICAL_ORIGIN}/about#adwait-keshari`;
+export const FOUNDER_ID = `${CANONICAL_ORIGIN}/adwait-keshari#person`;
 
 export function founderJsonLd() {
   return {
@@ -231,11 +249,12 @@ export function founderJsonLd() {
     alternateName: ["Adwaitbytes", FOUNDER.socials.twitterHandle],
     jobTitle: FOUNDER.title,
     description: FOUNDER.headline,
-    url: absoluteUrl("/about"),
+    url: absoluteUrl("/adwait-keshari"),
+    mainEntityOfPage: { "@id": absoluteUrl("/adwait-keshari") },
     image: {
       "@type": "ImageObject",
       url: absoluteUrl(FOUNDER.image),
-      caption: `${FOUNDER.name}, founder of Monsmith, speaking at a Monad community event`,
+      caption: `${FOUNDER.name}, creator of Monsmith, speaking at a Monad community event`,
     },
     homeLocation: { "@type": "Place", name: FOUNDER.location },
     nationality: { "@type": "Country", name: FOUNDER.country },
@@ -275,7 +294,7 @@ export function organizationJsonLd() {
     founder: { "@id": FOUNDER_ID },
     employee: { "@id": FOUNDER_ID },
     knowsAbout: ["Smart contracts", "Solidity", "Monad", "Parallel EVM", "Smart contract security"],
-    sameAs: [PRODUCT_SOCIALS.github, PRODUCT_SOCIALS.twitter, FOUNDER.socials.linkedin, FOUNDER.socials.youtube],
+    sameAs: [PRODUCT_SOCIALS.twitter, FOUNDER.socials.linkedin],
   };
 }
 

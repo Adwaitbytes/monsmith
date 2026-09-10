@@ -1,11 +1,13 @@
-/* TEAM */
-Founder Founder & Builder: Adwait Keshari Builder: Adwait Keshari (IIT Madras, Bhopal, India)
-Site: https://www.monsmith.com/about
-X: @AdwaitKeshari
-GitHub: Adwaitbytes
-Location: India
-
 /* SITE */
 Name: Monsmith
+Site: https://www.monsmith.com
 Tagline: Build. Learn. Ship to Monad.
-Stack: Next.js, TypeScript, Tailwind, Hardhat, Solidity
+Stack: Next.js, TypeScript, Tailwind, Solidity, solc, viem
+
+/* CREATOR */
+Created by: Adwait Keshari
+Role: Founder, and sole developer
+Page: https://www.monsmith.com/adwait-keshari
+X: @AdwaitKeshari
+GitHub: Adwaitbytes
+Location: Bhopal, India

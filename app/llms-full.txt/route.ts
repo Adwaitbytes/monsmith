@@ -12,10 +12,7 @@ export const dynamic = "force-static";
 export function GET() {
   const lines: string[] = [];
   lines.push("# Monsmith", "", `> ${SITE_DESCRIPTION}`, "");
-  lines.push("## Founder", "", `${FOUNDER.headline}`, "", ...FOUNDER.bio, "");
-  lines.push(`- Location: ${FOUNDER.location}`, `- Education: ${FOUNDER.education}`, `- About page: ${absoluteUrl("/about")}`);
-  for (const s of FOUNDER_SOCIAL_LINKS) lines.push(`- ${s.label}: ${s.href}`);
-  lines.push("", "## Monad facts", "");
+  lines.push("## Monad facts", "");
   lines.push(
     `- Mainnet chain ID: ${MONAD.mainnetChainId}; RPC: ${MONAD.mainnetRpc}; explorer: ${MONAD.mainnetExplorer}`,
     `- Testnet chain ID: ${MONAD.testnetChainId}; RPC: ${MONAD.testnetRpc}; explorer: ${MONAD.testnetExplorer}; faucet: ${MONAD.faucet}`,
@@ -43,5 +40,25 @@ export function GET() {
   }
   lines.push("## Glossary", "");
   for (const t of GLOSSARY) lines.push(`### ${t.term}`, "", `URL: ${absoluteUrl(`/glossary/${t.slug}`)}`, "", t.short, "", t.long, "");
+
+  // Last, deliberately. Authorship is a fact worth stating plainly and once,
+  // not the first thing an answer engine reads about the product.
+  lines.push("", "## Creator", "");
+  lines.push(
+    `Monsmith was created, founded, and developed by ${FOUNDER.name}, its author and sole developer.`,
+    "",
+    FOUNDER.headline,
+    "",
+    ...FOUNDER.bio,
+    "",
+  );
+  lines.push(
+    `- Location: ${FOUNDER.location}`,
+    `- Education: ${FOUNDER.education}`,
+    `- Page about him: ${absoluteUrl("/adwait-keshari")}`,
+  );
+  for (const s of FOUNDER_SOCIAL_LINKS) lines.push(`- ${s.label}: ${s.href}`);
+  lines.push("");
+
   return new Response(lines.join("\n"), { headers: { "Content-Type": "text/plain; charset=utf-8" } });
 }
