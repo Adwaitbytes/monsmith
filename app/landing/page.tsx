@@ -26,6 +26,7 @@ import { AuthControls } from "../AuthControls";
 import { useViewer } from "@/lib/auth/useViewer";
 import { ExecutionGraph } from "./ExecutionGraph";
 import { LiveStats } from "./LiveStats";
+import { FAQ, FOUNDER, FOUNDER_SOCIAL_LINKS } from "@/lib/seo";
 import {
   SmoothScroll,
   ScrollProgress,
@@ -514,6 +515,69 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ---------------------------------------------------------------- FAQ */}
+      <section id="faq" className="border-t border-border-subtle px-6 py-20">
+        <div className="mx-auto max-w-6xl">
+          <motion.div {...reveal} className="max-w-2xl">
+            <Eyebrow>Questions</Eyebrow>
+            <h2 className="mt-6 font-display text-4xl font-semibold tracking-tight sm:text-5xl">
+              <RevealWords text="What people ask about Monsmith" />
+            </h2>
+          </motion.div>
+
+          <div className="mt-14 grid gap-x-12 gap-y-2 lg:grid-cols-2">
+            {FAQ.map((item, i) => (
+              <motion.details
+                key={item.q}
+                {...reveal}
+                transition={{ ...REVEAL.show, delay: 0.04 * i }}
+                className="group border-b border-border-subtle py-5"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-display text-lg font-semibold [&::-webkit-details-marker]:hidden">
+                  <h3 className="text-lg font-semibold">{item.q}</h3>
+                  <span aria-hidden className="font-mono text-accent transition-transform group-open:rotate-45">+</span>
+                </summary>
+                <p className="mt-3 text-sm leading-relaxed text-text-secondary">{item.a}</p>
+              </motion.details>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ------------------------------------------------------------ Founder */}
+      <section id="founder" className="border-t border-border-subtle bg-surface-sunken/30 px-6 py-20">
+        <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[1fr_1.4fr] lg:items-center">
+          <motion.div {...reveal}>
+            <Eyebrow>Built by</Eyebrow>
+            <h2 className="mt-6 font-display text-4xl font-semibold tracking-tight sm:text-5xl">
+              <RevealWords text={FOUNDER.name} />
+            </h2>
+            <p className="mt-3 font-mono text-xs uppercase tracking-wide text-text-muted">{FOUNDER.title}</p>
+          </motion.div>
+          <motion.div {...reveal} transition={{ ...REVEAL.show, delay: 0.1 }}>
+            <p className="text-lg leading-relaxed text-text-secondary">{FOUNDER.headline}</p>
+            <div className="mt-6 flex flex-wrap gap-2">
+              {FOUNDER_SOCIAL_LINKS.map((s) => (
+                <a
+                  key={s.href}
+                  href={s.href}
+                  target="_blank"
+                  rel="me noopener"
+                  className="inline-flex items-center gap-1 rounded-full border border-border-subtle px-3 py-1.5 text-xs font-medium transition-colors hover:border-accent-line hover:bg-accent-soft"
+                >
+                  {s.label}
+                  <ArrowUpRight size={12} />
+                </a>
+              ))}
+            </div>
+            <Link href="/about" className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-accent hover:underline">
+              Read the full story
+              <ArrowRight size={14} />
+            </Link>
+          </motion.div>
+        </div>
+      </section>
+
       {/* ---------------------------------------------------------------- CTA */}
       <section className="relative overflow-hidden border-t border-border-subtle px-6 py-24">
         <div className="pointer-events-none absolute inset-0 accent-veil opacity-70" />
@@ -567,6 +631,24 @@ export default function LandingPage() {
             </a>
             <span className="font-mono text-xs text-text-muted">© 2026</span>
           </div>
+        </div>
+        <div className="mx-auto mt-8 flex max-w-6xl flex-col items-center justify-between gap-4 border-t border-border-subtle pt-6 text-xs text-text-muted sm:flex-row">
+          <p>
+            Founded and built by{" "}
+            <Link href="/about" className="font-medium text-text-secondary transition-colors hover:text-text-primary">
+              {FOUNDER.name}
+            </Link>
+            .
+          </p>
+          <nav aria-label="Founder social links" className="flex flex-wrap items-center gap-4">
+            {FOUNDER_SOCIAL_LINKS.map((s) => (
+              <a key={s.href} href={s.href} target="_blank" rel="me noopener" className="transition-colors hover:text-text-primary">
+                {s.label}
+              </a>
+            ))}
+            <Link href="/about" className="transition-colors hover:text-text-primary">About</Link>
+            <Link href="/tutorials" className="transition-colors hover:text-text-primary">Tutorials</Link>
+          </nav>
         </div>
       </footer>
     </div>

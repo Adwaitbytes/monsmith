@@ -11,6 +11,20 @@ Monsmith is an integrated development environment designed specifically for buil
 
 The IDE is optimized for Monad's parallel execution architecture, offering unique analysis tools to help developers write contracts that take full advantage of Monad's 10,000 TPS throughput.
 
+## Founder
+
+Monsmith is founded and built by **[Adwait Keshari](https://www.monsmith.com/about)**, a full-stack and blockchain engineer building developer tools for Monad in public.
+
+- LinkedIn: https://www.linkedin.com/in/adwait-keshari-b5793b294/
+- X (Twitter): https://x.com/AdwaitKeshari
+- GitHub: https://github.com/Adwaitbytes
+- Portfolio: https://adwait-portfolio-blond.vercel.app/
+- YouTube: https://www.youtube.com/@Iitmbs2024
+- Instagram: https://www.instagram.com/adwaitkeshari
+- TikTok: https://www.tiktok.com/@adwait503
+
+Live product: https://monsmith.com
+
 ## Key Features
 
 **Development Environment**

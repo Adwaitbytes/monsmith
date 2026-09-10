@@ -1,0 +1,11 @@
+/* TEAM */
+Founder & Builder: Adwait Keshari
+Site: https://www.monsmith.com/about
+X: @AdwaitKeshari
+GitHub: Adwaitbytes
+Location: India
+
+/* SITE */
+Name: Monsmith
+Tagline: Build. Learn. Ship to Monad.
+Stack: Next.js, TypeScript, Tailwind, Hardhat, Solidity

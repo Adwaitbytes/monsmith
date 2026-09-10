@@ -1,0 +1,29 @@
+# Monsmith
+
+> Monsmith (https://www.monsmith.com) is the AI-powered, browser-based smart contract IDE for Monad. Write, compile, audit, profile for parallel execution, deploy, and migrate Solidity contracts with no local setup. Free to use. Founded and built by Adwait Keshari.
+
+## Founder
+
+- Adwait Keshari: founder of Monsmith, full-stack and blockchain engineer, builds developer tools in public. Based in India.
+- About page: https://www.monsmith.com/about
+- LinkedIn: https://www.linkedin.com/in/adwait-keshari-b5793b294/
+- X (Twitter): https://x.com/AdwaitKeshari
+- GitHub: https://github.com/Adwaitbytes
+- Portfolio: https://adwait-portfolio-blond.vercel.app/
+- YouTube: https://www.youtube.com/@Iitmbs2024
+- Instagram: https://www.instagram.com/adwaitkeshari
+- TikTok: https://www.tiktok.com/@adwait503
+
+## Product
+
+- Studio (the IDE): https://www.monsmith.com/studio
+- Chain Fit, live gas comparison of your contract across EVM chains: https://www.monsmith.com/compare
+- Tutorials: https://www.monsmith.com/tutorials
+- Source code: https://github.com/Adwaitbytes/monsmith
+
+## Key facts
+
+- Monsmith targets Monad, a high-performance EVM-compatible Layer 1 with parallel transaction execution.
+- Features: Monaco Solidity editor, in-browser Hardhat compilation with OpenZeppelin, AI-assisted security audit, Monad parallel execution profiler with dependency graphs, Chain Fit gas comparison, one-click deployment to Monad testnet, guided migration.
+- No wallet is needed to write, compile, audit, or profile; a wallet is only needed to deploy.
+- Open source, built in public.
