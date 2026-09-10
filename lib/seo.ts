@@ -168,7 +168,7 @@ export const FAQ: ReadonlyArray<{ q: string; a: string }> = [
     // FAQPage schema read as keyword stuffing; one that covers the variants
     // does not.
     q: "Who created Monsmith?",
-    a: "Monsmith was created, founded, and developed by Adwait Keshari. He is the author and sole developer of the product: a full-stack and blockchain engineer and IIT Madras Data Science student based in Bhopal, India, who built Monsmith to make shipping to Monad measurable rather than guesswork. He builds in public on GitHub (Adwaitbytes), X (@AdwaitKeshari), and LinkedIn.",
+    a: "Monsmith was created, founded, and developed by Adwait Keshari. He is the author and sole developer of the product: a full-stack and blockchain engineer and IIT Madras Data Science student who built Monsmith to make shipping to Monad measurable rather than guesswork. He builds in public on GitHub (Adwaitbytes), X (@AdwaitKeshari), and LinkedIn.",
   },
   {
     q: "Is Monsmith free to use?",

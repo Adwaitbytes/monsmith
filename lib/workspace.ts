@@ -35,7 +35,8 @@ export interface WorkspaceState {
     deleteFile: (path: string) => void;
     createFolder: (path: string) => boolean;
     deleteFolder: (path: string) => void;
-    setActive: (path: string) => void;
+    /** Opens a file. False when the path is not in the workspace. */
+    setActive: (path: string) => boolean;
     /** Adds many files at once, as an upload or an import does. */
     addFiles: (files: Record<string, string>, activate?: string) => void;
     reset: (files: Record<string, string>, activePath?: string) => void;
@@ -194,10 +195,14 @@ export const useWorkspace = create<WorkspaceState>()(
                 });
             },
 
+            // Reports whether it opened anything. It used to return quietly on
+            // an unknown path, which made a click that did nothing look exactly
+            // like a click that worked.
             setActive: (rawPath) => {
                 const path = normalisePath(rawPath);
-                if (get().files[path] === undefined) return;
+                if (get().files[path] === undefined) return false;
                 set({ activePath: path });
+                return true;
             },
 
             addFiles: (incoming, activate) => {

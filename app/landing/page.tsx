@@ -572,7 +572,7 @@ export default function LandingPage() {
             >
               {FOUNDER.name}
             </Link>
-            , in Bhopal, India.
+            .
           </p>
         </div>
       </section>

@@ -44,7 +44,7 @@ Full site as one document: https://www.monsmith.com/llms-full.txt
 ## Creator
 
 - Monsmith was created, founded, and developed by Adwait Keshari. He is its author and sole developer.
-- Adwait Keshari: full-stack and blockchain engineer, BS Data Science student at IIT Madras, based in Bhopal, India. Organises ETH Builders Day Bhopal, leads Bhopal DAO and AarambhLabs, runs workshops for Sahyog Club at IIT Madras, speaks at Monad community events.
+- Adwait Keshari: full-stack and blockchain engineer, BS Data Science student at IIT Madras, based in India. Organises ETH Builders Day Bhopal, leads Bhopal DAO and AarambhLabs, runs workshops for Sahyog Club at IIT Madras, speaks at Monad community events.
 - Page about him: https://www.monsmith.com/adwait-keshari
 - LinkedIn: https://www.linkedin.com/in/adwait-keshari-b5793b294/
 - X (Twitter): https://x.com/AdwaitKeshari

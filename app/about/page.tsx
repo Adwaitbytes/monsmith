@@ -192,7 +192,7 @@ export default function AboutPage() {
             >
               {FOUNDER.name}
             </Link>
-            , a full-stack and blockchain engineer based in {FOUNDER.location}.
+            , a full-stack and blockchain engineer.
           </p>
           <Link
             href="/adwait-keshari"

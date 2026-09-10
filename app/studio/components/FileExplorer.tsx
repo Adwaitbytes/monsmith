@@ -94,6 +94,7 @@ export function FileExplorer({ onOpen, onNotify }: FileExplorerProps) {
     const deleteFile = useWorkspace((state) => state.deleteFile);
     const deleteFolder = useWorkspace((state) => state.deleteFolder);
     const addFiles = useWorkspace((state) => state.addFiles);
+    const setActive = useWorkspace((state) => state.setActive);
 
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const [renaming, setRenaming] = useState<string | null>(null);
@@ -103,6 +104,19 @@ export function FileExplorer({ onOpen, onNotify }: FileExplorerProps) {
 
     const tree = useMemo(() => buildTree(files, folders), [files, folders]);
     const fileCount = Object.keys(files).length;
+
+    /**
+     * Opens a file and tells the host it happened.
+     *
+     * Selection goes through the store rather than out through `onOpen`,
+     * because a callback the host might only log leaves the tree highlighting
+     * one file while the editor shows another. `onOpen` is a notification of
+     * something that already happened, never the thing that makes it happen.
+     */
+    const open = (path: string) => {
+        if (setActive(path)) onOpen(path);
+        else onNotify?.(`Could not open ${path}: it is no longer in the workspace.`);
+    };
 
     const toggle = (path: string) =>
         setCollapsed((current) => {
@@ -135,7 +149,7 @@ contract ${basenameOf(withExtension).replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-
 }
 `;
         if (createFile(withExtension, stub)) {
-            onOpen(withExtension);
+            open(withExtension);
             onNotify?.(`Created ${withExtension}`);
         } else {
             onNotify?.(`${withExtension} already exists`);
@@ -151,7 +165,7 @@ contract ${basenameOf(withExtension).replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-
         if (draft.trim().length === 0) return;
 
         if (renameFile(from, target)) {
-            onOpen(target);
+            open(target);
             onNotify?.(`Renamed to ${target}`);
         } else {
             onNotify?.(`Could not rename to ${target}`);
@@ -173,7 +187,7 @@ contract ${basenameOf(withExtension).replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-
 
         addFiles(incoming);
         const first = Object.keys(incoming)[0];
-        if (first !== undefined) onOpen(first);
+        if (first !== undefined) open(first);
         onNotify?.(`Added ${Object.keys(incoming).length} file(s)`);
         event.target.value = '';
     };
@@ -287,7 +301,7 @@ contract ${basenameOf(withExtension).replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-
         return (
             <div
                 key={node.path}
-                onClick={() => onOpen(node.path)}
+                onClick={() => open(node.path)}
                 className={`group flex cursor-pointer items-center gap-1.5 rounded py-1 pr-1 text-[12.5px] transition-colors ${
                     isActive
                         ? 'bg-accent-soft text-accent'

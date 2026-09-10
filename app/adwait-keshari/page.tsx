@@ -33,7 +33,7 @@ import {
  */
 
 const title = `${FOUNDER.name} — Creator of Monsmith`;
-const description = `${FOUNDER.name} is the creator, founder, and developer of Monsmith, the AI-powered smart contract IDE for Monad. Full-stack and blockchain engineer, IIT Madras Data Science student, community builder in Bhopal, India.`;
+const description = `${FOUNDER.name} is the creator, founder, and developer of Monsmith, the AI-powered smart contract IDE for Monad. Full-stack and blockchain engineer, IIT Madras Data Science student, and community builder in India.`;
 
 export const metadata: Metadata = {
   title,

@@ -130,3 +130,39 @@ test("only Solidity is handed to the compiler", () => {
     });
     assert.deepEqual(Object.keys(sources).sort(), ["a.sol", "nested/b.sol"]);
 });
+
+/**
+ * Opening a file has to be something the caller can check.
+ *
+ * The explorer used to hand the clicked path to an `onOpen` callback and stop
+ * there. The host only logged it, so the console filled with "Opened:
+ * MyToken.sol" while the tree stayed highlighted on another file and the editor
+ * never changed. Selection now goes through the store, and the store says
+ * whether it actually opened anything.
+ */
+
+test("opening a file reports that it worked", () => {
+    useWorkspace.getState().reset({ "a.sol": "A", "b.sol": "B" }, "a.sol");
+
+    assert.equal(useWorkspace.getState().setActive("b.sol"), true);
+    assert.equal(useWorkspace.getState().activePath, "b.sol");
+});
+
+test("opening a file that is not there reports failure rather than doing nothing quietly", () => {
+    useWorkspace.getState().reset({ "a.sol": "A" }, "a.sol");
+
+    assert.equal(useWorkspace.getState().setActive("gone.sol"), false);
+    assert.equal(useWorkspace.getState().activePath, "a.sol", "the open file must not change");
+});
+
+test("renaming a file that is not open leaves the open file alone", () => {
+    // The explorer announces the renamed path as opened, so it has to open it:
+    // renameFile only moves activePath when the renamed file was the open one.
+    useWorkspace.getState().reset({ "a.sol": "A", "b.sol": "B" }, "a.sol");
+    assert.equal(useWorkspace.getState().renameFile("b.sol", "c.sol"), true);
+    assert.equal(useWorkspace.getState().activePath, "a.sol");
+
+    // Which is why the explorer follows a rename with an explicit open.
+    assert.equal(useWorkspace.getState().setActive("c.sol"), true);
+    assert.equal(useWorkspace.getState().activePath, "c.sol");
+});
