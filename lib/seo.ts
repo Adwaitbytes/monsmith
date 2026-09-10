@@ -11,49 +11,69 @@ import { absoluteUrl, siteUrl } from "./siteUrl";
 
 export const SITE_NAME = "Monsmith";
 export const SITE_TAGLINE = "Build. Learn. Ship to Monad.";
-export const SITE_TITLE = "Monsmith · AI-Powered Smart Contract IDE for Monad";
+/** Under 60 characters so Google shows it whole, and carries the founder's name. */
+export const SITE_TITLE = "Monsmith | AI Smart Contract IDE for Monad by Adwait Keshari";
 export const SITE_DESCRIPTION =
-  "Monsmith is the browser-based, AI-powered smart contract IDE for Monad. Write, compile, audit, profile for parallel execution, deploy, and migrate Solidity contracts without local setup. Founded by Adwait Keshari.";
+  "Monsmith is the free, browser-based, AI-powered smart contract IDE for Monad. Write, compile, audit, profile for parallel execution, and deploy Solidity contracts with zero setup. Founded by Adwait Keshari.";
 
 export const SITE_KEYWORDS = [
   "Monsmith",
   "Monsmith IDE",
   "monsmith.com",
+  "Monsmith Monad",
   "Monad",
   "Monad IDE",
   "Monad smart contracts",
   "Monad developer tools",
+  "Monad testnet",
+  "deploy smart contract on Monad",
+  "Monad Solidity",
   "smart contract IDE",
   "AI smart contract IDE",
-  "browser Solidity IDE",
-  "Solidity",
+  "online Solidity IDE",
+  "browser Solidity compiler",
+  "Solidity online compiler",
+  "Remix alternative",
+  "smart contract development",
+  "smart contract audit",
+  "AI smart contract audit",
   "parallel EVM",
   "parallel execution profiler",
   "Chain Fit",
   "EVM gas comparison",
   "Web3 development",
   "smart contract deployment",
+  "Solidity tutorial",
+  "learn Solidity",
   "Adwait Keshari",
   "Adwait Keshari founder",
+  "Adwait Keshari Monsmith",
 ];
 
-/** The person behind the product. */
+/** The person behind the product. Every fact here is public on his own profiles. */
 export const FOUNDER = {
   name: "Adwait Keshari",
   givenName: "Adwait",
   familyName: "Keshari",
   role: "Founder & Builder",
   title: "Founder of Monsmith",
+  handle: "AdwaitKeshari",
   headline:
-    "Adwait Keshari is the founder of Monsmith, the AI-powered smart contract IDE for Monad. A full-stack and blockchain engineer, he builds developer tools that make shipping to parallel EVM chains fast, safe, and measurable.",
+    "Adwait Keshari is the founder of Monsmith, the AI-powered smart contract IDE for Monad. A full-stack and blockchain engineer studying Data Science at IIT Madras, he builds developer tools that make shipping to parallel EVM chains fast, safe, and measurable.",
   bio: [
-    "Adwait Keshari is a software engineer and founder focused on developer tooling for the next generation of blockchains. He created Monsmith to remove the friction between an idea and a verified contract running on Monad: no local toolchain, no guesswork about parallel execution, and no chain choice made on marketing instead of measurement.",
-    "Before Monsmith he shipped full-stack products across Web3 and AI, and he documents the journey of building in public across YouTube, X, LinkedIn, and GitHub. His work spans Solidity, the EVM, Next.js, and applied AI for code analysis.",
+    "Adwait Keshari is a software engineer and founder who builds at the seam of AI, cryptography, and product. He created Monsmith to remove the friction between an idea and a verified contract running on Monad: no local toolchain, no guesswork about parallel execution, and no chain choice made on marketing instead of measurement.",
+    "He is a BS Data Science student at IIT Madras and a three-time hackathon builder who has shipped multiple production products across Web3 and AI, spanning Solidity, the EVM, zero-knowledge proofs, Next.js, Rust, and applied AI for code analysis. His work is open on GitHub under Adwaitbytes.",
+    "Beyond the keyboard he organises ETH Builders Day Bhopal, leads Bhopal DAO and AarambhLabs, runs developer workshops for the Sahyog Club at IIT Madras, and speaks at Monad community events about building for parallel execution. He documents the journey of building Monsmith in public on YouTube, X, LinkedIn, Instagram, and TikTok.",
     "He believes the best developer tools disappear into the workflow, and Monsmith is built on that conviction: an editor, an auditor, a profiler, and a deploy console that live in one view and answer the question every builder actually has, which is whether the code is ready to ship.",
   ],
-  location: "India",
-  email: undefined as string | undefined,
-  image: "/founder-adwait-keshari.svg",
+  location: "Bhopal, India",
+  country: "India",
+  education: "IIT Madras, BS Data Science",
+  communities: ["ETH Builders Day Bhopal", "Bhopal DAO", "AarambhLabs", "Sahyog Club, IIT Madras"],
+  /** Speaking at a Monad community event. Served from /public/founder. */
+  image: "/founder/adwait-keshari.jpg",
+  /** Optional second photo. Rendered only when the file exists in /public/founder. */
+  portrait: "/founder/adwait-keshari-portrait.jpg",
   socials: {
     linkedin: "https://www.linkedin.com/in/adwait-keshari-b5793b294/",
     twitter: "https://x.com/AdwaitKeshari",
@@ -70,9 +90,12 @@ export const FOUNDER = {
     "Monad",
     "Parallel EVM",
     "Ethereum Virtual Machine",
+    "Smart contract security",
+    "Zero-knowledge proofs",
     "Web3 developer tools",
     "Next.js",
     "TypeScript",
+    "Rust",
     "Applied AI for code analysis",
     "Blockchain engineering",
   ],
@@ -98,6 +121,26 @@ export const CANONICAL_ORIGIN = "https://www.monsmith.com";
 
 export const FOUNDING_DATE = "2025";
 
+/** Monad facts used across the content. Sourced from docs.monad.xyz. */
+export const MONAD = {
+  mainnetChainId: 143,
+  testnetChainId: 10143,
+  mainnetRpc: "https://rpc.monad.xyz",
+  testnetRpc: "https://testnet-rpc.monad.xyz",
+  testnetExplorer: "https://testnet.monadexplorer.com",
+  mainnetExplorer: "https://monadvision.com",
+  faucet: "https://faucet.monad.xyz",
+  docs: "https://docs.monad.xyz",
+  blockTimeMs: 300,
+  finalityMs: 600,
+  tps: "10,000",
+  blockGasLimit: "150,000,000",
+  txGasLimit: "30,000,000",
+  maxCodeSizeKb: 128,
+  maxInitCodeSizeKb: 256,
+  symbol: "MON",
+} as const;
+
 /**
  * Questions people ask search and answer engines about Monsmith, with
  * self-contained answers. Rendered visibly on the landing page and emitted as
@@ -106,11 +149,11 @@ export const FOUNDING_DATE = "2025";
 export const FAQ: ReadonlyArray<{ q: string; a: string }> = [
   {
     q: "What is Monsmith?",
-    a: "Monsmith is a browser-based, AI-powered IDE for building smart contracts on Monad. It lets you write, compile, audit, profile for parallel execution, deploy, and migrate Solidity contracts without installing anything locally.",
+    a: "Monsmith (monsmith.com) is a free, browser-based, AI-powered IDE for building smart contracts on Monad. It lets you write, compile, audit, profile for parallel execution, deploy, and migrate Solidity contracts without installing anything locally.",
   },
   {
     q: "Who founded Monsmith?",
-    a: "Monsmith was founded and built by Adwait Keshari, a full-stack and blockchain engineer who builds developer tools in public. You can follow his work on GitHub (Adwaitbytes), X (@AdwaitKeshari), LinkedIn, and YouTube.",
+    a: "Monsmith was founded and built by Adwait Keshari, a full-stack and blockchain engineer and IIT Madras Data Science student based in Bhopal, India. He builds developer tools in public; you can follow him on GitHub (Adwaitbytes), X (@AdwaitKeshari), LinkedIn, and YouTube.",
   },
   {
     q: "Is Monsmith free to use?",
@@ -118,7 +161,11 @@ export const FAQ: ReadonlyArray<{ q: string; a: string }> = [
   },
   {
     q: "What is Monad and why does Monsmith target it?",
-    a: "Monad is a high-performance, EVM-compatible Layer 1 blockchain with parallel transaction execution. Monsmith is built around that architecture: its parallel profiler shows which functions can run concurrently and how to restructure storage so contracts get the full throughput benefit.",
+    a: "Monad is a high-performance, EVM-compatible Layer 1 blockchain with optimistic parallel execution, 300 ms blocks, 600 ms finality, and a 10,000 TPS design target. Monsmith is built around that architecture: its parallel profiler shows which functions can run concurrently and how to restructure storage so contracts get the full throughput benefit.",
+  },
+  {
+    q: "Is Monsmith a Remix alternative?",
+    a: "Yes. Like Remix, Monsmith runs entirely in the browser with no setup. Unlike Remix, it is built for Monad specifically: it adds an AI security auditor, a parallel execution profiler, Chain Fit live gas comparison across EVM chains, and one-click Monad testnet deployment.",
   },
   {
     q: "What does the Monsmith parallel profiler do?",
@@ -126,15 +173,19 @@ export const FAQ: ReadonlyArray<{ q: string; a: string }> = [
   },
   {
     q: "What is Chain Fit?",
-    a: "Chain Fit runs your Solidity contract in a real EVM, then reprices that exact execution under each chain's published gas schedule and live gas price, so you can compare Monad with other EVM chains using measurements rather than marketing.",
+    a: "Chain Fit runs your Solidity contract in a real EVM, then reprices that exact execution under each chain's published gas schedule and live gas price, so you can compare Monad with Ethereum, Base, Arbitrum, and other EVM chains using measurements rather than marketing.",
   },
   {
     q: "Do I need MetaMask or a wallet to use Monsmith?",
-    a: "You can write, compile, audit, and profile contracts with no wallet at all. A wallet such as MetaMask connected to Monad testnet is only needed when you deploy.",
+    a: "You can write, compile, audit, and profile contracts with no wallet at all. A wallet such as MetaMask connected to Monad testnet (chain ID 10143) is only needed when you deploy.",
   },
   {
     q: "Is Monsmith open source?",
     a: "Yes. The source code is published on GitHub under the Adwaitbytes account, and the roadmap is built in the open with the developers who use it.",
+  },
+  {
+    q: "Can I use Monsmith to learn Solidity?",
+    a: "Yes. Monsmith ships with guided tutorials, a glossary of smart contract terms, and developer guides covering Monad, Solidity, security, and gas optimisation, all readable at monsmith.com/learn.",
   },
 ];
 
@@ -177,14 +228,29 @@ export function founderJsonLd() {
     name: FOUNDER.name,
     givenName: FOUNDER.givenName,
     familyName: FOUNDER.familyName,
+    alternateName: ["Adwaitbytes", FOUNDER.socials.twitterHandle],
     jobTitle: FOUNDER.title,
     description: FOUNDER.headline,
     url: absoluteUrl("/about"),
-    image: absoluteUrl(FOUNDER.image),
-    nationality: { "@type": "Country", name: FOUNDER.location },
+    image: {
+      "@type": "ImageObject",
+      url: absoluteUrl(FOUNDER.image),
+      caption: `${FOUNDER.name}, founder of Monsmith, speaking at a Monad community event`,
+    },
+    homeLocation: { "@type": "Place", name: FOUNDER.location },
+    nationality: { "@type": "Country", name: FOUNDER.country },
+    alumniOf: {
+      "@type": "CollegeOrUniversity",
+      name: "Indian Institute of Technology Madras",
+      alternateName: "IIT Madras",
+      sameAs: "https://www.iitm.ac.in/",
+    },
+    memberOf: FOUNDER.communities.map((name) => ({ "@type": "Organization", name })),
     worksFor: { "@id": ORG_ID },
     affiliation: { "@id": ORG_ID },
+    founderOf: { "@id": ORG_ID },
     knowsAbout: [...FOUNDER.knowsAbout],
+    knowsLanguage: ["en", "hi"],
     sameAs: FOUNDER_SOCIAL_LINKS.map((s) => s.href),
   };
 }
@@ -195,17 +261,21 @@ export function organizationJsonLd() {
     "@id": ORG_ID,
     name: SITE_NAME,
     legalName: SITE_NAME,
+    alternateName: ["Monsmith IDE", "monsmith.com"],
     url: CANONICAL_ORIGIN,
     logo: {
       "@type": "ImageObject",
       url: absoluteUrl("/monsmith-logo.svg"),
     },
+    image: absoluteUrl("/opengraph-image"),
     description: SITE_DESCRIPTION,
     slogan: SITE_TAGLINE,
     foundingDate: FOUNDING_DATE,
+    foundingLocation: { "@type": "Place", name: FOUNDER.location },
     founder: { "@id": FOUNDER_ID },
     employee: { "@id": FOUNDER_ID },
-    sameAs: [PRODUCT_SOCIALS.github, PRODUCT_SOCIALS.twitter],
+    knowsAbout: ["Smart contracts", "Solidity", "Monad", "Parallel EVM", "Smart contract security"],
+    sameAs: [PRODUCT_SOCIALS.github, PRODUCT_SOCIALS.twitter, FOUNDER.socials.linkedin, FOUNDER.socials.youtube],
   };
 }
 
@@ -218,13 +288,19 @@ export function websiteJsonLd() {
     url: CANONICAL_ORIGIN,
     description: SITE_DESCRIPTION,
     publisher: { "@id": ORG_ID },
+    author: { "@id": FOUNDER_ID },
     inLanguage: "en",
+    potentialAction: {
+      "@type": "SearchAction",
+      target: { "@type": "EntryPoint", urlTemplate: `${CANONICAL_ORIGIN}/glossary?q={search_term_string}` },
+      "query-input": "required name=search_term_string",
+    },
   };
 }
 
 export function softwareJsonLd() {
   return {
-    "@type": "SoftwareApplication",
+    "@type": ["SoftwareApplication", "WebApplication"],
     "@id": APP_ID,
     name: SITE_NAME,
     alternateName: "Monsmith IDE",
@@ -235,7 +311,7 @@ export function softwareJsonLd() {
     operatingSystem: "Web browser",
     browserRequirements: "Requires a modern web browser with JavaScript enabled",
     isAccessibleForFree: true,
-    offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+    offers: { "@type": "Offer", price: "0", priceCurrency: "USD", availability: "https://schema.org/InStock" },
     author: { "@id": FOUNDER_ID },
     creator: { "@id": FOUNDER_ID },
     publisher: { "@id": ORG_ID },
@@ -247,17 +323,19 @@ export function softwareJsonLd() {
       "Chain Fit: live gas comparison across EVM chains",
       "One-click deployment to Monad testnet",
       "Guided contract migration",
+      "Tutorials, guides, and a smart contract glossary",
     ],
     screenshot: absoluteUrl("/monsmith-demo-poster.jpg"),
-    softwareHelp: { "@type": "CreativeWork", url: absoluteUrl("/tutorials") },
+    softwareHelp: { "@type": "CreativeWork", url: absoluteUrl("/learn") },
+    keywords: SITE_KEYWORDS.join(", "),
   };
 }
 
-export function faqJsonLd() {
+export function faqJsonLd(items: ReadonlyArray<{ q: string; a: string }> = FAQ, id = `${CANONICAL_ORIGIN}/#faq`) {
   return {
     "@type": "FAQPage",
-    "@id": `${CANONICAL_ORIGIN}/#faq`,
-    mainEntity: FAQ.map(({ q, a }) => ({
+    "@id": id,
+    mainEntity: items.map(({ q, a }) => ({
       "@type": "Question",
       name: q,
       acceptedAnswer: { "@type": "Answer", text: a },

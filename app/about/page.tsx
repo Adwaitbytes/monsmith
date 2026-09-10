@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowUpRight } from "lucide-react";
+import { existsSync } from "node:fs";
+import path from "node:path";
 
-import { ThemeToggle } from "../ThemeToggle";
 import { JsonLd } from "../JsonLd";
-import { MonsmithMark } from "../landing/MonsmithMark";
+import { SiteFooter, SiteNav } from "../SiteChrome";
 import {
   FOUNDER,
   FOUNDER_ID,
@@ -19,7 +20,7 @@ import {
 } from "@/lib/seo";
 
 const title = `About Monsmith and founder ${FOUNDER.name}`;
-const description = `${FOUNDER.name} is the founder of Monsmith, the AI-powered smart contract IDE for Monad. Learn the story behind the product, what it does, and how to follow Adwait on LinkedIn, X, GitHub, and YouTube.`;
+const description = `${FOUNDER.name} is the founder of Monsmith, the AI-powered smart contract IDE for Monad. IIT Madras Data Science student, full-stack and blockchain engineer, community builder in Bhopal, India. The story behind Monsmith and where to follow Adwait.`;
 
 export const metadata: Metadata = {
   title,
@@ -31,6 +32,9 @@ export const metadata: Metadata = {
     "Monsmith founder",
     "who founded Monsmith",
     "Adwaitbytes",
+    "Adwait Keshari IIT Madras",
+    "Adwait Keshari Bhopal",
+    "Adwait Keshari developer",
     "Monad developer",
     "smart contract IDE founder",
   ],
@@ -43,10 +47,10 @@ export const metadata: Metadata = {
     firstName: FOUNDER.givenName,
     lastName: FOUNDER.familyName,
     username: "AdwaitKeshari",
-    images: [{ url: absoluteUrl(FOUNDER.image), width: 512, height: 512, alt: FOUNDER.name }],
+    images: [{ url: absoluteUrl(FOUNDER.image), width: 460, height: 460, alt: `${FOUNDER.name}, founder of Monsmith` }],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title,
     description,
     creator: FOUNDER.socials.twitterHandle,
@@ -73,6 +77,9 @@ const MILESTONES = [
 ];
 
 export default function AboutPage() {
+  // A second photo is optional; the page only references it when the file is present.
+  const hasPortrait = existsSync(path.join(process.cwd(), "public", FOUNDER.portrait));
+
   return (
     <main className="min-h-screen bg-background text-text-primary">
       <JsonLd
@@ -86,6 +93,9 @@ export default function AboutPage() {
             mainEntity: { "@id": FOUNDER_ID },
             about: { "@id": FOUNDER_ID },
             isPartOf: { "@id": `${absoluteUrl("/")}#website` },
+            dateModified: "2026-09-10",
+            speakable: { "@type": "SpeakableSpecification", cssSelector: ["h1", ".founder-headline"] },
+            primaryImageOfPage: { "@type": "ImageObject", url: absoluteUrl(FOUNDER.image) },
           },
           founderJsonLd(),
           organizationJsonLd(),
@@ -96,23 +106,7 @@ export default function AboutPage() {
         )}
       />
 
-      <nav className="border-b border-border-subtle px-6 py-4">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
-            <MonsmithMark className="h-6 w-6" />
-            <span className="font-display text-[15px] font-semibold tracking-tight">{SITE_NAME}</span>
-          </Link>
-          <div className="flex items-center gap-3">
-            <ThemeToggle />
-            <Link
-              href="/studio"
-              className="rounded-lg bg-text-primary px-4 py-1.5 text-[13px] font-semibold text-background transition-opacity hover:opacity-90"
-            >
-              Open studio
-            </Link>
-          </div>
-        </div>
-      </nav>
+      <SiteNav />
 
       <article className="mx-auto max-w-6xl px-6 py-16 sm:py-24">
         <nav aria-label="Breadcrumb" className="font-mono text-xs text-text-muted">
@@ -126,14 +120,26 @@ export default function AboutPage() {
         {/* ---------------------------------------------------------- Founder */}
         <section id="adwait-keshari" className="mt-10 grid gap-12 lg:grid-cols-[320px_1fr]">
           <div>
-            <Image
-              src={FOUNDER.image}
-              alt={`${FOUNDER.name}, founder of Monsmith`}
-              width={320}
-              height={320}
-              priority
-              className="w-full max-w-[320px] rounded-3xl border border-border-subtle"
-            />
+            <figure>
+              <Image
+                src={FOUNDER.image}
+                alt={`${FOUNDER.name}, founder of Monsmith, speaking at a Monad community event`}
+                width={460}
+                height={460}
+                priority
+                className="w-full max-w-[320px] rounded-3xl border border-border-subtle object-cover"
+              />
+              <figcaption className="mt-2 text-xs text-text-muted">Speaking at a Monad community event</figcaption>
+            </figure>
+            {hasPortrait && (
+              <Image
+                src={FOUNDER.portrait}
+                alt={`${FOUNDER.name}, founder of Monsmith`}
+                width={640}
+                height={853}
+                className="mt-4 w-full max-w-[320px] rounded-3xl border border-border-subtle object-cover"
+              />
+            )}
             <ul className="mt-6 flex flex-wrap gap-2">
               {FOUNDER_SOCIAL_LINKS.map((s) => (
                 <li key={s.href}>
@@ -157,7 +163,7 @@ export default function AboutPage() {
               {FOUNDER.name}
             </h1>
             <p className="mt-2 text-lg text-text-secondary">{FOUNDER.title} · {FOUNDER.role}</p>
-            <p className="mt-8 text-xl leading-relaxed">{FOUNDER.headline}</p>
+            <p className="founder-headline mt-8 text-xl leading-relaxed">{FOUNDER.headline}</p>
             {FOUNDER.bio.map((paragraph) => (
               <p key={paragraph.slice(0, 32)} className="mt-5 leading-relaxed text-text-secondary">
                 {paragraph}
@@ -176,6 +182,14 @@ export default function AboutPage() {
               <div>
                 <dt className="font-mono text-xs uppercase tracking-wide text-text-muted">Based in</dt>
                 <dd className="mt-1 font-medium">{FOUNDER.location}</dd>
+              </div>
+              <div>
+                <dt className="font-mono text-xs uppercase tracking-wide text-text-muted">Education</dt>
+                <dd className="mt-1 font-medium">{FOUNDER.education}</dd>
+              </div>
+              <div>
+                <dt className="font-mono text-xs uppercase tracking-wide text-text-muted">Community</dt>
+                <dd className="mt-1 font-medium">{FOUNDER.communities.join(" · ")}</dd>
               </div>
               <div className="sm:col-span-2">
                 <dt className="font-mono text-xs uppercase tracking-wide text-text-muted">Expertise</dt>
@@ -235,6 +249,7 @@ export default function AboutPage() {
           </div>
         </section>
       </article>
+      <SiteFooter />
     </main>
   );
 }

@@ -9,6 +9,27 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
 
+  async redirects() {
+    return [
+      {
+        // One canonical host. Search engines must never see two copies of the site.
+        source: "/:path*",
+        has: [{ type: "host", value: "monsmith.com" }],
+        destination: "https://www.monsmith.com/:path*",
+        permanent: true,
+      },
+      { source: "/blog", destination: "/learn", permanent: true },
+      { source: "/blog/:slug", destination: "/learn/:slug", permanent: true },
+      { source: "/guides", destination: "/learn", permanent: true },
+      { source: "/guides/:slug", destination: "/learn/:slug", permanent: true },
+      { source: "/docs", destination: "/learn", permanent: true },
+      { source: "/ide", destination: "/studio", permanent: true },
+      { source: "/app", destination: "/studio", permanent: true },
+      { source: "/faq", destination: "/#faq", permanent: true },
+      { source: "/team", destination: "/about", permanent: true },
+    ];
+  },
+
   async headers() {
     return [
       {

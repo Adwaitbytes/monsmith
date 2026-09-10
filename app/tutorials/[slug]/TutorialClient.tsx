@@ -1,41 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
 import Link from "next/link";
 
-export function TutorialClient() {
-  const params = useParams();
-  const slug = params.slug as string;
-  const [content, setContent] = useState("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const loadTutorial = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(`/api/tutorial?slug=${slug}`);
-        const data: { success: boolean; content?: string } = await res.json();
-        if (cancelled) return;
-        setContent(
-          data.success && data.content
-            ? data.content
-            : "# Tutorial Not Found\n\nThe requested tutorial could not be loaded."
-        );
-      } catch {
-        if (!cancelled) setContent("# Error\n\nFailed to load tutorial.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    loadTutorial();
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
-
+export function TutorialClient({ content }: { content: string }) {
   // Tutorial markdown is repo-owned, but the inline formatter builds raw HTML -   // escape first so a stray angle bracket can never become live markup.
   const escapeHtml = (text: string) =>
     text
@@ -108,13 +74,6 @@ export function TutorialClient() {
     return elements;
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background text-text-primary flex items-center justify-center">
-        <div className="animate-pulse text-text-secondary">Loading tutorial...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background text-text-primary">

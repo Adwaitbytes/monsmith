@@ -14,7 +14,6 @@ import {
   ShieldCheck,
   Sun,
   Moon,
-  Github,
   Check,
 } from "lucide-react";
 import dynamic from "next/dynamic";
@@ -27,6 +26,7 @@ import { useViewer } from "@/lib/auth/useViewer";
 import { ExecutionGraph } from "./ExecutionGraph";
 import { LiveStats } from "./LiveStats";
 import { FAQ, FOUNDER, FOUNDER_SOCIAL_LINKS } from "@/lib/seo";
+import { SiteFooter } from "../SiteChrome";
 import {
   SmoothScroll,
   ScrollProgress,
@@ -106,8 +106,11 @@ export default function LandingPage() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  if (!mounted) return null;
-  const isDark = theme === "dark";
+  // Rendered on the server so crawlers and answer engines index the full
+  // page. The only theme-dependent pieces are the toggle icon and the WebGL
+  // hero, which is client-only already, so the server can assume light and
+  // let the client correct it after hydration without a mismatch.
+  const isDark = mounted && theme === "dark";
 
   return (
     <div className="min-h-screen bg-background text-text-primary selection:bg-accent-soft">
@@ -133,10 +136,11 @@ export default function LandingPage() {
           <div className="hidden items-center gap-8 md:flex">
             {[
               ["Workflow", "#workflow"],
-              ["Execution", "#execution"],
               ["Product", "#product"],
-              ["Roadmap", "#roadmap"],
-              ["Docs", "https://docs.monad.xyz"],
+              ["Chain Fit", "/compare"],
+              ["Learn", "/learn"],
+              ["Glossary", "/glossary"],
+              ["About", "/about"],
             ].map(([label, href]) => (
               <a
                 key={href}
@@ -200,6 +204,17 @@ export default function LandingPage() {
             >
               A browser-based studio to write, profile, deploy, and migrate smart
               contracts, with Monad&apos;s parallel execution in view the whole way.
+            </motion.p>
+            <motion.p
+              {...reveal}
+              transition={{ ...REVEAL.show, delay: 0.4 }}
+              className="mt-4 text-sm text-text-muted"
+            >
+              Free and open source. Founded and built by{" "}
+              <Link href="/about" className="font-medium text-text-secondary underline decoration-accent-line underline-offset-4 hover:text-text-primary">
+                {FOUNDER.name}
+              </Link>
+              .
             </motion.p>
 
             <motion.div {...reveal} transition={{ ...REVEAL.show, delay: 0.45 }} className="mt-9 flex flex-wrap items-center gap-3">
@@ -610,47 +625,7 @@ export default function LandingPage() {
       </section>
 
       {/* -------------------------------------------------------------- Footer */}
-      <footer className="border-t border-border-subtle px-6 py-12">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 sm:flex-row">
-          <div className="flex items-center gap-2.5">
-            <MonsmithMark size={22} />
-            <span className="font-display font-semibold">Monsmith</span>
-            <span className="font-mono text-xs text-text-muted">Build · Profile · Ship</span>
-          </div>
-          <div className="flex items-center gap-6 text-sm text-text-secondary">
-            <Link href="/studio" className="transition-colors hover:text-text-primary">Studio</Link>
-            <a href="https://docs.monad.xyz" target="_blank" rel="noreferrer" className="transition-colors hover:text-text-primary">Docs</a>
-            <a
-              href="https://github.com/Adwaitbytes/monsmith"
-              target="_blank"
-              rel="noreferrer"
-              aria-label="GitHub"
-              className="transition-colors hover:text-text-primary"
-            >
-              <Github size={18} />
-            </a>
-            <span className="font-mono text-xs text-text-muted">© 2026</span>
-          </div>
-        </div>
-        <div className="mx-auto mt-8 flex max-w-6xl flex-col items-center justify-between gap-4 border-t border-border-subtle pt-6 text-xs text-text-muted sm:flex-row">
-          <p>
-            Founded and built by{" "}
-            <Link href="/about" className="font-medium text-text-secondary transition-colors hover:text-text-primary">
-              {FOUNDER.name}
-            </Link>
-            .
-          </p>
-          <nav aria-label="Founder social links" className="flex flex-wrap items-center gap-4">
-            {FOUNDER_SOCIAL_LINKS.map((s) => (
-              <a key={s.href} href={s.href} target="_blank" rel="me noopener" className="transition-colors hover:text-text-primary">
-                {s.label}
-              </a>
-            ))}
-            <Link href="/about" className="transition-colors hover:text-text-primary">About</Link>
-            <Link href="/tutorials" className="transition-colors hover:text-text-primary">Tutorials</Link>
-          </nav>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

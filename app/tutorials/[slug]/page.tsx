@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 import { JsonLd } from "../../JsonLd";
 import { FOUNDER, FOUNDER_ID, ORG_ID, TUTORIALS, absoluteUrl, breadcrumbJsonLd, jsonLdGraph } from "@/lib/seo";
@@ -30,6 +32,10 @@ export default async function TutorialPage({ params }: { params: Promise<Params>
   const tutorial = TUTORIALS.find((t) => t.slug === slug);
   if (!tutorial) notFound();
 
+  // Rendered on the server so crawlers index the full tutorial text rather
+  // than a loading spinner.
+  const content = await readFile(path.join(process.cwd(), "tutorials", `${tutorial.slug}.md`), "utf8");
+
   return (
     <>
       <JsonLd
@@ -54,7 +60,7 @@ export default async function TutorialPage({ params }: { params: Promise<Params>
           ]),
         )}
       />
-      <TutorialClient />
+      <TutorialClient content={content} />
     </>
   );
 }

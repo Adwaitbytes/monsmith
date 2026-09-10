@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 import { JsonLd } from "../JsonLd";
-import { MonsmithMark } from "../landing/MonsmithMark";
+import { SiteFooter, SiteNav } from "../SiteChrome";
 import { TUTORIALS, absoluteUrl, breadcrumbJsonLd, jsonLdGraph } from "@/lib/seo";
 
 const title = "Monad smart contract tutorials";
@@ -38,20 +38,7 @@ export default function TutorialsIndex() {
           ]),
         )}
       />
-      <nav className="border-b border-border-subtle px-6 py-4">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5">
-            <MonsmithMark className="h-6 w-6" />
-            <span className="font-display text-[15px] font-semibold tracking-tight">Monsmith</span>
-          </Link>
-          <Link
-            href="/studio"
-            className="rounded-lg bg-text-primary px-4 py-1.5 text-[13px] font-semibold text-background transition-opacity hover:opacity-90"
-          >
-            Open studio
-          </Link>
-        </div>
-      </nav>
+      <SiteNav />
       <section className="mx-auto max-w-6xl px-6 py-16 sm:py-24">
         <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">Learn</p>
         <h1 className="mt-4 font-display text-4xl font-semibold tracking-tight sm:text-6xl">{title}</h1>
@@ -77,6 +64,7 @@ export default function TutorialsIndex() {
           ))}
         </ul>
       </section>
+      <SiteFooter />
     </main>
   );
 }

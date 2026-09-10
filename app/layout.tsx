@@ -51,7 +51,20 @@ export const metadata: Metadata = {
   classification: "Developer Tools",
   referrer: "origin-when-cross-origin",
   formatDetection: { email: false, address: false, telephone: false },
-  alternates: { canonical: "/" },
+  alternates: {
+    canonical: "/",
+    languages: { en: "/", "x-default": "/" },
+    types: { "application/rss+xml": "/feed.xml" },
+  },
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION,
+    yandex: process.env.NEXT_PUBLIC_YANDEX_VERIFICATION,
+    other: {
+      ...(process.env.NEXT_PUBLIC_BING_VERIFICATION
+        ? { "msvalidate.01": process.env.NEXT_PUBLIC_BING_VERIFICATION }
+        : {}),
+    },
+  },
   icons: {
     icon: [{ url: "/monsmith-logo.svg", type: "image/svg+xml" }, { url: "/favicon.ico" }],
     apple: "/monsmith-logo.svg",

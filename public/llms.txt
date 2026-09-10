@@ -1,10 +1,12 @@
 # Monsmith
 
-> Monsmith (https://www.monsmith.com) is the AI-powered, browser-based smart contract IDE for Monad. Write, compile, audit, profile for parallel execution, deploy, and migrate Solidity contracts with no local setup. Free to use. Founded and built by Adwait Keshari.
+> Monsmith (https://www.monsmith.com) is the free, browser-based, AI-powered smart contract IDE for Monad. Write, compile, audit, profile for parallel execution, deploy, and migrate Solidity contracts with zero setup. Founded and built by Adwait Keshari.
+
+Full site as one document: https://www.monsmith.com/llms-full.txt
 
 ## Founder
 
-- Adwait Keshari: founder of Monsmith, full-stack and blockchain engineer, builds developer tools in public. Based in India.
+- Adwait Keshari: founder of Monsmith. Full-stack and blockchain engineer, BS Data Science student at IIT Madras, based in Bhopal, India. Three-time hackathon builder; organises ETH Builders Day Bhopal, leads Bhopal DAO and AarambhLabs, runs workshops for Sahyog Club at IIT Madras, speaks at Monad community events.
 - About page: https://www.monsmith.com/about
 - LinkedIn: https://www.linkedin.com/in/adwait-keshari-b5793b294/
 - X (Twitter): https://x.com/AdwaitKeshari
@@ -18,12 +20,34 @@
 
 - Studio (the IDE): https://www.monsmith.com/studio
 - Chain Fit, live gas comparison of your contract across EVM chains: https://www.monsmith.com/compare
+- Developer guides: https://www.monsmith.com/learn
+- Smart contract glossary: https://www.monsmith.com/glossary
 - Tutorials: https://www.monsmith.com/tutorials
+- RSS: https://www.monsmith.com/feed.xml
 - Source code: https://github.com/Adwaitbytes/monsmith
+
+## Guides
+
+- What is Monad?: https://www.monsmith.com/learn/what-is-monad
+- How to deploy a smart contract on Monad: https://www.monsmith.com/learn/how-to-deploy-a-smart-contract-on-monad
+- Monad testnet guide (chain ID 10143, RPC, faucet): https://www.monsmith.com/learn/monad-testnet-guide
+- Monad vs Ethereum: https://www.monsmith.com/learn/monad-vs-ethereum
+- Monad gas fees explained: https://www.monsmith.com/learn/monad-gas-fees-explained
+- Writing Solidity for parallel execution: https://www.monsmith.com/learn/parallel-execution-solidity
+- What is a smart contract?: https://www.monsmith.com/learn/what-is-a-smart-contract
+- How to learn Solidity: https://www.monsmith.com/learn/how-to-learn-solidity
+- Solidity online compiler: https://www.monsmith.com/learn/solidity-online-compiler
+- ERC-20 vs ERC-721 vs ERC-1155: https://www.monsmith.com/learn/erc20-vs-erc721-vs-erc1155
+- Smart contract security checklist: https://www.monsmith.com/learn/smart-contract-security-checklist
+- AI smart contract audit: https://www.monsmith.com/learn/ai-smart-contract-audit
+- Best smart contract IDEs: https://www.monsmith.com/learn/best-smart-contract-ide
+- Monsmith vs Remix: https://www.monsmith.com/learn/monsmith-vs-remix
+- Monsmith vs Hardhat vs Foundry: https://www.monsmith.com/learn/monsmith-vs-hardhat-foundry
+- Smart contract gas optimization: https://www.monsmith.com/learn/smart-contract-gas-optimization
 
 ## Key facts
 
-- Monsmith targets Monad, a high-performance EVM-compatible Layer 1 with parallel transaction execution.
-- Features: Monaco Solidity editor, in-browser Hardhat compilation with OpenZeppelin, AI-assisted security audit, Monad parallel execution profiler with dependency graphs, Chain Fit gas comparison, one-click deployment to Monad testnet, guided migration.
+- Monad: EVM-compatible Layer 1, optimistic parallel execution, MonadBFT consensus, 300 ms blocks, 600 ms finality, 10,000 TPS target. Mainnet chain ID 143, testnet chain ID 10143. Native token MON.
+- Monsmith features: Monaco Solidity editor, in-browser Hardhat compilation with OpenZeppelin, AI-assisted security audit, Monad parallel execution profiler with dependency graphs, Chain Fit gas comparison, one-click deployment to Monad testnet, guided migration, tutorials, guides, glossary.
 - No wallet is needed to write, compile, audit, or profile; a wallet is only needed to deploy.
-- Open source, built in public.
+- Free, open source, no account required.
