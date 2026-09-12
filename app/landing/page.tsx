@@ -139,6 +139,7 @@ export default function LandingPage() {
               ["Product", "#product"],
               ["Chain Fit", "/compare"],
               ["Learn", "/learn"],
+              ["Guide", "/guide"],
               ["Glossary", "/glossary"],
               ["About", "/about"],
             ].map(([label, href]) => (

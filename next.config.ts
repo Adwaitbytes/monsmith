@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+import { BUILDER_GUIDE_PATH, BUILDER_GUIDE_URL } from "./lib/builderGuide";
+
 const nextConfig: NextConfig = {
   // solc is 24 MB of Emscripten output and is loaded through `require` at
   // runtime. Bundling it is both pointless and slow.
@@ -27,6 +29,9 @@ const nextConfig: NextConfig = {
       { source: "/app", destination: "/studio", permanent: true },
       { source: "/faq", destination: "/#faq", permanent: true },
       { source: "/team", destination: "/about", permanent: true },
+      // The builder guide is a Notion page. Temporary on purpose: the short
+      // path is the stable one and the destination may move.
+      { source: BUILDER_GUIDE_PATH, destination: BUILDER_GUIDE_URL, permanent: false },
     ];
   },
 

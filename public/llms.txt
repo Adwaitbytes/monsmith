@@ -7,6 +7,7 @@ Full site as one document: https://www.monsmith.com/llms-full.txt
 ## Product
 
 - Studio (the IDE): https://www.monsmith.com/studio
+- Builder guide (complete walkthrough: quickstart, every workflow stage with screenshots, hackathon plans, reference): https://www.monsmith.com/guide
 - Chain Fit, live gas comparison of your contract across EVM chains: https://www.monsmith.com/compare
 - Developer guides: https://www.monsmith.com/learn
 - Smart contract glossary: https://www.monsmith.com/glossary

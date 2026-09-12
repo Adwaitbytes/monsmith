@@ -203,7 +203,7 @@ export const FAQ: ReadonlyArray<{ q: string; a: string }> = [
   },
   {
     q: "Can I use Monsmith to learn Solidity?",
-    a: "Yes. Monsmith ships with guided tutorials, a glossary of smart contract terms, and developer guides covering Monad, Solidity, security, and gas optimisation, all readable at monsmith.com/learn.",
+    a: "Yes. Monsmith ships with guided tutorials, a glossary of smart contract terms, and developer guides covering Monad, Solidity, security, and gas optimisation, all readable at monsmith.com/learn. The complete builder guide, from a five-minute quickstart to hackathon plans, is at monsmith.com/guide.",
   },
 ];
 

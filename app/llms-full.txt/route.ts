@@ -1,6 +1,7 @@
 import { GUIDES } from "@/lib/content/guides";
 import { GLOSSARY } from "@/lib/content/glossary";
 import { FAQ, FOUNDER, FOUNDER_SOCIAL_LINKS, MONAD, SITE_DESCRIPTION, TUTORIALS, absoluteUrl } from "@/lib/seo";
+import { BUILDER_GUIDE_PATH } from "@/lib/builderGuide";
 
 /**
  * The whole site as one Markdown document for large language models and
@@ -18,6 +19,12 @@ export function GET() {
     `- Testnet chain ID: ${MONAD.testnetChainId}; RPC: ${MONAD.testnetRpc}; explorer: ${MONAD.testnetExplorer}; faucet: ${MONAD.faucet}`,
     `- Block time ${MONAD.blockTimeMs} ms; finality ${MONAD.finalityMs} ms; ${MONAD.tps} TPS design target; native token ${MONAD.symbol}`,
     `- Max contract size ${MONAD.maxCodeSizeKb} KB; fees charged on gas limit`,
+    "",
+  );
+  lines.push(
+    "## Builder guide",
+    "",
+    `The complete guide to building on Monad with Monsmith (five-minute quickstart, one page per workflow stage with screenshots, Monad Blitz and Metropolis hackathon plans, reference tables): ${absoluteUrl(BUILDER_GUIDE_PATH)}`,
     "",
   );
   lines.push("## Frequently asked questions", "");

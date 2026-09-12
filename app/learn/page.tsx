@@ -54,6 +54,44 @@ export default function LearnIndex() {
           Written by <Link href="/about" className="underline decoration-accent-line underline-offset-4">{FOUNDER.name}</Link>, founder of Monsmith.
         </p>
 
+        {/* The guide is the one thing a new builder should open first, so it
+            sits above the article grid rather than inside it. */}
+        <a
+          href="/guide"
+          className="group mt-14 block rounded-2xl border border-accent-line bg-surface-base p-8 transition-all hover:bg-surface-raised sm:p-10"
+        >
+          <div className="grid gap-8 lg:grid-cols-[1.5fr_1fr] lg:items-center">
+            <div>
+              <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-accent">Builder guide</span>
+              <h2 className="mt-3 font-display text-2xl font-semibold leading-snug tracking-tight sm:text-3xl">
+                The complete Monsmith guide for Monad builders
+              </h2>
+              <p className="mt-4 max-w-xl text-text-secondary">
+                A five-minute quickstart to a deployed contract, one page per stage of the workflow with real
+                screenshots, an hour-by-hour plan for a Monad Blitz day, a week-by-week plan for a Metropolis
+                submission, and the reference tables. Free, no sign-in, kept current with the product.
+              </p>
+              <ul className="mt-6 flex flex-wrap gap-2">
+                {["Quickstart", "The workflow", "Hackathon plans", "Monad in plain language", "Reference"].map((part) => (
+                  <li
+                    key={part}
+                    className="rounded-full border border-border-subtle px-3 py-1 font-mono text-xs text-text-secondary"
+                  >
+                    {part}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="flex flex-col items-start gap-3 lg:items-end">
+              <span className="inline-flex items-center gap-2 rounded-full bg-accent px-6 py-3 text-sm font-medium text-white shadow-[0_8px_30px_-8px] shadow-accent transition-transform group-hover:-translate-y-0.5">
+                Open the guide
+                <ArrowRight size={16} className="transition-transform group-hover:translate-x-0.5" />
+              </span>
+              <span className="text-xs text-text-muted">Opens on Notion. Also at monsmith.com/guide.</span>
+            </div>
+          </div>
+        </a>
+
         {GUIDE_CATEGORIES.map((cat) => (
           <section key={cat} className="mt-16">
             <h2 className="font-display text-2xl font-semibold tracking-tight">{cat}</h2>
