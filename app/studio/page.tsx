@@ -7,7 +7,6 @@ import {
   Shield,
   Brain,
   Terminal,
-  FileCode,
   ChevronRight,
   X,
   CheckCircle2,
@@ -21,10 +20,6 @@ import {
   Copy,
   ExternalLink,
   ArrowLeft,
-  Coins,
-  Image as ImageIcon,
-  Users,
-  Landmark,
   Hammer,
   Search,
   Globe,
@@ -1511,7 +1506,26 @@ Be concise but thorough. Format your response with markdown for readability.`;
       importFromGitHub: openRepoPicker,
       importFromAddress: () => openSidePanel("migration"),
       newFile: () => setShowStart(true),
-      openTemplates: () => setShowStart(true),
+      templates: [
+        ...Object.entries(TEMPLATES).map(([key, template]) => ({
+          key,
+          name: template.name,
+          description: template.description,
+          load: () => {
+            setShowStart(false);
+            loadTemplate(key as keyof typeof TEMPLATES);
+          },
+        })),
+        ...Object.entries(PYTHON_TEMPLATES).map(([key, template]) => ({
+          key: `py-${key}`,
+          name: `${template.name} (Python)`,
+          description: template.description,
+          load: () => {
+            setShowStart(false);
+            loadPythonTemplate(key as keyof typeof PYTHON_TEMPLATES);
+          },
+        })),
+      ],
       openAI: () => openSidePanel("ai"),
       aiAudit: () => void (language === "python" ? handlePythonAudit() : handleAudit()),
       openMigration: () => openSidePanel("migration"),
@@ -1590,61 +1604,13 @@ Be concise but thorough. Format your response with markdown for readability.`;
                 onNotify={addConsoleOutput}
               />
 
-              {/* Solidity Templates */}
-              {language === "solidity" && (
-                <div className="p-4 border-t border-white/5">
-                  <div className={`text-xs font-bold uppercase tracking-wider mb-4 ${isDark ? "text-gray-500" : "text-gray-400"}`}>
-                    Solidity Templates
-                  </div>
-                  <div className="space-y-1">
-                    {[
-                      { key: "erc20", icon: <Coins size={14} className="text-yellow-400" />, name: "ERC20 Token" },
-                      { key: "nft", icon: <ImageIcon size={14} className="text-pink-400" />, name: "NFT Collection" },
-                      { key: "dao", icon: <Users size={14} className="text-blue-400" />, name: "Simple DAO" },
-                      { key: "staking", icon: <Landmark size={14} className="text-green-400" />, name: "Staking" },
-                    ].map((template) => (
-                      <button
-                        key={template.key}
-                        onClick={() => loadTemplate(template.key as keyof typeof TEMPLATES)}
-                        className={`w-full flex items-center gap-2 text-xs py-2 px-3 rounded-lg transition-colors ${
-                          isDark ? "hover:bg-white/5 text-gray-400" : "hover:bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {template.icon}
-                        {template.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Python Templates */}
-              {language === "python" && (
-                <div className="p-4 border-t border-white/5">
-                  <div className={`text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2 ${isDark ? "text-gray-500" : "text-gray-400"}`}>
-                    <span>🐍</span> Python Templates
-                  </div>
-                  <div className="space-y-1">
-                    {[
-                      { key: "simpleStorage", icon: <FileCode size={14} className="text-blue-400" />, name: "Simple Storage" },
-                      { key: "counter", icon: <Zap size={14} className="text-yellow-400" />, name: "Counter" },
-                      { key: "token", icon: <Coins size={14} className="text-green-400" />, name: "Basic Token" },
-                      { key: "nft", icon: <ImageIcon size={14} className="text-pink-400" />, name: "NFT Collection" },
-                    ].map((template) => (
-                      <button
-                        key={template.key}
-                        onClick={() => loadPythonTemplate(template.key as keyof typeof PYTHON_TEMPLATES)}
-                        className={`w-full flex items-center gap-2 text-xs py-2 px-3 rounded-lg transition-colors ${
-                          isDark ? "hover:bg-white/5 text-gray-400" : "hover:bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {template.icon}
-                        {template.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+              {/*
+                The two template lists that used to hang under the file tree are
+                gone. Ten permanent buttons for something a person does once, at
+                the very start, is the same mistake the toolbar was making. They
+                are on the start cards, where a new file is actually chosen, and
+                in the palette under "Start from a template".
+              */}
             </motion.div>
           )}
         </AnimatePresence>
@@ -1678,10 +1644,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
                       setShowStart(false);
                       openSidePanel("migration");
                     }}
-                    onPickTemplate={() => {
-                      setShowStart(false);
-                      openSidePanel("ai");
-                    }}
+                    onPickTemplate={() => setPaletteOpen(true)}
                     githubConnected={github.status?.connected === true}
                     {...(github.status?.installUrl != null
                       ? { connectUrl: github.status.installUrl }
@@ -2401,7 +2364,9 @@ Be concise but thorough. Format your response with markdown for readability.`;
         >
           <ReportRail
             state={railState}
-            entitled={railState.status === "ready" && !railState.report.redacted}
+            // A report the server did not redact needs no unlock panel, which
+            // is also what makes the dormant paywall invisible here.
+            entitled={railState.status !== "ready" || !railState.report.redacted}
             onUnlock={() => void unlockReport()}
             unlocking={unlocking}
             unlockError={unlockError}

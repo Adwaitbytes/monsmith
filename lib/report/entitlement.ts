@@ -168,8 +168,37 @@ async function unlockRowExists(reportId: string): Promise<boolean | null> {
     }
 }
 
+/**
+ * Whether reports are sold at all.
+ *
+ * The half-report split is built, tested and dormant. Charging for a report is
+ * a commercial decision rather than a technical one, and it is not being made
+ * yet, so the whole mechanism sits behind one environment variable that
+ * defaults to off. Off means every report comes back whole.
+ *
+ * It is a single flag read in a single place on purpose. The alternative, which
+ * is to comment out the paywall or to have the client skip the unlock panel,
+ * leaves the redaction path unexercised and quietly rotting until the day
+ * somebody switches it on and finds it broken. This way the code that decides
+ * what a free viewer sees keeps its tests and keeps working; it is only ever
+ * asked a question whose answer is currently always yes.
+ */
+export function paywallEnabled(): boolean {
+    return process.env.REPORTS_PAYWALL === 'on';
+}
+
 export async function entitlementFor(reportId: string, req: Request): Promise<Entitlement> {
     const viewer = await getApiViewer();
+
+    if (!paywallEnabled()) {
+        return {
+            entitled: true,
+            owner: await resolveOwner(req),
+            unlimited: true,
+            reason: 'tier',
+        };
+    }
+
     const unlimited = viewer.permissions.includes('analysis.unlimited');
     const owner = await resolveOwner(req);
 

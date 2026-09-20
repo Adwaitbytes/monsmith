@@ -308,7 +308,13 @@ export function ScoreStrip({ report, activeSection, onJump }: ScoreStripProps) {
 
             <SeverityBar report={report} />
 
-            <nav aria-label="Report sections" className="scrollbar-hide -mx-1 mt-3.5 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
+            {/*
+              Wrapping rather than scrolling. The rail is narrow and there are
+              only ever four of these, so a hidden-scrollbar row buys nothing
+              and costs the reader a chip cut off mid-word, which reads as a
+              rendering fault rather than as something to scroll.
+            */}
+            <nav aria-label="Report sections" className="-mx-1 mt-3.5 flex flex-wrap gap-1.5 px-1 pb-0.5">
                 {SECTION_KINDS.map((kind) => {
                     const active = activeSection === kind;
                     return (

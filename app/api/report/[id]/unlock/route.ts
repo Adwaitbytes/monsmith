@@ -5,6 +5,7 @@ import { getAddress, isAddress } from "viem";
 
 import {
     entitlementFor,
+    paywallEnabled,
     MONAD_CHAIN_ID,
     REPORT_PAYEE,
     REPORT_PRICE_WEI,
@@ -225,6 +226,7 @@ async function attemptUnlock(
 ): Promise<UnlockOutcome> {
     const { entitled, owner, reason } = await entitlementFor(reportId, req);
 
+
     // Charging someone twice for the same report is worse than any other bug on
     // this path, so entitlement is resolved before a payment header is even
     // read. A tier, a settled unlock and a first free report all land here.
@@ -353,6 +355,21 @@ export async function POST(
     // before the payment rail rather than after it.
     if (stored === null) {
         return NextResponse.json({ success: false, error: "Report not found" }, { status: 404 });
+    }
+
+    // With the paywall dormant every report is already whole, so there is
+    // nothing to sell and no signature to ask for. Handing back the report
+    // rather than an error means a client that still offers an unlock button
+    // gets the right outcome instead of a failure it would have to explain.
+    if (!paywallEnabled()) {
+        return NextResponse.json({
+            success: true,
+            alreadyUnlocked: true,
+            reason: "tier",
+            txHash: null,
+            persisted: true,
+            report: redactReport(stored.report, true),
+        });
     }
 
     let body: unknown = null;

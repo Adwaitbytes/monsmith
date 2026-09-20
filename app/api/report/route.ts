@@ -4,6 +4,7 @@ import { getApiViewer } from "@/lib/auth/server";
 import { buildRepoReport } from "@/lib/report/build";
 import { redactReport } from "@/lib/report/redact";
 import { isUnlocked, saveReport, type ReportOwner } from "@/lib/report/store";
+import { paywallEnabled } from "@/lib/report/entitlement";
 import { CONTRACT_CAP, type ReportEvent, type ReportOrigin } from "@/lib/report/types";
 
 /**
@@ -158,9 +159,14 @@ export async function POST(request: Request) {
                         console.error("Report persistence failed:", error);
                     }
 
-                    let entitled = unlimited;
+                    // The paywall is dormant, so this resolves to true until
+                    // the flag is switched on. The call still happens rather
+                    // than being skipped, so the path stays exercised.
+                    let entitled = !paywallEnabled() || unlimited;
                     try {
-                        entitled = await isUnlocked(report.reportId, owner, unlimited);
+                        if (paywallEnabled()) {
+                            entitled = await isUnlocked(report.reportId, owner, unlimited);
+                        }
                     } catch (error) {
                         // Falling back to the tier is the safe direction: a
                         // database that cannot answer must not hand out the

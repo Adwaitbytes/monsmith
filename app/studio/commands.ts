@@ -47,7 +47,8 @@ export interface StudioActions {
     importFromGitHub: () => void;
     importFromAddress: () => void;
     newFile: () => void;
-    openTemplates: () => void;
+    /** Each template is its own command, so `erc20` finds it by name. */
+    templates: ReadonlyArray<{ key: string; name: string; description: string; load: () => void }>;
     openAI: () => void;
     aiAudit: () => void;
     openMigration: () => void;
@@ -139,13 +140,17 @@ export function buildCommands(
             keywords: ['create', 'add', 'sol'],
             run: actions.newFile,
         },
-        {
-            id: 'file.templates',
-            label: 'Start from a template',
+        // One command per template rather than one command that opens a list.
+        // The list was ten permanent buttons in the sidebar; as commands they
+        // cost nothing and are found by typing the name of the thing you want.
+        ...actions.templates.map((template) => ({
+            id: `template.${template.key}`,
+            label: `New ${template.name}`,
+            hint: template.description,
             group: 'Bring in code',
-            keywords: ['erc20', 'erc721', 'nft', 'token', 'dao', 'example', 'boilerplate'],
-            run: actions.openTemplates,
-        },
+            keywords: ['template', 'example', 'boilerplate', template.key, template.name],
+            run: template.load,
+        })),
         {
             id: 'start.cards',
             label: 'Start here',
