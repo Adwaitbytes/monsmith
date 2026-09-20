@@ -69,7 +69,16 @@ export async function GET(req: Request) {
         "",
     );
 
-    const payload = JSON.stringify(manifest(origin, productionUrl));
+    // Escaped for an HTML attribute rather than written by a script. An inline
+    // script is the obvious way to fill a hidden field and it is the wrong one:
+    // a content security policy blocks it, the field then submits empty, and
+    // GitHub reports a missing `url` rather than a missing manifest, which
+    // sends you looking in entirely the wrong place.
+    const payload = JSON.stringify(manifest(origin, productionUrl))
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
 
     // A form POST is the only way in: GitHub reads the manifest from a form
     // field, not from a query string, so this page exists to submit one.
@@ -101,13 +110,10 @@ export async function GET(req: Request) {
     <li>Webhooks: off</li>
     <li>Install target: ${productionUrl}</li>
   </ul>
-  <form id="f" method="post" action="https://github.com/settings/apps/new">
-    <input type="hidden" name="manifest" id="manifest">
+  <form method="post" action="https://github.com/settings/apps/new">
+    <input type="hidden" name="manifest" value="${payload}">
     <button type="submit">Continue to GitHub</button>
   </form>
-  <script>
-    document.getElementById('manifest').value = ${JSON.stringify(payload)};
-  </script>
 </main>
 </body>
 </html>`;
