@@ -201,7 +201,7 @@ export function Omnibox({
                             {chip.label}
                         </span>
                         <span className="truncate font-mono text-text-muted">{chip.detail}</span>
-                        {intent.kind === 'source' && (
+                        {intent?.kind === 'source' && (
                             <span className="ml-auto hidden text-text-muted sm:inline">
                                 Shift and Enter for a new line
                             </span>
