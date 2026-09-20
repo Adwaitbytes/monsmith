@@ -692,6 +692,10 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
     let anySectionFailed = false;
     const auditNotes = new Set<string>();
     const descriptions = new Map<string, string>();
+    const threatModels = new Map<
+        string,
+        Array<{ title: string; target: string; approach: string }>
+    >();
 
     // The deep audit shares the run's wall clock with everything else, so its
     // budget shrinks as the number of contracts grows. A ten contract repo must
@@ -774,6 +778,16 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
             findings.push(...toFindings(audit, id));
             for (const note of audit.notes) auditNotes.add(note);
             if (audit.description !== null) descriptions.set(id, audit.description.purpose);
+            if (audit.threats.length > 0) {
+                threatModels.set(
+                    id,
+                    audit.threats.map((threat) => ({
+                        title: threat.title,
+                        target: threat.target,
+                        approach: threat.approach,
+                    })),
+                );
+            }
         } catch (error) {
             auditNotes.add(
                 'The threat-model audit did not complete, so these findings are from the static pass only.',
@@ -792,6 +806,7 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
             path,
             name: resolveName(path, source, sections),
             ...(purpose !== undefined ? { purpose } : {}),
+            ...(threatModels.has(id) ? { threats: threatModels.get(id) } : {}),
             health: healthFor(findings, sections.parallel),
             findings,
             counts: contractCounts,

@@ -89,6 +89,9 @@ function redactContract(contract: ContractReport): ContractReport {
         // reader judges whether the findings rest on a correct reading, and it
         // is the most honest demonstration that the analysis is real.
         ...(contract.purpose !== undefined ? { purpose: contract.purpose } : {}),
+        // Free for the same reason the purpose is. What was looked for is the
+        // honest demonstration of depth; what was found is the product.
+        ...(contract.threats !== undefined ? { threats: contract.threats } : {}),
         health: contract.health,
         // Counts come from the *unredacted* findings, so they stay true.
         counts: countBySeverity(contract.findings),

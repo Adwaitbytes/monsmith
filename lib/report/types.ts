@@ -202,6 +202,18 @@ export interface ContractReport {
      * misunderstood the contract entirely.
      */
     purpose?: string;
+    /**
+     * What an attacker would try, derived from this contract's own assets and
+     * invariants rather than recalled from a list of vulnerability categories.
+     *
+     * Carried on the report because it is the most useful thing the audit
+     * produces and it used to be thrown away. A reader who disagrees with a
+     * finding can check whether the threat behind it was framed correctly, and
+     * a reader with no findings at all still learns what was looked for, which
+     * is the difference between "we found nothing" and "we checked these five
+     * things and found nothing".
+     */
+    threats?: Array<{ title: string; target: string; approach: string }>;
     health: Health | null;
     findings: Finding[];
     counts: SeverityCounts;
