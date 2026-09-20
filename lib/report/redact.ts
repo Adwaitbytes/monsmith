@@ -85,6 +85,10 @@ function redactContract(contract: ContractReport): ContractReport {
         id: contract.id,
         path: contract.path,
         name: contract.name,
+        // Free. Stating what the audit understood the contract to do is how a
+        // reader judges whether the findings rest on a correct reading, and it
+        // is the most honest demonstration that the analysis is real.
+        ...(contract.purpose !== undefined ? { purpose: contract.purpose } : {}),
         health: contract.health,
         // Counts come from the *unredacted* findings, so they stay true.
         counts: countBySeverity(contract.findings),

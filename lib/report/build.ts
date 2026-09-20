@@ -25,6 +25,7 @@
  * could not measure is worse than no report.
  */
 
+import { deepAudit, toFindings } from './audit';
 import { isChainId, type ChainId } from '../chainfit/chains';
 import type { ChainFinding } from '../chainfit/findings';
 import { buildChainFitReport, type ChainFitReport } from '../chainfit/report';
@@ -689,6 +690,13 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
     const contracts: ContractReport[] = [];
     let counts = emptyCounts();
     let anySectionFailed = false;
+    const auditNotes = new Set<string>();
+    const descriptions = new Map<string, string>();
+
+    // The deep audit shares the run's wall clock with everything else, so its
+    // budget shrinks as the number of contracts grows. A ten contract repo must
+    // not spend ninety seconds each on the audit and time out before the tenth.
+    const auditBudgetMs = Math.max(20_000, Math.round(240_000 / Math.max(1, planned.length)));
 
     for (const [index, contract] of planned.entries()) {
         const { id, path, source } = contract;
@@ -736,15 +744,54 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
         }
         yield { type: 'section', contractId: id, section: 'chainfit', result: sections.chainfit };
 
+        /*
+          The deep audit runs last and separately from the static pass.
+
+          The static rules are a floor: fast, deterministic, and incapable of
+          inventing a finding. They are also the same fourteen questions for
+          every contract, which is exactly the failure mode Monad wrote about.
+          The deep audit builds a threat model from what this contract is for,
+          then tests it against the code and has a second model try to knock the
+          results down.
+
+          It is folded into the security section's findings rather than given a
+          section of its own, because a reader does not care which engine found
+          a reentrancy. They care that it is there. When it cannot run, the note
+          says so rather than letting a shallow pass look like a deep one.
+        */
+        try {
+            const audit = await deepAudit(source, {
+                budgetMs: auditBudgetMs,
+                // What the parser already proved, so the reviewer cannot talk
+                // itself out of a vulnerability the static pass confirmed.
+                confirmed: findings
+                    .filter((finding) => finding.source === 'security')
+                    .map((finding) => ({
+                        title: finding.title,
+                        ...(finding.line !== undefined ? { line: finding.line } : {}),
+                    })),
+            });
+            findings.push(...toFindings(audit, id));
+            for (const note of audit.notes) auditNotes.add(note);
+            if (audit.description !== null) descriptions.set(id, audit.description.purpose);
+        } catch (error) {
+            auditNotes.add(
+                'The threat-model audit did not complete, so these findings are from the static pass only.',
+            );
+            console.warn('[report] deep audit failed:', error instanceof Error ? error.message : error);
+        }
+
         anySectionFailed =
             anySectionFailed ||
             Object.values(sections).some((section) => section.status === 'failed');
 
         const contractCounts = countBySeverity(findings);
+        const purpose = descriptions.get(id);
         const report: ContractReport = {
             id,
             path,
             name: resolveName(path, source, sections),
+            ...(purpose !== undefined ? { purpose } : {}),
             health: healthFor(findings, sections.parallel),
             findings,
             counts: contractCounts,
@@ -785,6 +832,8 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
             );
         }
     }
+
+    for (const note of auditNotes) notes.push(note);
 
     if (anySectionFailed) {
         notes.push(

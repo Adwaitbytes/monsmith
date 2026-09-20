@@ -1,5 +1,7 @@
 'use client';
 
+import { Share2 } from 'lucide-react';
+
 import type { Finding, Grade, RepoReport, SectionKind, Severity } from '@/lib/report/types';
 import { SECTION_KINDS, SECTION_LABELS, SEVERITIES } from '@/lib/report/types';
 import type { ChainFitReport } from '@/lib/chainfit/report';
@@ -275,9 +277,17 @@ export interface ScoreStripProps {
     /** Highlights the chip whose section is currently under the reader's eye. */
     activeSection: SectionKind | null;
     onJump: (section: SectionKind) => void;
+    /**
+     * Offered only once there is a finished report to share.
+     *
+     * A share control on an empty rail is a button that cannot do its job, and
+     * one that appears the moment the work is done reads as the next step
+     * rather than as chrome.
+     */
+    onShare?: () => void;
 }
 
-export function ScoreStrip({ report, activeSection, onJump }: ScoreStripProps) {
+export function ScoreStrip({ report, activeSection, onJump, onShare }: ScoreStripProps) {
     const health = report.health;
     const score = asFinite(health?.score);
     const grade = health?.grade;
@@ -299,7 +309,20 @@ export function ScoreStrip({ report, activeSection, onJump }: ScoreStripProps) {
                 </div>
 
                 <div className="min-w-0 flex-1 pt-0.5">
-                    <h2 className="text-[11px] font-medium uppercase tracking-wider text-text-muted">Contract report</h2>
+                    <div className="flex items-start justify-between gap-2">
+                        <h2 className="text-[11px] font-medium uppercase tracking-wider text-text-muted">
+                            Contract report
+                        </h2>
+                        {onShare !== undefined && (
+                            <button
+                                onClick={onShare}
+                                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border-subtle px-2.5 py-1 text-[11.5px] font-medium text-text-secondary outline-none ring-accent-line transition-colors hover:border-border-strong hover:text-text-primary focus-visible:ring-2"
+                            >
+                                <Share2 size={12} />
+                                Share
+                            </button>
+                        )}
+                    </div>
                     <p className="mt-1 text-[12.5px] leading-relaxed text-text-secondary">
                         {health?.headline ?? 'Scores appear as each contract finishes.'}
                     </p>

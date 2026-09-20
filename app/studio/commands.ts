@@ -61,6 +61,7 @@ export interface StudioActions {
     disconnectWallet: () => void;
     shareReport: () => void;
     showStartCards: () => void;
+    showTour: () => void;
 }
 
 export interface StudioCommandContext {
@@ -151,6 +152,13 @@ export function buildCommands(
             keywords: ['template', 'example', 'boilerplate', template.key, template.name],
             run: template.load,
         })),
+        {
+            id: 'start.tour',
+            label: 'What is this? Show me around',
+            group: 'Bring in code',
+            keywords: ['tour', 'intro', 'onboarding', 'walkthrough', 'explain', 'new', 'help'],
+            run: actions.showTour,
+        },
         {
             id: 'start.cards',
             label: 'Start here',

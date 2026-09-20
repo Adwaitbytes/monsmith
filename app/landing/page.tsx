@@ -21,6 +21,8 @@ import { useThemeStore } from "@/lib/store";
 import { useHydrated } from "@/lib/useHydrated";
 import { track } from "@/lib/track";
 import { MonsmithMark } from "./MonsmithMark";
+import { NavMenu } from "./NavMenu";
+import { RepoAudit } from "./RepoAudit";
 import { AuthControls } from "../AuthControls";
 import { useViewer } from "@/lib/auth/useViewer";
 import { ExecutionGraph } from "./ExecutionGraph";
@@ -133,15 +135,19 @@ export default function LandingPage() {
             <span className="font-display text-lg font-semibold tracking-tight">Monsmith</span>
           </Link>
 
+          {/*
+            Three links and one menu, down from seven flat links.
+
+            Weighting every destination the same is how a visitor ends up with
+            no idea which one answers their question. What the product is, the
+            measurement it is known for, and the way in stay out. The reading
+            material is wanted occasionally, and by people who already know they
+            want it, so it costs nothing behind one word.
+          */}
           <div className="hidden items-center gap-8 md:flex">
             {[
-              ["Workflow", "#workflow"],
               ["Product", "#product"],
               ["Chain Fit", "/compare"],
-              ["Learn", "/learn"],
-              ["Guide", "/guide"],
-              ["Glossary", "/glossary"],
-              ["About", "/about"],
             ].map(([label, href]) => (
               <a
                 key={href}
@@ -153,6 +159,18 @@ export default function LandingPage() {
                 <span className="absolute -bottom-1.5 left-0 h-px w-0 bg-accent transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:w-full" />
               </a>
             ))}
+
+            <NavMenu
+              label="Learn"
+              items={[
+                { label: "Developer guides", href: "/learn", hint: "How Monad differs, in practice" },
+                { label: "Builder guide", href: "/guide", hint: "Ship your first contract end to end" },
+                { label: "Tutorials", href: "/tutorials", hint: "Follow along in the studio" },
+                { label: "Glossary", href: "/glossary", hint: "Terms, defined plainly" },
+                { label: "How it works", href: "/#workflow", hint: "The path from source to deployed" },
+                { label: "About Monsmith", href: "/about", hint: "Who builds this, and why" },
+              ]}
+            />
           </div>
 
           <div className="flex items-center gap-2">
@@ -214,14 +232,23 @@ export default function LandingPage() {
               Free to use. Nothing to install, no account to open.
             </motion.p>
 
-            <motion.div {...reveal} transition={{ ...REVEAL.show, delay: 0.45 }} className="mt-9 flex flex-wrap items-center gap-3">
+            {/*
+              The repository field leads, because it is the shortest path from
+              a stranger's clipboard to their own contracts being measured. The
+              studio link stays for people who arrived with nothing to paste.
+            */}
+            <motion.div {...reveal} transition={{ ...REVEAL.show, delay: 0.45 }} className="mt-9">
+              <RepoAudit />
+            </motion.div>
+
+            <motion.div {...reveal} transition={{ ...REVEAL.show, delay: 0.5 }} className="mt-7 flex flex-wrap items-center gap-3">
               <Magnetic strength={0.4}>
                 <Link
                   href="/studio"
                   onClick={() => track("page_view", { detail: { event: "cta_click", cta: "hero_open_studio" } })}
                   className="group inline-flex items-center gap-2 rounded-full bg-accent px-6 py-3 text-base font-medium text-white shadow-[0_8px_30px_-8px] shadow-accent transition-transform hover:-translate-y-0.5"
                 >
-                  Open Studio
+                  Open the studio instead
                   <ArrowRight size={18} className="transition-transform group-hover:translate-x-0.5" />
                 </Link>
               </Magnetic>

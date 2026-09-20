@@ -70,6 +70,8 @@ export interface ReportRailProps {
     onApplyPatch?: (finding: Finding) => void;
     onRerun?: () => void;
     onOpenContract?: (contract: ContractReport) => void;
+    /** Offered only on a finished report, from inside the report itself. */
+    onShare?: () => void;
 }
 
 // ============= SMALL FORMATTERS =============
@@ -830,6 +832,7 @@ function ReportDocument({
     onApplyPatch,
     onOpenContract,
     scrollRef,
+    onShare,
 }: {
     report: RepoReport;
     entitled: boolean;
@@ -839,6 +842,7 @@ function ReportDocument({
     onApplyPatch?: (finding: Finding) => void;
     onOpenContract?: (contract: ContractReport) => void;
     scrollRef: RefObject<HTMLDivElement | null>;
+    onShare?: () => void;
 }) {
     const [activeSection, setActiveSection] = useState<SectionKind | null>(null);
     const sectionRefs = useRef<Partial<Record<SectionKind, HTMLElement>>>({});
@@ -896,7 +900,12 @@ function ReportDocument({
 
     return (
         <>
-            <ScoreStrip report={report} activeSection={activeSection} onJump={jump} />
+            <ScoreStrip
+                report={report}
+                activeSection={activeSection}
+                onJump={jump}
+                {...(onShare !== undefined ? { onShare } : {})}
+            />
 
             <HealthSection report={report} onOpenContract={onOpenContract} />
 
@@ -939,6 +948,7 @@ export function ReportRail({
     onApplyPatch,
     onRerun,
     onOpenContract,
+    onShare,
 }: ReportRailProps) {
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const report = state.status === 'ready' ? state.report : state.status === 'running' ? state.partial : null;
@@ -964,6 +974,9 @@ export function ReportRail({
                         onApplyPatch={onApplyPatch}
                         onOpenContract={onOpenContract}
                         scrollRef={scrollRef}
+                        {...(state.status === 'ready' && onShare !== undefined
+                            ? { onShare }
+                            : {})}
                     />
                 )}
             </div>

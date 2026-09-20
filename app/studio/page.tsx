@@ -73,6 +73,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { Omnibox, type OmniboxIntent } from "./components/Omnibox";
 import { StartCards } from "./components/StartCards";
 import { RepoPicker } from "./components/RepoPicker";
+import { WelcomeTour, tourSeen } from "./components/WelcomeTour";
 import { ReportRail, type RailState } from "./components/report/ReportRail";
 import { buildCommands } from "./commands";
 import { useReportStream } from "@/lib/report/useReportStream";
@@ -181,6 +182,7 @@ export default function StudioPage() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [repoPickerOpen, setRepoPickerOpen] = useState(false);
   const [showStart, setShowStart] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [repoOrigin, setRepoOrigin] = useState<ReportOrigin>({ kind: "workspace" });
@@ -312,7 +314,11 @@ export default function StudioPage() {
     // `seedWorkspace` has already run, so a genuinely new visitor has exactly
     // the one starter file and nothing they have chosen.
     const existing = Object.keys(useWorkspace.getState().files);
-    setShowStart(existing.length <= 1);
+    const fresh = existing.length <= 1;
+    setShowStart(fresh);
+    // The tour explains what the product is; the cards are how you start. A
+    // returning visitor has been told once and is not told again.
+    if (fresh && !tourSeen()) setTourOpen(true);
     // The picker needs this the moment a card is clicked, and it is one cheap
     // request rather than a wait at the point of intent.
     void github.prepare();
@@ -1544,6 +1550,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
         addConsoleOutput("Report link copied.");
       },
       showStartCards: () => setShowStart(true),
+      showTour: () => setTourOpen(true),
     },
     {
       compiled: compileResult?.success === true,
@@ -2371,6 +2378,13 @@ Be concise but thorough. Format your response with markdown for readability.`;
             unlocking={unlocking}
             unlockError={unlockError}
             onRerun={runReport}
+            onShare={() => {
+              if (report.state.status !== "ready") return;
+              void navigator.clipboard.writeText(
+                `${window.location.origin}/report/${report.state.report.reportId}`,
+              );
+              addConsoleOutput("Report link copied.");
+            }}
             onApplyPatch={(finding) => {
               if (finding.patch === undefined) return;
               applyOptimizedContract(finding.patch);
@@ -2506,6 +2520,12 @@ Be concise but thorough. Format your response with markdown for readability.`;
         asked at the moment it becomes relevant instead of as a gate.
       */}
       <CommandPalette commands={commands} open={paletteOpen} onOpenChange={setPaletteOpen} />
+
+      <WelcomeTour
+        open={tourOpen}
+        onClose={() => setTourOpen(false)}
+        onFinish={() => setShowStart(true)}
+      />
 
       <RepoPicker
         open={repoPickerOpen}

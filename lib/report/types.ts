@@ -193,6 +193,15 @@ export interface ContractReport {
     path: string;
     /** The contract solc considers the artifact, not the filename. */
     name: string;
+    /**
+     * What the contract is for, in one or two sentences.
+     *
+     * A real audit opens by stating what it understood the code to do, so the
+     * reader can tell whether the findings that follow rest on a correct
+     * reading. It is also the cheapest way to catch the audit having
+     * misunderstood the contract entirely.
+     */
+    purpose?: string;
     health: Health | null;
     findings: Finding[];
     counts: SeverityCounts;
