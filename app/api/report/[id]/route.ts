@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { entitlementFor, REPORT_PAYEE, REPORT_PRICE_MON, REPORT_PRICE_WEI } from "@/lib/report/entitlement";
 import { redactReport, summariseLocked } from "@/lib/report/redact";
-import { loadReport } from "@/lib/report/store";
+import { loadReport, type StoredReport } from "@/lib/report/store";
 
 /**
  * Reading a stored report.
@@ -35,7 +35,7 @@ export async function GET(
         return NextResponse.json({ error: "Report id is required" }, { status: 400 });
     }
 
-    let stored;
+    let stored: StoredReport | null;
     try {
         stored = await loadReport(id);
     } catch (error) {
