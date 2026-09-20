@@ -32,6 +32,10 @@ export interface RepoPickerProps {
     connected: boolean | null;
     /** Where GitHub installs the app. Absent when the App is not configured. */
     installUrl: string | null;
+    /** Signing in is the fix, not an environment variable. */
+    signedIn: boolean;
+    /** False means the GitHub App genuinely is not set up on this deployment. */
+    appAvailable: boolean;
     repos: RepoSummary[];
     loading: boolean;
     error: string | null;
@@ -56,11 +60,28 @@ function relativeTime(iso: string | null): string {
     return `${Math.round(months / 12)}y ago`;
 }
 
-export function RepoPicker({
-    open,
+export function RepoPicker(props: RepoPickerProps) {
+    /*
+      The body is a separate component so that closing the picker unmounts it.
+
+      Query text and the highlighted row have to be clean every time this opens.
+      Clearing them from an effect works but clears them a render late, and the
+      linter is right to call that out: it is a second render scheduled for a
+      change nobody asked for. Unmounting resets them with no effect at all.
+    */
+    return (
+        <AnimatePresence>
+            {props.open && <PickerBody {...props} />}
+        </AnimatePresence>
+    );
+}
+
+function PickerBody({
     onClose,
     connected,
     installUrl,
+    signedIn,
+    appAvailable,
     repos,
     loading,
     error,
@@ -74,20 +95,13 @@ export function RepoPicker({
     const restoreRef = useRef<HTMLElement | null>(null);
 
     useEffect(() => {
-        if (!open) return;
         restoreRef.current = document.activeElement as HTMLElement | null;
         const frame = requestAnimationFrame(() => inputRef.current?.focus());
         return () => {
             cancelAnimationFrame(frame);
             restoreRef.current?.focus();
         };
-    }, [open]);
-
-    useEffect(() => {
-        if (open) return;
-        setQuery('');
-        setActive(0);
-    }, [open]);
+    }, []);
 
     const filtered = useMemo(() => {
         const needle = query.trim().toLowerCase();
@@ -99,16 +113,22 @@ export function RepoPicker({
         );
     }, [repos, query]);
 
-    useEffect(() => {
-        setActive(0);
-    }, [query]);
+    /*
+      Clamped during render rather than reset from an effect.
+
+      Filtering can shrink the list under a selection that was valid a keystroke
+      ago. Correcting that in an effect means one render where the highlight
+      points past the end of the list, which is exactly when a keypress would
+      land on nothing. Deriving it leaves no such frame.
+    */
+    const activeIndex = filtered.length === 0 ? 0 : Math.min(active, filtered.length - 1);
 
     // Keeping the highlighted row on screen is the difference between arrow
     // keys being usable and being theatre.
     useEffect(() => {
-        const node = listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`);
+        const node = listRef.current?.querySelector<HTMLElement>(`[data-index="${activeIndex}"]`);
         node?.scrollIntoView({ block: 'nearest' });
-    }, [active]);
+    }, [activeIndex]);
 
     const onKeyDown = (event: React.KeyboardEvent) => {
         if (event.key === 'Escape') {
@@ -120,20 +140,22 @@ export function RepoPicker({
 
         if (event.key === 'ArrowDown') {
             event.preventDefault();
-            setActive((current) => (current + 1) % filtered.length);
+            setActive((current) => (Math.min(current, filtered.length - 1) + 1) % filtered.length);
         } else if (event.key === 'ArrowUp') {
             event.preventDefault();
-            setActive((current) => (current - 1 + filtered.length) % filtered.length);
+            setActive(
+                (current) =>
+                    (Math.min(current, filtered.length - 1) - 1 + filtered.length) %
+                    filtered.length,
+            );
         } else if (event.key === 'Enter') {
             event.preventDefault();
-            const repo = filtered[active];
+            const repo = filtered[activeIndex];
             if (repo !== undefined) onPick(repo);
         }
     };
 
     return (
-        <AnimatePresence>
-            {open && (
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -199,6 +221,14 @@ export function RepoPicker({
                                         see.
                                     </p>
                                     <div className="mt-5 flex flex-wrap gap-2">
+                                        {/*
+                                          Three different reasons land here and
+                                          they need three different sentences.
+                                          Telling a signed-out visitor that the
+                                          deployment is misconfigured sends them
+                                          to check environment variables that
+                                          were never the problem.
+                                        */}
                                         {installUrl !== null ? (
                                             <a
                                                 href={installUrl}
@@ -206,9 +236,18 @@ export function RepoPicker({
                                             >
                                                 Connect GitHub
                                             </a>
+                                        ) : !signedIn ? (
+                                            <p className="text-[12.5px] text-text-secondary">
+                                                Sign in first. An installation is tied to an account,
+                                                so connecting needs one.
+                                            </p>
+                                        ) : !appAvailable ? (
+                                            <p className="text-[12.5px] text-text-muted">
+                                                GitHub is not set up on this deployment.
+                                            </p>
                                         ) : (
                                             <p className="text-[12.5px] text-text-muted">
-                                                GitHub is not configured on this deployment.
+                                                Could not reach GitHub just now.
                                             </p>
                                         )}
                                         <button
@@ -249,7 +288,7 @@ export function RepoPicker({
                                     onMouseEnter={() => setActive(index)}
                                     onClick={() => onPick(repo)}
                                     className={`flex w-full items-center gap-3 px-4 py-2.5 text-left outline-none transition-colors ${
-                                        index === active ? 'bg-accent-soft' : 'hover:bg-surface-sunken'
+                                        index === activeIndex ? 'bg-accent-soft' : 'hover:bg-surface-sunken'
                                     }`}
                                 >
                                     <div className="min-w-0 flex-1">
@@ -284,7 +323,5 @@ export function RepoPicker({
                         )}
                     </motion.div>
                 </motion.div>
-            )}
-        </AnimatePresence>
     );
 }

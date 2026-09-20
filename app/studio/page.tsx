@@ -2512,6 +2512,8 @@ Be concise but thorough. Format your response with markdown for readability.`;
         onClose={() => setRepoPickerOpen(false)}
         connected={github.status === null ? null : github.status.connected}
         installUrl={github.status?.installUrl ?? null}
+        signedIn={github.status?.signedIn === true}
+        appAvailable={github.status?.appAvailable === true}
         repos={github.repos}
         loading={github.reposLoading}
         error={github.reposError}

@@ -28,9 +28,20 @@ export async function GET() {
 
     // An install has to be bound to an account, so a signed-out viewer has no
     // connect flow available to them even on a fully configured deployment.
+    // The two reasons for "no connect flow" are reported separately, because
+    // conflating them produces the worst possible message: a signed-out visitor
+    // being told the deployment is misconfigured, which sends whoever reads it
+    // to check environment variables that were fine all along.
     if (!githubAppConfigured() || userId === null) {
         return NextResponse.json(
-            { configured: false, connected: false, installUrl: null, accounts: [] },
+            {
+                configured: false,
+                connected: false,
+                installUrl: null,
+                accounts: [],
+                signedIn: userId !== null,
+                appAvailable: githubAppConfigured(),
+            },
             { headers: NO_STORE },
         );
     }
@@ -50,6 +61,8 @@ export async function GET() {
             connected: accounts.length > 0,
             installUrl: installUrl(issueInstallState(userId)),
             accounts,
+            signedIn: true,
+            appAvailable: true,
         },
         { headers: NO_STORE },
     );

@@ -24,6 +24,10 @@ export interface GitHubStatus {
     connected: boolean;
     installUrl: string | null;
     accounts: Array<{ installationId: number; accountLogin: string | null }>;
+    /** False means sign in, not that the deployment is broken. */
+    signedIn: boolean;
+    /** False means the GitHub App genuinely is not set up on this deployment. */
+    appAvailable: boolean;
 }
 
 export interface ImportedRepo {
@@ -52,14 +56,14 @@ export function useGitHub() {
         try {
             const response = await fetch('/api/github/status');
             if (!response.ok) {
-                setStatus({ configured: false, connected: false, installUrl: null, accounts: [] });
+                setStatus({ configured: false, connected: false, installUrl: null, accounts: [], signedIn: false, appAvailable: false });
                 return;
             }
             setStatus((await response.json()) as GitHubStatus);
         } catch {
             // A status we cannot read is indistinguishable from not configured,
             // and both lead to the same offer: paste a public URL instead.
-            setStatus({ configured: false, connected: false, installUrl: null, accounts: [] });
+            setStatus({ configured: false, connected: false, installUrl: null, accounts: [], signedIn: false, appAvailable: false });
         }
     }, []);
 
