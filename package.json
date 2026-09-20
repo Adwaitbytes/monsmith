@@ -34,6 +34,7 @@
     "framer-motion": "^12.23.26",
     "hardhat": "^2.27.1",
     "hardhat-gas-reporter": "^2.3.0",
+    "jose": "^6.2.12",
     "lenis": "^1.3.26",
     "lucide-react": "^0.559.0",
     "next": "^16.3.4",
