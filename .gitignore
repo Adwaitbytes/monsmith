@@ -91,3 +91,7 @@ benchmark-results.json
 # Tooling artifacts
 .playwright-mcp/
 .freebuff/
+
+# Verification screenshots, kept out of the tree
+/*.png
+/.playwright-mcp/
