@@ -291,7 +291,7 @@ export function ScoreStrip({ report, activeSection, onJump }: ScoreStripProps) {
                     </span>
                     {grade !== undefined && (
                         <span
-                            className={`rounded-md border px-1.5 py-0.5 text-[11px] font-semibold leading-none ${GRADE_TONE[grade]}`}
+                            className={`rounded-md border px-1.5 py-0.5 text-[11px] font-semibold leading-none ${GRADE_TONE[grade] ?? ''}`}
                         >
                             {grade}
                         </span>

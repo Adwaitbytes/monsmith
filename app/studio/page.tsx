@@ -4,10 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Sun,
-  Moon,
-  Play,
-  Rocket,
   Shield,
   Brain,
   Terminal,
@@ -32,18 +28,8 @@ import {
   Hammer,
   Search,
   Globe,
-  TrendingUp,
-  Layers,
-  Database,
-  Lock,
   Send,
-  ArrowRightLeft,
-  Gift,
-  Gauge,
-  Scale,
 } from "lucide-react";
-import Link from "next/link";
-import { MonsmithMark } from "../landing/MonsmithMark";
 import { useThemeStore, useUserStore, useIDEStore } from "@/lib/store";
 import { basenameOf, seedWorkspace, solidityFiles, useWorkspace } from "@/lib/workspace";
 import { FileExplorer } from "./components/FileExplorer";
@@ -51,15 +37,10 @@ import { useHydrated } from "@/lib/useHydrated";
 import { useResizable } from "@/lib/useResizable";
 import { ResizeHandle } from "./components/ResizeHandle";
 import type { QuickActionType } from "@/lib/supabase";
-import { ParallelProfiler } from "./components/ParallelProfiler";
 import { MigrationWizard } from "./components/MigrationWizard";
 import { Markdown } from "./components/Markdown";
 import { ContractInteraction } from "./components/ContractInteraction";
-import { GasProfiler } from "./components/GasProfiler";
-import { ChainFitReport } from "./components/ChainFitReport";
 import { SAMPLE_CONTRACTS } from "../compare/samples";
-import { AuthControls } from "../AuthControls";
-import { useViewer } from "@/lib/auth/useViewer";
 import { generateFromTemplate, ARCHITECT_TO_TEMPLATE, CONTRACT_TEMPLATES } from "@/lib/contractTemplates";
 import { track } from "@/lib/track";
 import { createPaymentHeader } from "@/utils/q402";
@@ -91,6 +72,18 @@ const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ),
 });
 
+import { StudioBar, type PrimaryAction } from "./components/StudioBar";
+import { AccountMenu } from "./components/AccountMenu";
+import { CommandPalette } from "./components/CommandPalette";
+import { Omnibox, type OmniboxIntent } from "./components/Omnibox";
+import { StartCards } from "./components/StartCards";
+import { RepoPicker } from "./components/RepoPicker";
+import { ReportRail, type RailState } from "./components/report/ReportRail";
+import { buildCommands } from "./commands";
+import { useReportStream } from "@/lib/report/useReportStream";
+import { useGitHub, importFailed } from "@/lib/github/useGitHub";
+import type { ReportOrigin } from "@/lib/report/types";
+import type { RepoSummary } from "@/lib/github/source";
 import {
     ARCHITECT_CONTRACT_TYPES,
     DEFAULT_CONTRACT,
@@ -104,7 +97,6 @@ export default function StudioPage() {
   const { theme, toggleTheme } = useThemeStore();
   const { walletAddress, isConnected, network, setUser, disconnect, setNetwork } = useUserStore();
   const { 
-    isCompiling, 
     isDeploying, 
     compileResult, 
     consoleOutput,
@@ -121,7 +113,6 @@ export default function StudioPage() {
   } = useIDEStore();
 
   const mounted = useHydrated();
-  const { viewer } = useViewer();
 
   // The editor reads and writes the persisted workspace directly. It used to
   // hold the source in component state beside a second, unpersisted store,
@@ -150,7 +141,7 @@ export default function StudioPage() {
     [addFiles],
   );
   const [language, setLanguage] = useState<"solidity" | "python">("solidity");
-  const [transpilledSolidity, setTranspiledSolidity] = useState<string | null>(null);
+  const [, setTranspiledSolidity] = useState<string | null>(null);
   const [aiResponse, setAIResponse] = useState<string | null>(null);
   const [aiLoading, setAILoading] = useState(false);
   const [teachModeContent, setTeachModeContent] = useState<TeachModeContent | null>(null);
@@ -188,16 +179,29 @@ export default function StudioPage() {
   const [architectChatHistory, setArchitectChatHistory] = useState<{role: "user" | "assistant", content: string}[]>([]);
   const [researchLoading, setResearchLoading] = useState(false);
 
+  // ============= REPORT, PALETTE AND IMPORT =============
+  // The report rail, the command palette and the repository picker are what the
+  // six panel toggles and the three action buttons turned into. They are held
+  // here rather than in a store because none of them outlive the studio.
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [repoPickerOpen, setRepoPickerOpen] = useState(false);
+  const [showStart, setShowStart] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+  const [repoOrigin, setRepoOrigin] = useState<ReportOrigin>({ kind: "workspace" });
+  const [repoLabel, setRepoLabel] = useState<string | null>(null);
+
+  const report = useReportStream();
+  const github = useGitHub();
+
   const isDark = theme === "dark";
 
   // Docked panels are drag-resizable; sizes persist per panel.
   const sidebarResize = useResizable({ initial: 200, min: 160, max: 420, edge: "right", storageKey: "ms.w.sidebar" });
   const aiResize = useResizable({ initial: 380, min: 300, max: 720, edge: "left", storageKey: "ms.w.ai" });
-  const profilerResize = useResizable({ initial: 620, min: 380, max: 1100, edge: "left", storageKey: "ms.w.profiler" });
+  const railResize = useResizable({ initial: 460, min: 360, max: 900, edge: "left", storageKey: "ms.w.rail" });
   const migrationResize = useResizable({ initial: 450, min: 360, max: 860, edge: "left", storageKey: "ms.w.migration" });
   const interactResize = useResizable({ initial: 420, min: 340, max: 820, edge: "left", storageKey: "ms.w.interact" });
-  const gasResize = useResizable({ initial: 460, min: 360, max: 860, edge: "left", storageKey: "ms.w.gas" });
-  const chainFitResize = useResizable({ initial: 560, min: 420, max: 980, edge: "left", storageKey: "ms.w.chainfit" });
   const terminalResize = useResizable({ initial: 180, min: 90, max: 520, edge: "top", storageKey: "ms.h.terminal" });
 
   /**
@@ -269,6 +273,57 @@ export default function StudioPage() {
     }
 
     track("page_view", { detail: { page: "studio", sample: sample?.id ?? null } });
+  }, []);
+
+  /**
+   * Where a first visit begins, and where GitHub sends people back to.
+   *
+   * The start cards open for anyone who has not chosen a path yet, which is the
+   * whole answer to "a new user cannot tell what this does". Someone with work
+   * already in the workspace, or arriving on a sample link, has clearly chosen,
+   * so they go straight to the editor.
+   *
+   * The same effect handles the return trip from GitHub, because the install
+   * redirect lands here and the only useful thing to do with that is open the
+   * picker they were in the middle of using.
+   */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const returnedFrom = params.get("github");
+    const repo = params.get("repo");
+
+    if (returnedFrom !== null || repo !== null) {
+      // The parameters have been consumed, and leaving them in the URL would
+      // re-trigger this on every reload.
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
+    if (returnedFrom === "connected") {
+      void github.refreshStatus();
+      setRepoPickerOpen(true);
+      addConsoleOutput("GitHub connected.");
+      return;
+    }
+    if (returnedFrom === "signin") {
+      addConsoleOutput("Sign in first, then connect GitHub.");
+      return;
+    }
+    if (repo !== null) {
+      void loadRepo({ url: repo });
+      return;
+    }
+
+    if (params.get("sample") !== null) return;
+    // `seedWorkspace` has already run, so a genuinely new visitor has exactly
+    // the one starter file and nothing they have chosen.
+    const existing = Object.keys(useWorkspace.getState().files);
+    setShowStart(existing.length <= 1);
+    // The picker needs this the moment a card is clicked, and it is one cheap
+    // request rather than a wait at the point of intent.
+    void github.prepare();
+    // Reading the workspace once on mount is the point; re-running when it
+    // changes would reopen the cards over work in progress.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Connect wallet
@@ -1271,209 +1326,252 @@ Be concise but thorough. Format your response with markdown for readability.`;
     handleResearchQuery(topicQueries[topicId] || `Tell me about ${topicId}`);
   };
 
+  // ============= THE PRIMARY ACTION AND THE THINGS IT REPLACED =============
+
+  /**
+   * One button, labelled by what comes next.
+   *
+   * The bar used to offer Compile, Audit and Deploy side by side as though they
+   * were three choices. They are a sequence, and compiling is not something
+   * anyone wants for its own sake. So the report compiles on its own, and the
+   * button says the thing the person actually came to do: measure it, or ship it.
+   */
+  const primaryAction: PrimaryAction =
+    compileResult?.success === true && report.state.status === "ready" ? "deploy" : "report";
+
+  const primaryBusy =
+    primaryAction === "deploy" ? isDeploying : report.state.status === "running";
+
+  const primaryBlockedReason =
+    primaryAction === "deploy" && compileResult?.success !== true
+      ? "Compile the contract first."
+      : undefined;
+
+  const workspaceTitle = repoLabel ?? (currentFileName === "" ? "Untitled" : currentFileName);
+  const workspaceSubtitle = repoLabel !== null && activePath !== null ? activePath : undefined;
+
+  const runReport = useCallback(() => {
+    const solidity = solidityFiles(files);
+    if (Object.keys(solidity).length === 0) {
+      addConsoleOutput("There is no Solidity in the workspace to measure.");
+      return;
+    }
+    setShowStart(false);
+    setUnlockError(null);
+    void report.run({ files: solidity, origin: repoOrigin });
+    track("audit", { walletAddress, detail: { surface: "report", origin: repoOrigin.kind } });
+  }, [files, report, repoOrigin, walletAddress, addConsoleOutput]);
+
+  const handlePrimary = () => {
+    if (primaryAction === "deploy") handleDeploy();
+    else runReport();
+  };
+
+  /**
+   * Bringing code in, from whichever of the three shapes it arrived in.
+   *
+   * The omnibox replaced four separate entry points, so this is where they all
+   * land. Each one ends the same way: files in the workspace, ready to measure.
+   */
+  const loadRepo = useCallback(
+    async (target: { url: string } | { owner: string; repo: string; ref?: string }) => {
+      setRepoPickerOpen(false);
+      addConsoleOutput("Reading the repository");
+
+      const result = await github.importRepo(target);
+      if (importFailed(result)) {
+        addConsoleOutput(result.message);
+        if (result.installUrl !== undefined) setRepoPickerOpen(true);
+        return;
+      }
+
+      addFiles(result.files);
+      setRepoOrigin({
+        kind: "github",
+        owner: result.ref.owner,
+        repo: result.ref.repo,
+        ref: result.ref.ref,
+        private: result.private,
+      });
+      setRepoLabel(`${result.ref.owner}/${result.ref.repo}`);
+      setShowStart(false);
+
+      const count = Object.keys(result.files).length;
+      addConsoleOutput(
+        `Imported ${count} Solidity file${count === 1 ? "" : "s"} from ${result.ref.owner}/${result.ref.repo}`,
+      );
+      if (result.truncated) {
+        addConsoleOutput("GitHub truncated the file tree, so this import may be partial.");
+      }
+    },
+    [github, addFiles, addConsoleOutput],
+  );
+
+  const handleOmnibox = useCallback(
+    (intent: OmniboxIntent) => {
+      if (intent.kind === "repo") {
+        void loadRepo({
+          owner: intent.ref.owner,
+          repo: intent.ref.repo,
+          ...(intent.ref.ref !== undefined ? { ref: intent.ref.ref } : {}),
+        });
+        return;
+      }
+      if (intent.kind === "address") {
+        setRepoOrigin({ kind: "address", address: intent.address, chainId: 1 });
+        openSidePanel("migration");
+        return;
+      }
+      const name = `contracts/Pasted${Date.now()}.sol`;
+      addFiles({ [name]: intent.code });
+      setShowStart(false);
+      addConsoleOutput(`Added ${name}`);
+    },
+    [loadRepo, addFiles, addConsoleOutput],
+  );
+
+  const handleRepoPick = (repo: RepoSummary) => {
+    void loadRepo({ owner: repo.owner, repo: repo.repo, ref: repo.defaultBranch });
+  };
+
+  const openRepoPicker = () => {
+    void github.prepare();
+    setRepoPickerOpen(true);
+  };
+
+  /** Pays for the full report, in MON, over the rail the agent route already uses. */
+  const unlockReport = useCallback(async () => {
+    if (report.state.status !== "ready") return;
+    setUnlocking(true);
+    setUnlockError(null);
+    try {
+      const address = walletAddress ?? (await connectWallet());
+      if (typeof address !== "string" || address.length === 0) {
+        setUnlockError("Connect a wallet to unlock the full report.");
+        return;
+      }
+
+      const id = report.state.report.reportId;
+      const challenge = await fetch(`/api/report/${id}/unlock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userAddress: address, network }),
+      });
+      const offer = await challenge.json();
+
+      if (challenge.status === 402 && offer.paymentDetails !== undefined) {
+        const header = await createPaymentHeader(address, offer.paymentDetails);
+        const paid = await fetch(`/api/report/${id}/unlock`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Payment": header },
+          body: JSON.stringify({ userAddress: address, network }),
+        });
+        const settled = await paid.json();
+        if (settled.success !== true) {
+          setUnlockError(settled.error ?? "The payment did not go through.");
+          return;
+        }
+        report.replace(settled.report);
+        addConsoleOutput("Full report unlocked.");
+        return;
+      }
+
+      if (offer.success === true) {
+        report.replace(offer.report);
+        return;
+      }
+      setUnlockError(offer.error ?? "The report could not be unlocked.");
+    } catch (error) {
+      setUnlockError(errorMessage(error));
+    } finally {
+      setUnlocking(false);
+    }
+  }, [report, walletAddress, network, connectWallet, addConsoleOutput]);
+
+  const railState: RailState =
+    report.state.status === "idle"
+      ? { status: "empty" }
+      : report.state.status === "running"
+        ? {
+            status: "running",
+            done: report.state.done,
+            total: report.state.total,
+            label: report.state.label,
+            partial: report.state.partial,
+          }
+        : report.state.status === "ready"
+          ? { status: "ready", report: report.state.report }
+          : { status: "error", message: report.state.message };
+
+  const commands = buildCommands(
+    {
+      runReport,
+      compile: () => void handleCompile(),
+      deploy: handleDeploy,
+      importFromGitHub: openRepoPicker,
+      importFromAddress: () => openSidePanel("migration"),
+      newFile: () => setShowStart(true),
+      openTemplates: () => setShowStart(true),
+      openAI: () => openSidePanel("ai"),
+      aiAudit: () => void (language === "python" ? handlePythonAudit() : handleAudit()),
+      openMigration: () => openSidePanel("migration"),
+      openInteract: () => openSidePanel("interact"),
+      openTerminal: toggleTerminal,
+      toggleTheme,
+      toggleNetwork: () => setNetwork(network === "testnet" ? "mainnet" : "testnet"),
+      setLanguage: handleLanguageSwitch,
+      connectWallet: () => void connectWallet(),
+      disconnectWallet: disconnect,
+      shareReport: () => {
+        if (report.state.status !== "ready") return;
+        void navigator.clipboard.writeText(
+          `${window.location.origin}/report/${report.state.report.reportId}`,
+        );
+        addConsoleOutput("Report link copied.");
+      },
+      showStartCards: () => setShowStart(true),
+    },
+    {
+      compiled: compileResult?.success === true,
+      deployed: deployedAddress !== null,
+      walletConnected: isConnected,
+      reportReady: report.state.status === "ready",
+      language,
+      network,
+      theme: isDark ? "dark" : "light",
+    },
+  );
+
   if (!mounted) return null;
 
   return (
     <div className="h-screen flex flex-col bg-background text-text-primary">
-      {/* Top Bar */}
-      <div className="h-12 flex items-center justify-between px-4 border-b border-border-subtle bg-surface-raised">
-        {/* Left */}
-        <div className="flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2 group">
-            <MonsmithMark size={22} className="transition-transform group-hover:scale-110" />
-            <span className="hidden sm:inline text-sm font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Monsmith</span>
-          </Link>
-          <span className="h-4 w-px bg-border-strong" />
-          <span className="text-sm font-medium text-text-secondary">{currentFileName}</span>
-
-          {/* Language Toggle */}
-          <div className="flex items-center rounded-lg p-0.5 ml-2 bg-surface-sunken border border-border-subtle">
-            <button
-              onClick={() => handleLanguageSwitch("solidity")}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                language === "solidity" ? "bg-accent text-white" : "text-text-muted hover:text-text-primary"
-              }`}
-            >
-              Solidity
-            </button>
-            <button
-              onClick={() => handleLanguageSwitch("python")}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1 ${
-                language === "python" ? "bg-[#2f9e6d] text-white" : "text-text-muted hover:text-text-primary"
-              }`}
-            >
-              Python
-            </button>
-          </div>
-        </div>
-
-        {/* Center - Actions */}
-        <div className="flex items-center gap-2">
-          <motion.button
-            onClick={() => handleCompile()}
-            disabled={isCompiling}
-            className={`px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 transition-colors ${
-              isCompiling ? "bg-surface-overlay text-text-muted cursor-not-allowed" : "bg-accent hover:opacity-90 text-white"
-            }`}
-            whileTap={{ scale: 0.98 }}
-          >
-            {isCompiling ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-            Compile
-          </motion.button>
-
-          <motion.button
-            onClick={language === "python" ? handlePythonAudit : handleAudit}
-            disabled={aiLoading}
-            className="px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 panel-surface border border-border-subtle hover:border-border-strong transition-colors"
-            whileTap={{ scale: 0.98 }}
-          >
-            <Shield size={14} />
-            Audit
-          </motion.button>
-
-          <motion.button
-            onClick={handleDeploy}
-            disabled={isDeploying || !compileResult?.success}
-            className={`px-4 py-1.5 rounded-lg text-xs font-medium flex items-center gap-2 border transition-colors ${
-              isDeploying || !compileResult?.success
-                ? "border-border-subtle text-text-muted cursor-not-allowed"
-                : "bg-accent hover:opacity-90 text-white border-transparent"
-            }`}
-            whileTap={{ scale: 0.98 }}
-          >
-            {isDeploying ? <Loader2 size={14} className="animate-spin" /> : <Rocket size={14} />}
-            Deploy
-          </motion.button>
-        </div>
-
-        {/* Right */}
-        <div className="flex items-center gap-2">
-          {/* Network Toggle */}
-          <button
-            onClick={() => setNetwork(network === "testnet" ? "mainnet" : "testnet")}
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-              network === "mainnet"
-                ? "border-red-500/40 text-red-400 bg-red-500/10"
-                : "border-border-strong text-text-secondary hover:text-text-primary"
-            }`}
-          >
-            {network.toUpperCase()}
-          </button>
-
-          {/* Theme Toggle */}
-          <motion.button
-            onClick={toggleTheme}
-            className="p-2 rounded-lg panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"
-            whileTap={{ scale: 0.95 }}
-            title="Toggle theme"
-          >
-            {isDark ? <Sun size={16} /> : <Moon size={16} />}
-          </motion.button>
-
-          {/* Terminal Toggle */}
-          <motion.button
-            onClick={toggleTerminal}
-            className={`p-2 rounded-lg ${terminalOpen ? "bg-accent text-white border border-transparent" : "panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"}`}
-            whileTap={{ scale: 0.95 }}
-            title="Toggle terminal"
-          >
-            <Terminal size={16} />
-          </motion.button>
-
-          {/* AI Panel Toggle */}
-          <motion.button
-            onClick={() => openSidePanel("ai")}
-            className={`p-2 rounded-lg ${aiPanelOpen ? "bg-accent text-white border border-transparent" : "panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"}`}
-            whileTap={{ scale: 0.95 }}
-            title="AI assistant"
-          >
-            <Brain size={16} />
-          </motion.button>
-
-          {/* Parallel Profiler Toggle */}
-          <motion.button
-            onClick={() => openSidePanel("profiler")}
-            className={`p-2 rounded-lg ${parallelProfilerOpen ? "bg-accent text-white border border-transparent" : "panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"}`}
-            whileTap={{ scale: 0.95 }}
-            title="Parallel execution profiler"
-          >
-            <Gauge size={16} />
-          </motion.button>
-
-          {/* Gas Profiler Toggle */}
-          <motion.button
-            onClick={() => openSidePanel("gas")}
-            className={`p-2 rounded-lg ${gasOpen ? "bg-accent text-white border border-transparent" : "panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"}`}
-            whileTap={{ scale: 0.95 }}
-            title="Gas profiler"
-          >
-            <Gauge size={16} />
-          </motion.button>
-
-          {/* Chain Fit Toggle */}
-          <motion.button
-            onClick={() => openSidePanel("chainfit")}
-            className={`p-2 rounded-lg ${chainFitOpen ? "bg-accent text-white border border-transparent" : "panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"}`}
-            whileTap={{ scale: 0.95 }}
-            title="Chain Fit: cost and behaviour of this contract on Monad against other EVM chains"
-          >
-            <Scale size={16} />
-          </motion.button>
-
-          <motion.button
-            onClick={() => openSidePanel("interact")}
-            className={`p-2 rounded-lg ${interactOpen ? "bg-accent text-white border border-transparent" : "panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"}`}
-            whileTap={{ scale: 0.95 }}
-            title="Interact with a deployed contract"
-          >
-            <Play size={16} />
-          </motion.button>
-
-          <motion.button
-            onClick={() => openSidePanel("migration")}
-            className={`p-2 rounded-lg ${migrationOpen ? "bg-accent text-white border border-transparent" : "panel-surface border border-border-subtle text-text-secondary hover:text-text-primary hover:border-border-strong"}`}
-            whileTap={{ scale: 0.95 }}
-            title="Contract migration"
-          >
-            <ArrowRightLeft size={16} />
-          </motion.button>
-
-          <AuthControls compact tier={viewer.tier} isAdmin={viewer.role === "admin"} />
-
-          {/* Wallet */}
-          {!isConnected ? (
-            <motion.button
-              onClick={connectWallet}
-              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-text-primary text-background hover:opacity-90 transition-opacity"
-              whileTap={{ scale: 0.98 }}
-            >
-              Connect Wallet
-            </motion.button>
-          ) : (
-            <div className="relative group">
-              <div className="flex items-center gap-2 px-3 py-1.5 panel-surface border border-border-subtle rounded-lg cursor-pointer hover:border-border-strong transition-colors">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                <span className="text-xs font-mono">{walletAddress?.slice(0, 6)}...{walletAddress?.slice(-4)}</span>
-              </div>
-
-              {/* Disconnect Dropdown */}
-              <div className="absolute right-0 top-full mt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                <motion.button
-                  onClick={() => {
-                    disconnect();
-                    addConsoleOutput("Wallet disconnected");
-                  }}
-                  className="px-4 py-2 rounded-lg text-xs font-medium whitespace-nowrap flex items-center gap-2 panel-surface border border-border-subtle text-red-400 hover:bg-red-500/10 shadow-[var(--shadow-panel)]"
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <X size={14} />
-                  Disconnect
-                </motion.button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Top bar, at four controls. See StudioBar for why. */}
+      <StudioBar
+        title={workspaceTitle}
+        subtitle={workspaceSubtitle}
+        primary={primaryAction}
+        busy={primaryBusy}
+        primaryBlockedReason={primaryBlockedReason}
+        onPrimary={handlePrimary}
+        onOpenPalette={() => setPaletteOpen(true)}
+        account={
+          <AccountMenu
+            theme={isDark ? "dark" : "light"}
+            onToggleTheme={toggleTheme}
+            network={network}
+            onNetworkChange={setNetwork}
+            language={language}
+            onLanguageChange={handleLanguageSwitch}
+            wallet={walletAddress}
+            onConnectWallet={connectWallet}
+            onDisconnectWallet={() => {
+              disconnect();
+              addConsoleOutput("Wallet disconnected");
+            }}
+          />
+        }
+      />
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden min-w-0">
@@ -1563,8 +1661,39 @@ Be concise but thorough. Format your response with markdown for readability.`;
 
         {/* Editor Area - min-width keeps the code readable when a side panel opens */}
         <div className="flex-1 flex flex-col min-w-[320px] overflow-hidden">
+          {/*
+            The start cards, which are the studio's empty state rather than a
+            modal. A tour someone dismisses teaches nothing; a launcher that is
+            still there next week is the thing they come back to. Each card does
+            the work rather than describing it.
+          */}
+          {showStart && (
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-10">
+              <div className="mx-auto max-w-2xl">
+                <Omnibox onSubmit={handleOmnibox} busy={github.importing} autoFocus />
+                <div className="mt-10">
+                  <StartCards
+                    onPickRepo={openRepoPicker}
+                    onPickAddress={() => {
+                      setShowStart(false);
+                      openSidePanel("migration");
+                    }}
+                    onPickTemplate={() => {
+                      setShowStart(false);
+                      openSidePanel("ai");
+                    }}
+                    githubConnected={github.status?.connected === true}
+                    {...(github.status?.installUrl != null
+                      ? { connectUrl: github.status.installUrl }
+                      : {})}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Monaco Editor */}
-          <div className={`${terminalOpen ? "flex-1" : "h-full"} min-h-0`}>
+          <div className={`${showStart ? "hidden" : terminalOpen ? "flex-1" : "h-full"} min-h-0`}>
             <MonacoEditor
               height="100%"
               language={language === "python" ? "python" : "sol"}
@@ -2248,82 +2377,41 @@ Be concise but thorough. Format your response with markdown for readability.`;
           )}
         </AnimatePresence>
 
-        {/* Parallel Execution Profiler Panel */}
-        {parallelProfilerOpen && (
-          <ResizeHandle
-              edge="left"
-              label="Resize profiler"
-              isDragging={profilerResize.isDragging}
-              onPointerDown={profilerResize.onPointerDown}
-              onReset={profilerResize.reset}
-            />
-        )}
-        <AnimatePresence>
-          {parallelProfilerOpen && (
-            <motion.div
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: profilerResize.size, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              style={{ width: profilerResize.size }}
-              className={`border-l flex flex-col min-w-0 flex-shrink-0 overflow-hidden ${"panel-surface border"}`}
-            >
-              <ParallelProfiler
-                code={language === "python" ? (transpilledSolidity || code) : code}
-                onClose={() => setParallelProfilerOpen(false)}
-                onApplyCode={language === "python" ? undefined : applyOptimizedContract}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {/*
+          The report rail.
 
-        {gasOpen && (
-          <ResizeHandle
-            edge="left"
-            label="Resize gas profiler"
-            isDragging={gasResize.isDragging}
-            onPointerDown={gasResize.onPointerDown}
-            onReset={gasResize.reset}
+          This replaced the parallel, gas and chain fit panels, each of which
+          used to be reached by its own unlabelled icon in the toolbar, two of
+          them sharing an icon and so indistinguishable. They were never three
+          tools. They were three views of one question, and asking someone to
+          assemble that question out of three toggles is why the product looked
+          like it did too much. Here it is one scrolling document that fills
+          itself in as the measurements land.
+        */}
+        <ResizeHandle
+          edge="left"
+          label="Resize the report"
+          isDragging={railResize.isDragging}
+          onPointerDown={railResize.onPointerDown}
+          onReset={railResize.reset}
+        />
+        <div
+          style={{ width: railResize.size }}
+          className="flex min-w-0 shrink-0 flex-col overflow-hidden border-l border-border-subtle panel-surface"
+        >
+          <ReportRail
+            state={railState}
+            entitled={railState.status === "ready" && !railState.report.redacted}
+            onUnlock={() => void unlockReport()}
+            unlocking={unlocking}
+            unlockError={unlockError}
+            onRerun={runReport}
+            onApplyPatch={(finding) => {
+              if (finding.patch === undefined) return;
+              applyOptimizedContract(finding.patch);
+            }}
           />
-        )}
-        <AnimatePresence>
-          {gasOpen && (
-            <motion.div
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: gasResize.size, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              style={{ width: gasResize.size }}
-              className="border-l border-border-subtle flex flex-col min-w-0 flex-shrink-0 overflow-hidden panel-surface"
-            >
-              <GasProfiler code={code} onClose={() => setGasOpen(false)} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {chainFitOpen && (
-          <ResizeHandle
-            edge="left"
-            label="Resize chain fit report"
-            isDragging={chainFitResize.isDragging}
-            onPointerDown={chainFitResize.onPointerDown}
-            onReset={chainFitResize.reset}
-          />
-        )}
-        <AnimatePresence>
-          {chainFitOpen && (
-            <motion.div
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: chainFitResize.size, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              style={{ width: chainFitResize.size }}
-              className="border-l border-border-subtle flex flex-col min-w-0 flex-shrink-0 overflow-hidden panel-surface"
-            >
-              <ChainFitReport
-                code={language === "python" ? (transpilledSolidity || code) : code}
-                onClose={() => setChainFitOpen(false)}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        </div>
 
         {interactOpen && (
           <ResizeHandle
@@ -2445,9 +2533,29 @@ Be concise but thorough. Format your response with markdown for readability.`;
         )}
       </AnimatePresence>
 
-      {/* New File Modal */}
-      <AnimatePresence>
-      </AnimatePresence>
+      {/*
+        Everything the toolbar used to carry, in the two places that scale.
+
+        The palette holds the long tail, searchable by name rather than guessed
+        from a 32px icon. The picker is the one extra question GitHub forces,
+        asked at the moment it becomes relevant instead of as a gate.
+      */}
+      <CommandPalette commands={commands} open={paletteOpen} onOpenChange={setPaletteOpen} />
+
+      <RepoPicker
+        open={repoPickerOpen}
+        onClose={() => setRepoPickerOpen(false)}
+        connected={github.status === null ? null : github.status.connected}
+        installUrl={github.status?.installUrl ?? null}
+        repos={github.repos}
+        loading={github.reposLoading}
+        error={github.reposError}
+        onPick={handleRepoPick}
+        onPasteInstead={() => {
+          setRepoPickerOpen(false);
+          setShowStart(true);
+        }}
+      />
     </div>
   );
 }

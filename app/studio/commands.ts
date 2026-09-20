@@ -49,6 +49,7 @@ export interface StudioActions {
     newFile: () => void;
     openTemplates: () => void;
     openAI: () => void;
+    aiAudit: () => void;
     openMigration: () => void;
     openInteract: () => void;
     openTerminal: () => void;
@@ -100,6 +101,13 @@ export function buildCommands(
             keywords: ['link', 'permalink', 'export', 'send'],
             run: actions.shareReport,
             disabled: !context.reportReady,
+        },
+        {
+            id: 'ai.audit',
+            label: 'Run an AI security audit',
+            group: 'Analyse',
+            keywords: ['ai', 'llm', 'review', 'vulnerability', 'secure', 'python', 'pymon'],
+            run: actions.aiAudit,
         },
         {
             id: 'build.compile',

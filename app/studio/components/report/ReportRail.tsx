@@ -474,7 +474,7 @@ function ContractScore({ contract }: { contract: ContractReport }) {
     }
 
     return (
-        <span className={`shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10.5px] font-medium leading-none ${GRADE_TONE[grade]}`}>
+        <span className={`shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10.5px] font-medium leading-none ${GRADE_TONE[grade] ?? ''}`}>
             {Math.round(score)} {grade}
         </span>
     );
@@ -696,7 +696,7 @@ function HealthSection({
 
                 {skipped.length > 0 && (
                     <details className="group rounded-lg border border-border-subtle bg-surface-sunken px-3 py-2">
-                        <summary className="cursor-pointer list-none text-[11.5px] text-text-muted transition-colors duration-150 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transition-none">
+                        <summary className="cursor-pointer list-none text-[11.5px] text-text-muted [&::-webkit-details-marker]:hidden transition-colors duration-150 hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent motion-reduce:transition-none">
                             {skipped.length} {skipped.length === 1 ? 'file was' : 'files were'} not audited
                         </summary>
                         <ul className="mt-2 space-y-1">
@@ -728,7 +728,7 @@ function RunProgress({ done, total, label }: { done: number; total: number; labe
     return (
         <div className="shrink-0 border-b border-border-subtle bg-surface-raised px-5 py-3.5">
             <div className="flex items-baseline justify-between gap-3">
-                <p className="min-w-0 truncate text-[12.5px] font-medium text-text-primary">
+                <p aria-live="polite" className="min-w-0 truncate text-[12.5px] font-medium text-text-primary">
                     {label.length > 0 ? label : 'Running the analysis'}
                 </p>
                 <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-text-muted">

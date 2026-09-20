@@ -292,5 +292,17 @@ export function useReportStream() {
         }
     }, []);
 
-    return { state, run, cancel };
+    /**
+     * Swaps in a report the server handed back whole.
+     *
+     * Unlocking returns the full report rather than a patch, because the paid
+     * half is assembled server-side and a client-side merge would be a second
+     * place where the two halves could disagree. Replacing outright keeps the
+     * redaction decision in exactly one place.
+     */
+    const replace = useCallback((next: RepoReport) => {
+        setState({ status: 'ready', report: next });
+    }, []);
+
+    return { state, run, cancel, replace };
 }
