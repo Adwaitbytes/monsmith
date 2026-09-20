@@ -80,8 +80,38 @@ export async function GET(req: Request) {
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;");
 
-    // A form POST is the only way in: GitHub reads the manifest from a form
-    // field, not from a query string, so this page exists to submit one.
+    /*
+      The same app, expressed as query parameters on a plain link.
+
+      The manifest POST is the better flow when it works, because the
+      credentials come back over the wire instead of through a downloaded key.
+      It has one hard requirement though: an active GitHub session. A POST made
+      while signed out loses its body through the login redirect, and GitHub
+      then reports the manifest's first required key as missing rather than
+      saying the manifest never arrived, which is a genuinely misleading place
+      to be sent looking.
+
+      A GET survives that redirect. This link prefills the same permissions on
+      GitHub's ordinary creation form, so it works signed in or out, at the cost
+      of generating the private key by hand afterwards.
+    */
+    const prefill = new URLSearchParams({
+        name: "Monsmith Contract Audit",
+        description:
+            "Imports Solidity from your repositories so Monsmith can audit it. Reads repository contents and nothing else.",
+        url: productionUrl,
+        setup_url: `${productionUrl}/api/github/callback`,
+        setup_on_update: "true",
+        public: "true",
+        webhook_active: "false",
+        contents: "read",
+        metadata: "read",
+        request_oauth_on_install: "false",
+    });
+    const prefilledUrl = `https://github.com/settings/apps/new?${prefill.toString()}`;
+
+    // A form POST is the only way into the manifest flow: GitHub reads the
+    // manifest from a form field, not from a query string.
     const page = `<!doctype html>
 <html lang="en">
 <head>
@@ -98,6 +128,10 @@ export async function GET(req: Request) {
   button { font: inherit; font-weight: 600; padding: .7rem 1.4rem; border: 0; border-radius: .6rem;
            background: #7c5cff; color: #fff; cursor: pointer; }
   ul { text-align: left; opacity: .75; font-size: 13.5px; }
+  .small { font-size: 12.5px; opacity: .6; margin: .4rem 0 1.6rem; }
+  .warn { font-size: 13.5px; opacity: .9; padding: .7rem .9rem; border-radius: .5rem;
+          background: rgba(245,158,11,.14); }
+  a { color: #7c5cff; }
 </style>
 </head>
 <body>
@@ -110,10 +144,19 @@ export async function GET(req: Request) {
     <li>Webhooks: off</li>
     <li>Install target: ${productionUrl}</li>
   </ul>
+  <p class="warn"><strong>Sign into GitHub first.</strong> Creating an app needs a
+     session, and a signed-out attempt fails with a confusing message about a
+     missing <code>url</code>.</p>
+
   <form method="post" action="https://github.com/settings/apps/new">
     <input type="hidden" name="manifest" value="${payload}">
-    <button type="submit">Continue to GitHub</button>
+    <button type="submit">Create it automatically</button>
   </form>
+  <p class="small">Generates the private key and writes it to <code>.env.local</code>. Needs a signed-in session.</p>
+
+  <p><a href="${prefilledUrl}">Or fill the form for me instead</a></p>
+  <p class="small">Opens GitHub's normal creation form with these settings already filled in.
+     Works signed out, but you generate the private key yourself afterwards.</p>
 </main>
 </body>
 </html>`;
