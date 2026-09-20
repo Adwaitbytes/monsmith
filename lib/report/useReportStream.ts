@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 
+import { visitorId } from '../track';
 import {
     emptyCounts,
     type ContractReport,
@@ -135,8 +136,14 @@ export function useReportStream() {
         try {
             const response = await fetch('/api/report', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(input),
+                headers: {
+                    'Content-Type': 'application/json',
+                    // The anonymous owner of the report, so a signed-out
+                    // visitor still gets their first one free and can come
+                    // back to a permalink they already paid for.
+                    'x-visitor-id': visitorId(),
+                },
+                body: JSON.stringify({ ...input, visitorId: visitorId() }),
                 signal: controller.signal,
             });
 

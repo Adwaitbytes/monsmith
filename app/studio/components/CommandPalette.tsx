@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion, type Transition } from 'framer-motion';
 import { CornerDownLeft, Search } from 'lucide-react';
 
@@ -83,7 +83,7 @@ function scoreText(text: string, query: string): number | null {
 
     const at = haystack.indexOf(query);
     if (at !== -1) {
-        const atWordStart = /[\s/._-]/.test(haystack[at - 1]);
+        const atWordStart = /[\s/._-]/.test(haystack.charAt(at - 1));
         return (atWordStart ? WORD_START : SUBSTRING) - at;
     }
 
@@ -140,6 +140,41 @@ function groupMatches(commands: Command[], query: string): RenderGroup[] {
 }
 
 export function CommandPalette({ commands, open, onOpenChange }: CommandPaletteProps) {
+    // Registered unconditionally, since the shortcut has to work while the
+    // palette is shut. That is the whole point of it.
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.defaultPrevented) return;
+            if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return;
+            event.preventDefault();
+            onOpenChange(!open);
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [open, onOpenChange]);
+
+    return (
+        <AnimatePresence>
+            {open && (
+                <PaletteSheet
+                    key="command-palette"
+                    commands={commands}
+                    onClose={() => onOpenChange(false)}
+                />
+            )}
+        </AnimatePresence>
+    );
+}
+
+/**
+ * The open palette, split out so that mounting is what resets it.
+ *
+ * Query and selection start clean on every open because this component is new
+ * on every open. Clearing them from an effect instead would mean a render with
+ * last session's search still on screen, and a second render to correct it.
+ */
+function PaletteSheet({ commands, onClose }: { commands: Command[]; onClose: () => void }) {
     const [query, setQuery] = useState('');
     const [active, setActive] = useState(0);
 
@@ -149,9 +184,7 @@ export function CommandPalette({ commands, open, onOpenChange }: CommandPaletteP
     const rowRefs = useRef(new Map<string, HTMLElement>());
 
     const reduce = useReducedMotion();
-    const transition: Transition = reduce
-        ? { duration: 0 }
-        : { duration: 0.15, ease: EASE };
+    const transition: Transition = reduce ? { duration: 0 } : { duration: 0.15, ease: EASE };
 
     const groups = useMemo(
         () => groupMatches(commands, query.trim().toLowerCase()),
@@ -167,33 +200,12 @@ export function CommandPalette({ commands, open, onOpenChange }: CommandPaletteP
     const activeCommand = selectable[Math.min(active, selectable.length - 1)];
     const rowId = (id: string) => `${baseId}-row-${id}`;
 
-    const close = useCallback(() => onOpenChange(false), [onOpenChange]);
-
-    // Registered unconditionally, since the shortcut has to work while the
-    // palette is shut. That is the whole point of it.
-    useEffect(() => {
-        const onKeyDown = (event: KeyboardEvent) => {
-            if (event.defaultPrevented) return;
-            if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'k') return;
-            event.preventDefault();
-            onOpenChange(!open);
-        };
-
-        window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, [open, onOpenChange]);
-
     /**
-     * Opening resets the search and takes focus; closing hands focus back to
-     * whatever had it. Without the handback, dismissing the palette drops the
-     * user at the top of the document and a keyboard session is over.
+     * Takes focus on open and hands it back on close. Without the handback,
+     * dismissing the palette drops the user at the top of the document and
+     * their keyboard session is over.
      */
     useEffect(() => {
-        if (!open) return;
-
-        setQuery('');
-        setActive(0);
-
         const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         const scrollLock = document.body.style.overflow;
         document.body.style.overflow = 'hidden';
@@ -205,11 +217,7 @@ export function CommandPalette({ commands, open, onOpenChange }: CommandPaletteP
             document.body.style.overflow = scrollLock;
             previous?.focus();
         };
-    }, [open]);
-
-    useEffect(() => {
-        setActive(0);
-    }, [query]);
+    }, []);
 
     useEffect(() => {
         if (activeCommand === undefined) return;
@@ -218,7 +226,7 @@ export function CommandPalette({ commands, open, onOpenChange }: CommandPaletteP
 
     const run = (command: Command) => {
         if (command.disabled === true) return;
-        close();
+        onClose();
         command.run();
     };
 
@@ -228,7 +236,7 @@ export function CommandPalette({ commands, open, onOpenChange }: CommandPaletteP
         switch (event.key) {
             case 'Escape':
                 event.preventDefault();
-                close();
+                onClose();
                 return;
             case 'ArrowDown':
                 event.preventDefault();
@@ -260,169 +268,168 @@ export function CommandPalette({ commands, open, onOpenChange }: CommandPaletteP
     };
 
     return (
-        <AnimatePresence>
-            {open && (
-                <motion.div
-                    key="command-palette"
-                    className="fixed inset-0 z-[120] flex items-start justify-center px-4 pt-[12vh]"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={transition}
-                >
-                    <div
-                        aria-hidden
-                        onMouseDown={close}
-                        className="absolute inset-0 bg-background/60 backdrop-blur-[3px]"
+        <motion.div
+            className="fixed inset-0 z-[120] flex items-start justify-center px-4 pt-[12vh]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={transition}
+        >
+            <div
+                aria-hidden
+                onMouseDown={onClose}
+                className="absolute inset-0 bg-background/60 backdrop-blur-[3px]"
+            />
+
+            <motion.div
+                role="dialog"
+                aria-modal="true"
+                aria-label="Command palette"
+                onKeyDown={onKeyDown}
+                initial={reduce ? false : { opacity: 0, y: 8, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={reduce ? { opacity: 0 } : { opacity: 0, y: 4, scale: 0.985 }}
+                transition={transition}
+                className="panel-surface relative flex max-h-[min(30rem,70vh)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border-strong shadow-[var(--shadow-panel)]"
+            >
+                <div className="flex items-center gap-3 border-b border-border-subtle px-4">
+                    <Search size={16} className="shrink-0 text-text-muted" aria-hidden />
+                    <input
+                        ref={inputRef}
+                        value={query}
+                        onChange={(event) => {
+                            setQuery(event.target.value);
+                            // A new search means a new best match, so selection
+                            // returns to the top rather than to whatever row the
+                            // previous query happened to leave it on.
+                            setActive(0);
+                        }}
+                        placeholder="Search commands"
+                        spellCheck={false}
+                        autoComplete="off"
+                        role="combobox"
+                        aria-expanded="true"
+                        aria-controls={listId}
+                        aria-autocomplete="list"
+                        aria-label="Search commands"
+                        aria-activedescendant={
+                            activeCommand === undefined ? undefined : rowId(activeCommand.id)
+                        }
+                        className="h-12 min-w-0 flex-1 bg-transparent text-[14px] text-text-primary placeholder:text-text-muted focus:outline-none"
                     />
+                    <kbd className="hidden shrink-0 rounded border border-border-subtle px-1.5 py-0.5 font-mono text-[10px] text-text-muted sm:block">
+                        esc
+                    </kbd>
+                </div>
 
-                    <motion.div
-                        role="dialog"
-                        aria-modal="true"
-                        aria-label="Command palette"
-                        onKeyDown={onKeyDown}
-                        initial={reduce ? false : { opacity: 0, y: 8, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={reduce ? { opacity: 0 } : { opacity: 0, y: 4, scale: 0.985 }}
-                        transition={transition}
-                        className="panel-surface relative flex max-h-[min(30rem,70vh)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-border-strong shadow-[var(--shadow-panel)]"
-                    >
-                        <div className="flex items-center gap-3 border-b border-border-subtle px-4">
-                            <Search size={16} className="shrink-0 text-text-muted" aria-hidden />
-                            <input
-                                ref={inputRef}
-                                value={query}
-                                onChange={(event) => setQuery(event.target.value)}
-                                placeholder="Search commands"
-                                spellCheck={false}
-                                autoComplete="off"
-                                role="combobox"
-                                aria-expanded="true"
-                                aria-controls={listId}
-                                aria-autocomplete="list"
-                                aria-label="Search commands"
-                                aria-activedescendant={
-                                    activeCommand === undefined ? undefined : rowId(activeCommand.id)
-                                }
-                                className="h-12 min-w-0 flex-1 bg-transparent text-[14px] text-text-primary placeholder:text-text-muted focus:outline-none"
-                            />
-                            <kbd className="hidden shrink-0 rounded border border-border-subtle px-1.5 py-0.5 font-mono text-[10px] text-text-muted sm:block">
-                                esc
-                            </kbd>
-                        </div>
+                <div
+                    id={listId}
+                    role="listbox"
+                    aria-label="Commands"
+                    className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2"
+                >
+                    {groups.length === 0 ? (
+                        <p className="px-3 py-10 text-center text-[13px] leading-relaxed text-text-muted">
+                            Nothing matches {'“'}
+                            <span className="text-text-secondary">{query.trim()}</span>
+                            {'”'}. Try a shorter word.
+                        </p>
+                    ) : (
+                        groups.map((group) => {
+                            const headingId = `${baseId}-group-${group.name}`;
+                            return (
+                                <div key={group.name} role="group" aria-labelledby={headingId}>
+                                    <div
+                                        id={headingId}
+                                        className="sticky top-0 z-10 bg-surface-raised px-3 pb-1.5 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-text-muted"
+                                    >
+                                        {group.name}
+                                    </div>
 
-                        <div
-                            id={listId}
-                            role="listbox"
-                            aria-label="Commands"
-                            className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2"
-                        >
-                            {groups.length === 0 ? (
-                                <p className="px-3 py-10 text-center text-[13px] leading-relaxed text-text-muted">
-                                    Nothing matches {'“'}
-                                    <span className="text-text-secondary">{query.trim()}</span>
-                                    {'”'}. Try a shorter word.
-                                </p>
-                            ) : (
-                                groups.map((group) => {
-                                    const headingId = `${baseId}-group-${group.name}`;
-                                    return (
-                                        <div key={group.name} role="group" aria-labelledby={headingId}>
+                                    {group.commands.map((command) => {
+                                        const isDisabled = command.disabled === true;
+                                        const isActive =
+                                            activeCommand !== undefined && activeCommand.id === command.id;
+
+                                        return (
                                             <div
-                                                id={headingId}
-                                                className="sticky top-0 z-10 bg-surface-raised px-3 pb-1.5 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-text-muted"
+                                                key={command.id}
+                                                id={rowId(command.id)}
+                                                role="option"
+                                                aria-selected={isActive}
+                                                aria-disabled={isDisabled || undefined}
+                                                ref={(node) => {
+                                                    if (node === null) rowRefs.current.delete(command.id);
+                                                    else rowRefs.current.set(command.id, node);
+                                                }}
+                                                onMouseMove={() => {
+                                                    if (isDisabled) return;
+                                                    const index = selectable.findIndex(
+                                                        (candidate) => candidate.id === command.id,
+                                                    );
+                                                    if (index !== -1) setActive(index);
+                                                }}
+                                                // Keeps the search field focused, so
+                                                // aria-activedescendant stays the single
+                                                // source of truth for what is selected.
+                                                onMouseDown={(event) => event.preventDefault()}
+                                                onClick={() => run(command)}
+                                                className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors duration-100 ${
+                                                    isDisabled
+                                                        ? 'cursor-not-allowed text-text-muted/70'
+                                                        : isActive
+                                                          ? 'cursor-pointer bg-accent-soft text-text-primary'
+                                                          : 'cursor-pointer text-text-secondary'
+                                                }`}
                                             >
-                                                {group.name}
+                                                <span
+                                                    aria-hidden
+                                                    className={`flex h-4 w-4 shrink-0 items-center justify-center ${
+                                                        isActive && !isDisabled ? 'text-accent' : 'text-text-muted'
+                                                    }`}
+                                                >
+                                                    {command.icon}
+                                                </span>
+
+                                                <span className="min-w-0 flex-1 truncate">{command.label}</span>
+
+                                                {command.hint !== undefined && (
+                                                    <span className="shrink-0 font-mono text-[11px] text-text-muted">
+                                                        {command.hint}
+                                                    </span>
+                                                )}
+
+                                                {isActive && !isDisabled && (
+                                                    <CornerDownLeft
+                                                        size={13}
+                                                        aria-hidden
+                                                        className="shrink-0 text-accent"
+                                                    />
+                                                )}
                                             </div>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
 
-                                            {group.commands.map((command) => {
-                                                const isDisabled = command.disabled === true;
-                                                const isActive =
-                                                    activeCommand !== undefined && activeCommand.id === command.id;
-
-                                                return (
-                                                    <div
-                                                        key={command.id}
-                                                        id={rowId(command.id)}
-                                                        role="option"
-                                                        aria-selected={isActive}
-                                                        aria-disabled={isDisabled || undefined}
-                                                        ref={(node) => {
-                                                            if (node === null) rowRefs.current.delete(command.id);
-                                                            else rowRefs.current.set(command.id, node);
-                                                        }}
-                                                        onMouseMove={() => {
-                                                            if (isDisabled) return;
-                                                            const index = selectable.findIndex(
-                                                                (candidate) => candidate.id === command.id,
-                                                            );
-                                                            if (index !== -1) setActive(index);
-                                                        }}
-                                                        // Keeps the search field focused, so
-                                                        // aria-activedescendant stays the single source
-                                                        // of truth for what is selected.
-                                                        onMouseDown={(event) => event.preventDefault()}
-                                                        onClick={() => run(command)}
-                                                        className={`flex items-center gap-3 rounded-lg px-3 py-2 text-[13px] transition-colors duration-100 ${
-                                                            isDisabled
-                                                                ? 'cursor-not-allowed text-text-muted/70'
-                                                                : isActive
-                                                                  ? 'cursor-pointer bg-accent-soft text-text-primary'
-                                                                  : 'cursor-pointer text-text-secondary'
-                                                        }`}
-                                                    >
-                                                        <span
-                                                            aria-hidden
-                                                            className={`flex h-4 w-4 shrink-0 items-center justify-center ${
-                                                                isActive && !isDisabled ? 'text-accent' : 'text-text-muted'
-                                                            }`}
-                                                        >
-                                                            {command.icon}
-                                                        </span>
-
-                                                        <span className="min-w-0 flex-1 truncate">{command.label}</span>
-
-                                                        {command.hint !== undefined && (
-                                                            <span className="shrink-0 font-mono text-[11px] text-text-muted">
-                                                                {command.hint}
-                                                            </span>
-                                                        )}
-
-                                                        {isActive && !isDisabled && (
-                                                            <CornerDownLeft
-                                                                size={13}
-                                                                aria-hidden
-                                                                className="shrink-0 text-accent"
-                                                            />
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    );
-                                })
-                            )}
-                        </div>
-
-                        <div className="flex items-center gap-4 border-t border-border-subtle px-4 py-2.5 text-[11px] text-text-muted">
-                            <span className="flex items-center gap-1.5">
-                                <kbd className="rounded border border-border-subtle px-1 font-mono">{'↑'}</kbd>
-                                <kbd className="rounded border border-border-subtle px-1 font-mono">{'↓'}</kbd>
-                                to move
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                                <kbd className="rounded border border-border-subtle px-1 font-mono">
-                                    {'↵'}
-                                </kbd>
-                                to run
-                            </span>
-                            <span className="ml-auto tabular-nums">
-                                {selectable.length} command{selectable.length === 1 ? '' : 's'}
-                            </span>
-                        </div>
-                    </motion.div>
-                </motion.div>
-            )}
-        </AnimatePresence>
+                <div className="flex items-center gap-4 border-t border-border-subtle px-4 py-2.5 text-[11px] text-text-muted">
+                    <span className="flex items-center gap-1.5">
+                        <kbd className="rounded border border-border-subtle px-1 font-mono">{'↑'}</kbd>
+                        <kbd className="rounded border border-border-subtle px-1 font-mono">{'↓'}</kbd>
+                        to move
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                        <kbd className="rounded border border-border-subtle px-1 font-mono">{'↵'}</kbd>
+                        to run
+                    </span>
+                    <span className="ml-auto tabular-nums">
+                        {selectable.length} command{selectable.length === 1 ? '' : 's'}
+                    </span>
+                </div>
+            </motion.div>
+        </motion.div>
     );
 }

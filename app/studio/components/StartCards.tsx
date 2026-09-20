@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useSyncExternalStore } from 'react';
 import { ArrowUpRight, Boxes, Github, Sparkles } from 'lucide-react';
 
 /**
@@ -35,6 +35,19 @@ export interface StartCardsProps {
 
 const CARD_CLASS =
     'group relative flex h-full flex-col items-start gap-3 rounded-2xl border border-border-subtle bg-surface-base p-5 text-left transition-[transform,box-shadow,border-color] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-panel)] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none motion-reduce:hover:translate-y-0';
+
+/**
+ * Which modifier key to print in the palette hint.
+ *
+ * The platform is only knowable on the client, so this is read through
+ * useSyncExternalStore rather than corrected from an effect: the server
+ * snapshot is what renders during hydration and the client snapshot replaces
+ * it in the same commit, with no mismatch and no second paint of the wrong key.
+ * The platform never changes mid-session, so there is nothing to subscribe to.
+ */
+const subscribeToPlatform = () => () => {};
+const readModifier = () => (/mac/i.test(navigator.userAgent) ? '⌘' : 'Ctrl ');
+const serverModifier = () => '⌘';
 
 interface CardBody {
     icon: React.ReactNode;
@@ -78,14 +91,7 @@ export function StartCards({
     githubConnected,
     connectUrl,
 }: StartCardsProps) {
-    // Rendered as the Mac symbol first so server and client agree, then
-    // corrected once the platform is knowable. Showing the wrong key for one
-    // frame beats showing a hydration mismatch or nothing at all.
-    const [modifier, setModifier] = useState('⌘');
-
-    useEffect(() => {
-        if (!/mac/i.test(navigator.userAgent)) setModifier('Ctrl ');
-    }, []);
+    const modifier = useSyncExternalStore(subscribeToPlatform, readModifier, serverModifier);
 
     const needsInstall = !githubConnected && connectUrl !== undefined;
 

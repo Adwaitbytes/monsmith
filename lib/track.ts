@@ -12,7 +12,7 @@ const VISITOR_KEY = "monsmith.visitor";
  * the totals become meaningless. It is random and carries no personal data; a
  * wallet address is attached separately only once the user connects one.
  */
-function visitorId(): string {
+export function visitorId(): string {
   if (typeof window === "undefined") return "";
 
   let id = window.localStorage.getItem(VISITOR_KEY);

@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion, type Transition } from 'framer-motion';
 import { Check, LogOut, Moon, Sun, User, Wallet } from 'lucide-react';
 
-import { AuthControls } from '../AuthControls';
+import { AuthControls } from '../../AuthControls';
 
 /**
  * Everything the top bar used to spend permanent width on.

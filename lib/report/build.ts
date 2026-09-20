@@ -505,7 +505,7 @@ function planContracts(files: Record<string, string>, cap: number): Plan {
 
     if (oversized > 0) {
         notes.push(
-            `${plural(oversized, 'file')} above ${Math.round(MAX_FILE_BYTES / 1024)} KB were not audited, because a source that large cannot be compiled and traced inside the per-contract time budget.`,
+            `${plural(oversized, 'file')} above ${Math.round(MAX_FILE_BYTES / 1024)} KB ${oversized === 1 ? 'was' : 'were'} not audited, because a source that large cannot be compiled and traced inside the per-contract time budget.`,
         );
     }
 
@@ -526,7 +526,7 @@ function planContracts(files: Record<string, string>, cap: number): Plan {
         planned = auditable.filter((contract) => kept.has(contract.id));
 
         notes.push(
-            `${plural(auditable.length - cap, 'contract')} of ${auditable.length} were not audited, because this report is capped at ${cap}. The ones kept are the largest by number of public and external functions.`,
+            `${plural(auditable.length - cap, 'contract')} of ${auditable.length} ${auditable.length - cap === 1 ? 'was' : 'were'} not audited, because this report is capped at ${cap}. The ones kept are the largest by number of public and external functions.`,
         );
     }
 

@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { AlertTriangle, Check, Loader2, Lock } from 'lucide-react';
 
 import type { LockedSummary } from '@/lib/report/redact';
@@ -69,7 +70,7 @@ function stateOf(report: RepoReport, unlocking: boolean, error: string | null | 
     return 'locked';
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children }: { children: ReactNode }) {
     return (
         <section
             aria-labelledby="report-unlock-heading"
