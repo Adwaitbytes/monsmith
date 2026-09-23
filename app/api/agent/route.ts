@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { verifyPayment, settlePayment } from "../../../lib/q402";
+import { paywallEnabled } from "@/lib/report/entitlement";
 import { createWalletClient, createPublicClient, http, defineChain, getAddress, parseEther, isAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { compileForDeploy, type ProjectInput } from "@/lib/solc/compile";
@@ -237,7 +238,19 @@ export async function POST(req: Request) {
         // Only the LLM-backed actions need a model provider. compile/deploy/transfer
         // run entirely on solc and viem, so they must stay available without one.
         const AI_ACTIONS = ["research", "generate", "architect", "audit", "explain_error"];
-        const PAID_ACTIONS = ["audit", "deploy"];
+        /*
+         * What costs money, and when.
+         *
+         * This charged for `audit` unconditionally while `/api/report` ran a
+         * strictly deeper audit for free: security, gas, parallel fitness, a
+         * chain comparison and a threat model, with no wallet at all. Two
+         * audits under two rules, and the one behind the paywall was the worse
+         * of them. Whatever the pricing turns out to be, it cannot be that.
+         *
+         * Both now answer to the same switch, so turning the paywall on turns
+         * it on everywhere rather than in whichever route remembered.
+         */
+        const PAID_ACTIONS = paywallEnabled() ? ["audit", "deploy"] : ["deploy"];
         const aiAvailable = hasAIProvider();
         if (AI_ACTIONS.includes(action) && !aiAvailable) {
             return NextResponse.json({
