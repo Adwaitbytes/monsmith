@@ -348,8 +348,9 @@ export default function StudioPage() {
     const params = new URLSearchParams(window.location.search);
     const returnedFrom = params.get("github");
     const repo = params.get("repo");
+    const address = params.get("address");
 
-    if (returnedFrom !== null || repo !== null) {
+    if (returnedFrom !== null || repo !== null || address !== null) {
       // The parameters have been consumed, and leaving them in the URL would
       // re-trigger this on every reload.
       window.history.replaceState({}, "", window.location.pathname);
@@ -367,6 +368,10 @@ export default function StudioPage() {
     }
     if (repo !== null) {
       void loadRepo({ url: repo });
+      return;
+    }
+    if (address !== null) {
+      void loadAddress(address, params.get("chain") ?? "ethereum");
       return;
     }
 
@@ -1549,6 +1554,72 @@ Be concise but thorough. Format your response with markdown for readability.`;
     [github, addFiles, addConsoleOutput, report],
   );
 
+  /**
+   * Brings a deployed contract in by address, then audits it.
+   *
+   * The same shape as the repository import on purpose: fetch the source,
+   * drop it in the workspace, run the report. A reader should not be able to
+   * tell from the result whether the contract arrived from GitHub or from a
+   * chain, because for the purposes of auditing it there is no difference.
+   */
+  const loadAddress = useCallback(
+    async (address: string, network = "ethereum") => {
+      addConsoleOutput(`Looking up ${address.slice(0, 10)}…${address.slice(-6)}`);
+
+      try {
+        const response = await fetch("/api/contract-source", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address, network }),
+        });
+        const data = (await response.json()) as {
+          files?: Record<string, string>;
+          name?: string;
+          chainId?: number;
+          isProxy?: boolean;
+          implementationAddress?: string | null;
+          sourceProvider?: string;
+          error?: string;
+        };
+
+        if (!response.ok || data.files === undefined) {
+          addConsoleOutput(data.error ?? "That contract could not be loaded.");
+          return;
+        }
+
+        addFiles(data.files);
+        const origin: ReportOrigin = {
+          kind: "address",
+          address,
+          chainId: data.chainId ?? 1,
+        };
+        setRepoOrigin(origin);
+        setRepoLabel(data.name ?? address.slice(0, 10));
+        setShowStart(false);
+
+        addConsoleOutput(
+          `Loaded ${data.name ?? "the contract"} from ${data.sourceProvider ?? "the explorer"}.`,
+        );
+        if (data.isProxy === true) {
+          // A clean report on twenty lines of forwarding logic is worse than
+          // no report, because it reads as a verdict on the thing behind it.
+          addConsoleOutput(
+            `This is a proxy. What you are about to audit is the forwarder, not the logic it points at${
+              data.implementationAddress !== null && data.implementationAddress !== undefined
+                ? ` (${data.implementationAddress})`
+                : ""
+            }.`,
+          );
+        }
+
+        void report.run({ files: solidityFiles(data.files), origin });
+      } catch {
+        addConsoleOutput("Could not reach the explorer just now.");
+      }
+    },
+    [addFiles, addConsoleOutput, report],
+  );
+
   const handleOmnibox = useCallback(
     (intent: OmniboxIntent) => {
       if (intent.kind === "repo") {
@@ -1560,10 +1631,10 @@ Be concise but thorough. Format your response with markdown for readability.`;
         return;
       }
       if (intent.kind === "address") {
-        setRepoOrigin({ kind: "address", address: intent.address, chainId: 1 });
-        // Set the view directly rather than through the toggling helper: this
-        // has already decided, and a helper that also closes would undo it.
-        setActiveView("migration");
+        // Audit it, rather than opening the migration wizard. Pasting an
+        // address into a field that offers an audit is a request for an audit;
+        // migrating it is a different question nobody asked here.
+        void loadAddress(intent.address);
         return;
       }
       const name = `contracts/Pasted${Date.now()}.sol`;
@@ -1571,7 +1642,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
       setShowStart(false);
       addConsoleOutput(`Added ${name}`);
     },
-    [loadRepo, addFiles, addConsoleOutput],
+    [loadRepo, loadAddress, addFiles, addConsoleOutput],
   );
 
   const handleRepoPick = (repo: RepoSummary) => {
