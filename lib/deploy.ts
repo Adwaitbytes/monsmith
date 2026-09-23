@@ -8,6 +8,7 @@ import {
   formatEther,
   type Abi,
   type Address,
+  type Chain,
   type Hash,
 } from "viem";
 import { getEthereumProvider, isProviderRpcError } from "./ethereum";
@@ -23,6 +24,23 @@ export const monadTestnet = defineChain({
     default: { name: "Monad Explorer", url: "https://testnet.monadexplorer.com" },
   },
 });
+
+export const monadMainnet = defineChain({
+  id: 143,
+  name: "Monad",
+  nativeCurrency: { name: "Monad", symbol: "MON", decimals: 18 },
+  rpcUrls: { default: { http: ["https://rpc.monad.xyz"] } },
+  blockExplorers: {
+    default: { name: "Monad Explorer", url: "https://monadexplorer.com" },
+  },
+});
+
+export type MonadNetwork = "testnet" | "mainnet";
+
+export const MONAD_CHAINS = {
+  testnet: monadTestnet,
+  mainnet: monadMainnet,
+} as const;
 
 /** MetaMask's "chain not added to wallet" error code. */
 const CHAIN_NOT_ADDED = 4902;
@@ -73,11 +91,25 @@ export interface DeployResult {
   explorerUrl: string;
 }
 
-async function ensureMonadTestnet(): Promise<void> {
+/**
+ * Puts the wallet on the network the studio is set to.
+ *
+ * This used to force testnet regardless, which meant the network selector was
+ * decorative for deploys: choosing mainnet turned the status bar red, said
+ * "Monad mainnet", and then silently switched the wallet to testnet and
+ * deployed there. That is the exact mistake the status bar exists to prevent,
+ * committed by the code behind it.
+ *
+ * Worth being blunt about the direction of the risk. Sending a mainnet deploy
+ * to testnet wastes a few seconds. The reverse would spend real money, and a
+ * function that quietly picks a chain for you can do either.
+ */
+async function ensureNetwork(network: MonadNetwork): Promise<void> {
   const ethereum = getEthereumProvider();
   if (!ethereum) throw new Error("No wallet detected. Install MetaMask to deploy.");
 
-  const target = `0x${monadTestnet.id.toString(16)}`;
+  const chain = MONAD_CHAINS[network];
+  const target = `0x${chain.id.toString(16)}`;
   const current = await ethereum.request<string>({ method: "eth_chainId" });
   if (current === target) return;
 
@@ -95,10 +127,10 @@ async function ensureMonadTestnet(): Promise<void> {
     method: "wallet_addEthereumChain",
     params: [{
       chainId: target,
-      chainName: monadTestnet.name,
-      nativeCurrency: monadTestnet.nativeCurrency,
-      rpcUrls: [...monadTestnet.rpcUrls.default.http],
-      blockExplorerUrls: [monadTestnet.blockExplorers.default.url],
+      chainName: chain.name,
+      nativeCurrency: chain.nativeCurrency,
+      rpcUrls: [...chain.rpcUrls.default.http],
+      blockExplorerUrls: [chain.blockExplorers.default.url],
     }],
   });
 }
@@ -128,6 +160,8 @@ async function deployLibraries(
     walletClient: ReturnType<typeof createWalletClient>;
     publicClient: ReturnType<typeof createPublicClient>;
     account: Address;
+    /** The same chain the main deploy targets, so a library cannot land elsewhere. */
+    chain: Chain;
   },
   bytecode: string,
   linkReferences: LinkReferences | undefined,
@@ -156,7 +190,7 @@ async function deployLibraries(
         abi: [],
         bytecode: hex,
         account: clients.account,
-        chain: monadTestnet,
+        chain: clients.chain,
       });
     } catch (error) {
       if (isProviderRpcError(error) && error.code === USER_REJECTED) {
@@ -202,6 +236,14 @@ export interface DeployOptions {
   libraries?: DeployLibrary[];
   /** Called before each wallet prompt, so a multi-step deploy is not silent. */
   onStep?: (message: string) => void;
+  /**
+   * Which Monad to deploy to.
+   *
+   * Absent means testnet. The default is deliberate: a caller that forgets to
+   * say should land on the network where a mistake costs seconds rather than
+   * money.
+   */
+  network?: MonadNetwork;
 }
 
 export async function deployFromWallet(
@@ -210,15 +252,25 @@ export async function deployFromWallet(
   account: Address,
   options: DeployOptions = {}
 ): Promise<DeployResult> {
-  const { args = [], value = 0n, linkReferences, libraries = [], onStep } = options;
+  const {
+    args = [],
+    value = 0n,
+    linkReferences,
+    libraries = [],
+    onStep,
+    // Defaults to testnet, which is the safe direction for a caller that
+    // forgets to say: the cost of a wasted testnet deploy is seconds.
+    network = "testnet",
+  } = options;
   const ethereum = getEthereumProvider();
   if (!ethereum) throw new Error("No wallet detected. Install MetaMask to deploy.");
 
-  await ensureMonadTestnet();
+  await ensureNetwork(network);
 
   const transport = custom(ethereum);
-  const walletClient = createWalletClient({ account, chain: monadTestnet, transport });
-  const publicClient = createPublicClient({ chain: monadTestnet, transport });
+  const chain = MONAD_CHAINS[network];
+  const walletClient = createWalletClient({ account, chain, transport });
+  const publicClient = createPublicClient({ chain, transport });
 
   const balance = await publicClient.getBalance({ address: account });
   if (balance === 0n) {
@@ -239,7 +291,7 @@ export async function deployFromWallet(
   // Deploying that unpatched does not fail loudly, it puts the placeholder text
   // on chain where those bytes are read as instructions.
   const linked = await deployLibraries(
-    { walletClient, publicClient, account },
+    { walletClient, publicClient, account, chain },
     bytecode,
     linkReferences,
     libraries,

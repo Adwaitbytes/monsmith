@@ -771,6 +771,10 @@ export default function StudioPage() {
           value,
           linkReferences: compileResult.linkReferences,
           libraries: compileResult.libraries,
+          // The network the status bar has been showing all along. Without
+          // this the deploy forced testnet regardless, so choosing mainnet
+          // turned the bar red and then quietly deployed somewhere else.
+          network,
           onStep: addConsoleOutput,
         }
       );

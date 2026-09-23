@@ -21,7 +21,10 @@ const monadTestnet = defineChain({
 });
 
 const monadMainnet = defineChain({
-  id: 10143, // Update when mainnet launches
+  // Was 10143, the testnet id, carried over from a copy of the block above with
+  // a note to fix it later. A signature verified against the wrong chain id is
+  // valid on a chain the payer did not agree to, so this is not cosmetic.
+  id: 143,
   name: 'Monad Mainnet',
   nativeCurrency: {
     decimals: 18,
