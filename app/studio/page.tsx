@@ -141,7 +141,6 @@ export default function StudioPage() {
     consoleOutput,
     terminalOpen,
     sidebarOpen,
-    aiPanelOpen,
     setCompiling,
     setDeploying,
     setCompileResult,
@@ -197,13 +196,7 @@ export default function StudioPage() {
   // Researcher Mode State
   const [researchQuery, setResearchQuery] = useState("");
   const [researchHistory, setResearchHistory] = useState<{role: "user" | "assistant", content: string}[]>([]);
-  // Parallel Profiler State
-  const [parallelProfilerOpen, setParallelProfilerOpen] = useState(false);
-  // Migration Tool State
-  const [migrationOpen, setMigrationOpen] = useState(false);
-  const [interactOpen, setInteractOpen] = useState(false);
-  const [gasOpen, setGasOpen] = useState(false);
-  const [chainFitOpen, setChainFitOpen] = useState(false);
+
   // A constructor with parameters cannot be deployed blind; these hold the
   // prompt state until the user supplies them.
   const [ctorInputs, setCtorInputs] = useState<ConstructorInput[]>([]);
@@ -261,44 +254,45 @@ export default function StudioPage() {
    * editor. Showing two at once leaves no room for the code, so opening one
    * closes the others; clicking the active one closes it.
    */
-  const showAIPanel = () => {
-    if (!aiPanelOpen) toggleAIPanel();
-    setParallelProfilerOpen(false);
-    setMigrationOpen(false);
-    setInteractOpen(false);
-    setGasOpen(false);
-    setChainFitOpen(false);
-  };
-
+  /**
+   * One dock, one source of truth.
+   *
+   * There were two. The AI panel, the interaction panel and the migration
+   * wizard each kept their own open flag and coordinated through a helper that
+   * closed the others by hand, while the newer tools went through `activeView`.
+   * Neither mechanism knew about the other, so opening the assistant and then
+   * Chain Fit left both on screen with the editor crushed between them, and no
+   * amount of care in either would have prevented it: the bug was having two.
+   *
+   * `activeView` now decides what occupies the right dock, and every panel
+   * derives its visibility from it. Adding a panel means adding a case here,
+   * which is the point: there is nowhere else to add one.
+   */
   const openSidePanel = (panel: "ai" | "profiler" | "migration" | "interact" | "gas" | "chainfit") => {
-    const aiNext = panel === "ai" ? !aiPanelOpen : false;
+    const id = panel === "profiler" ? "parallel" : panel;
+    setActiveView((current) => (current === id ? null : id));
 
-    if (aiNext !== aiPanelOpen) toggleAIPanel();
-    setParallelProfilerOpen(panel === "profiler" ? !parallelProfilerOpen : false);
-    setMigrationOpen(panel === "migration" ? !migrationOpen : false);
-    setInteractOpen(panel === "interact" ? !interactOpen : false);
-    setGasOpen(panel === "gas" ? !gasOpen : false);
-    setChainFitOpen(panel === "chainfit" ? !chainFitOpen : false);
-
-    // Opening a tool is the clearest signal of what people came for.
-    const opening =
-      (panel === "profiler" && !parallelProfilerOpen) ||
-      (panel === "migration" && !migrationOpen) ||
-      (panel === "gas" && !gasOpen) ||
-      (panel === "chainfit" && !chainFitOpen) ||
-      (panel === "interact" && !interactOpen);
-    if (opening) {
-      const eventFor = {
-        profiler: "parallel_analysis",
-        migration: "migration",
-        gas: "gas_profile",
-        chainfit: "chain_fit",
-        interact: "interact_read",
-        ai: "ai_generate",
-      } as const;
-      track(eventFor[panel], { walletAddress, detail: { opened: true } });
-    }
+    const eventFor = {
+      profiler: "parallel_analysis",
+      migration: "migration",
+      gas: "gas_profile",
+      chainfit: "chain_fit",
+      interact: "interact_read",
+      ai: "ai_generate",
+    } as const;
+    track(eventFor[panel], { walletAddress, detail: { opened: true } });
   };
+
+  /** Opens the assistant without toggling it shut when it is already open. */
+  const showAIPanel = () => setActiveView("ai");
+
+  // Named views, so the JSX still reads as "is this panel open" rather than as
+  // a string comparison repeated a dozen times.
+  const aiPanelOpen = activeView === "ai";
+  const interactOpen = activeView === "interact";
+  const migrationOpen = activeView === "migration";
+  const setInteractOpen = (open: boolean) => setActiveView(open ? "interact" : null);
+  const setMigrationOpen = (open: boolean) => setActiveView(open ? "migration" : null);
 
   // One page view per mount, so visitor counts reflect people rather than renders.
   //
@@ -2721,6 +2715,10 @@ Be concise but thorough. Format your response with markdown for readability.`;
             unlocking={unlocking}
             unlockError={unlockError}
             onRerun={() => runReport()}
+            onClose={() => {
+              setRailOpen(false);
+              setRailForced(false);
+            }}
             onShare={() => {
               if (report.state.status !== "ready") return;
               void navigator.clipboard.writeText(

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Loader2, MinusCircle, Play, RotateCw } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Loader2, MinusCircle, Play, RotateCw, X } from 'lucide-react';
 
 import type { ChainFitReport } from '@/lib/chainfit/report';
 import type { GasProfile } from '@/lib/gasProfiler';
@@ -72,6 +72,14 @@ export interface ReportRailProps {
     onOpenContract?: (contract: ContractReport) => void;
     /** Offered only on a finished report, from inside the report itself. */
     onShare?: () => void;
+    /**
+     * Closes the dock.
+     *
+     * Every other panel had one and this did not, so the only way to reclaim
+     * the space was to find the matching icon in the activity bar. A dock you
+     * cannot close from inside is a dock people leave open and resent.
+     */
+    onClose?: () => void;
 }
 
 // ============= SMALL FORMATTERS =============
@@ -1027,12 +1035,24 @@ export function ReportRail({
     onRerun,
     onOpenContract,
     onShare,
+    onClose,
 }: ReportRailProps) {
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const report = state.status === 'ready' ? state.report : state.status === 'running' ? state.partial : null;
 
     return (
-        <aside aria-label="Contract report" className="flex h-full flex-col panel-surface">
+        <aside aria-label="Contract report" className="relative flex h-full flex-col panel-surface">
+            {onClose !== undefined && (
+                <button
+                    onClick={onClose}
+                    aria-label="Close the report"
+                    title="Close the report"
+                    className="absolute right-2.5 top-2.5 z-30 grid h-6 w-6 place-items-center rounded-md text-text-muted outline-none ring-accent-line transition-colors hover:bg-border-subtle hover:text-text-primary focus-visible:ring-2"
+                >
+                    <X size={14} />
+                </button>
+            )}
+
             {state.status === 'running' && (
                 <RunProgress done={state.done} total={state.total} label={state.label} />
             )}

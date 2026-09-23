@@ -387,7 +387,10 @@ contract MyContract {
             <button
               onClick={analyzeContract}
               disabled={loading || (inputMode === 'address' && !address) || (inputMode === 'code' && !pastedCode)}
-              className="w-full py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 disabled:cursor-not-allowed rounded-lg font-medium transition-all"
+              /* A disabled button should read as unavailable, not as a filled
+                 dark one. The gradient also survived the move to tokens and was
+                 the last place a second colour system was still visible. */
+              className="w-full rounded-lg py-3 text-sm font-semibold outline-none ring-accent-line transition-colors focus-visible:ring-2 enabled:bg-accent enabled:text-white enabled:hover:opacity-90 disabled:cursor-not-allowed disabled:border disabled:border-border-subtle disabled:bg-transparent disabled:text-text-muted"
             >
               Analyze for Monad Migration
             </button>
@@ -614,7 +617,7 @@ contract MyContract {
               </button>
               <button
                 onClick={handleImportMigrated}
-                className="flex-1 py-2.5 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 rounded-lg font-medium transition-all flex items-center justify-center gap-2"
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-accent py-2.5 text-sm font-semibold text-white outline-none ring-accent-line transition-opacity hover:opacity-90 focus-visible:ring-2"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
