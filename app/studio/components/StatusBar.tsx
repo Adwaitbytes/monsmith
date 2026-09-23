@@ -25,6 +25,10 @@ export interface StatusBarProps {
     onNetworkClick: () => void;
     wallet: string | null;
     onWalletClick: () => void;
+    /** Formatted MON on the selected network. Null while unknown. */
+    balance?: string | null;
+    /** True when the wallet is connected to a different chain than selected. */
+    wrongNetwork?: boolean;
     /** Errors and warnings from the last compile, and findings from the audit. */
     problems: { errors: number; warnings: number };
     onProblemsClick: () => void;
@@ -85,6 +89,8 @@ export function StatusBar({
     onNetworkClick,
     wallet,
     onWalletClick,
+    balance,
+    wrongNetwork = false,
     problems,
     onProblemsClick,
     compileState,
@@ -141,6 +147,24 @@ export function StatusBar({
 
                 {solcVersion !== undefined && solcVersion.length > 0 && (
                     <Item title="Compiler resolved from the pragma">solc {solcVersion}</Item>
+                )}
+
+                {/*
+                  The balance sits next to the address because the question is
+                  always "can this wallet pay for what I am about to do", and
+                  answering it after the signing dialog fails is too late.
+                */}
+                {wallet !== null && (wrongNetwork || balance !== null) && (
+                    <Item
+                        title={
+                            wrongNetwork
+                                ? 'Your wallet is on a different network than the studio is set to'
+                                : 'Balance on the selected network'
+                        }
+                        tone={wrongNetwork ? 'alert' : 'plain'}
+                    >
+                        {wrongNetwork ? 'Wrong network' : `${balance} MON`}
+                    </Item>
                 )}
 
                 <Item

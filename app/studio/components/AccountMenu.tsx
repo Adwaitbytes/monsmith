@@ -39,6 +39,15 @@ export interface AccountMenuProps {
     onLanguageChange: (language: StudioLanguage) => void;
     /** Checksummed address, or null when no wallet is attached. */
     wallet: string | null;
+    /**
+     * Formatted MON on the selected network.
+     *
+     * Shown beside the address because the only question anyone opens this menu
+     * with a wallet connected to ask is whether it can pay for a deploy.
+     */
+    balance?: string | null;
+    /** True when the wallet sits on a different chain than the one selected. */
+    wrongNetwork?: boolean;
     onConnectWallet: () => void;
     onDisconnectWallet: () => void;
 }
@@ -139,6 +148,8 @@ export function AccountMenu({
     language,
     onLanguageChange,
     wallet,
+    balance = null,
+    wrongNetwork = false,
     onConnectWallet,
     onDisconnectWallet,
 }: AccountMenuProps) {
@@ -341,11 +352,24 @@ export function AccountMenu({
                                             aria-hidden
                                             className="shrink-0 text-[var(--contention-parallel)]"
                                         />
-                                        <span
-                                            title={wallet}
-                                            className="truncate font-mono text-[12px] text-text-primary"
-                                        >
-                                            {short}
+                                        <span className="min-w-0">
+                                            <span
+                                                title={wallet}
+                                                className="block truncate font-mono text-[12px] text-text-primary"
+                                            >
+                                                {short}
+                                            </span>
+                                            {wrongNetwork ? (
+                                                <span className="block text-[10.5px] text-[var(--contention-serial)]">
+                                                    Wallet is on another network
+                                                </span>
+                                            ) : (
+                                                balance !== null && (
+                                                    <span className="block text-[10.5px] tabular-nums text-text-muted">
+                                                        {balance} MON on {network}
+                                                    </span>
+                                                )
+                                            )}
                                         </span>
                                     </span>
                                     <button

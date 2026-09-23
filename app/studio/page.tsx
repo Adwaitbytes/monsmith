@@ -37,6 +37,8 @@ import { useThemeStore, useUserStore, useIDEStore } from "@/lib/store";
 import { basenameOf, seedWorkspace, solidityFiles, useWorkspace } from "@/lib/workspace";
 import { FileExplorer } from "./components/FileExplorer";
 import { useHydrated } from "@/lib/useHydrated";
+import { useNarrowViewport } from "@/lib/useNarrowViewport";
+import { useBalance } from "@/lib/useBalance";
 import { useResizable } from "@/lib/useResizable";
 import { ResizeHandle } from "./components/ResizeHandle";
 import type { QuickActionType } from "@/lib/supabase";
@@ -230,6 +232,11 @@ export default function StudioPage() {
   const [activeView, setActiveView] = useState<string | null>("explorer");
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [railOpen, setRailOpen] = useState(true);
+  // Below this width the editor is at its floor, so the right dock stands down
+  // unless it was opened deliberately.
+  const narrow = useNarrowViewport();
+  const balance = useBalance(walletAddress, network);
+  const [railForced, setRailForced] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [repoOrigin, setRepoOrigin] = useState<ReportOrigin>({ kind: "workspace" });
@@ -1728,6 +1735,9 @@ Be concise but thorough. Format your response with markdown for readability.`;
     }
     if (id === "report") {
       setRailOpen((open) => !open);
+      // An explicit toggle outranks the narrow-screen default, in both
+      // directions: asking for the report on a small screen should get it.
+      setRailForced(true);
       setActiveView("report");
       return;
     }
@@ -1846,6 +1856,8 @@ Be concise but thorough. Format your response with markdown for readability.`;
             language={language}
             onLanguageChange={handleLanguageSwitch}
             wallet={walletAddress}
+            balance={balance.formatted}
+            wrongNetwork={balance.wrongNetwork}
             onConnectWallet={connectWallet}
             onDisconnectWallet={() => {
               disconnect();
@@ -2016,13 +2028,23 @@ Be concise but thorough. Format your response with markdown for readability.`;
               <div className="h-8 px-4 flex items-center justify-between border-b border-white/5">
                 <div className="flex items-center gap-2">
                   <Terminal size={14} className="text-green-500" />
-                  <span className="text-xs font-mono text-gray-400">Terminal</span>
+                  <span className="font-mono text-xs text-text-muted">Terminal</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button onClick={clearConsole} className="text-gray-500 hover:text-white">
+                  <button
+                    onClick={clearConsole}
+                    aria-label="Clear the console"
+                    title="Clear the console"
+                    className="rounded p-0.5 text-text-muted outline-none ring-accent-line transition-colors hover:text-text-primary focus-visible:ring-2"
+                  >
                     <RefreshCw size={12} />
                   </button>
-                  <button onClick={toggleTerminal} className="text-gray-500 hover:text-white">
+                  <button
+                    onClick={toggleTerminal}
+                    aria-label="Close the console"
+                    title="Close the console"
+                    className="rounded p-0.5 text-text-muted outline-none ring-accent-line transition-colors hover:text-text-primary focus-visible:ring-2"
+                  >
                     <X size={12} />
                   </button>
                 </div>
@@ -2064,7 +2086,11 @@ Be concise but thorough. Format your response with markdown for readability.`;
                     <Brain className="text-purple-500" size={18} />
                     <span className="font-bold text-sm">AI Assistant</span>
                   </div>
-                  <button onClick={toggleAIPanel} className="text-gray-500 hover:text-white p-1">
+                  <button
+                    onClick={toggleAIPanel}
+                    aria-label="Close the AI panel"
+                    className="rounded p-1 text-text-muted outline-none ring-accent-line transition-colors hover:text-text-primary focus-visible:ring-2"
+                  >
                     <X size={16} />
                   </button>
                 </div>
@@ -2673,7 +2699,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
           reason, and a tool that measures the open file is not useful beside a
           summary of the same measurement anyway.
         */}
-        {railOpen && toolPanel === null && (
+        {railOpen && toolPanel === null && (!narrow || railForced) && (
           <>
         <ResizeHandle
           edge="left"
@@ -2878,6 +2904,8 @@ Be concise but thorough. Format your response with markdown for readability.`;
         onNetworkClick={() => setNetwork(network === "testnet" ? "mainnet" : "testnet")}
         wallet={walletAddress}
         onWalletClick={() => (isConnected ? disconnect() : void connectWallet())}
+        balance={balance.formatted}
+        wrongNetwork={balance.wrongNetwork}
         problems={problemCounts}
         onProblemsClick={() => setActiveView("report")}
         compileState={compileState}
