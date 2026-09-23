@@ -40,6 +40,7 @@ import {
 import { compileVersioned } from '../solc/compile';
 import {
     CONTRACT_BUDGET_MS,
+    CONTRACTS_PER_RUN,
     countBySeverity,
     emptyCounts,
     gradeFor,
@@ -527,7 +528,7 @@ function planContracts(files: Record<string, string>, cap: number): Plan {
         planned = auditable.filter((contract) => kept.has(contract.id));
 
         notes.push(
-            `${plural(auditable.length - cap, 'contract')} of ${auditable.length} ${auditable.length - cap === 1 ? 'was' : 'were'} not audited, because this report is capped at ${cap}. The ones kept are the largest by number of public and external functions.`,
+            `${plural(auditable.length - cap, 'contract')} of ${auditable.length} ${auditable.length - cap === 1 ? 'was' : 'were'} not audited. One run audits at most ${cap}, because a full audit takes about twenty seconds a contract and the request has a hard time limit. The ones kept are the largest by number of public and external functions.`,
         );
     }
 
@@ -674,10 +675,40 @@ function selectChains(chains: string[] | undefined): ChainId[] | undefined {
     return known.length > 0 ? known : undefined;
 }
 
+/**
+ * The repository's score, which is its worst contract's.
+ *
+ * Extracted so the running snapshot and the finished report cannot disagree.
+ * Two copies of a rollup is how a partial report ends up claiming a grade the
+ * final one contradicts.
+ */
+function healthAcross(contracts: readonly ContractReport[]): Health | null {
+    const scores = contracts
+        .map((contract) => contract.health)
+        .filter((entry): entry is Health => entry !== null)
+        .map((entry) => entry.score);
+
+    if (scores.length === 0) return null;
+
+    const worst = Math.min(...scores);
+    return {
+        score: worst,
+        grade: gradeFor(worst),
+        headline:
+            contracts.length === 1
+                ? `This contract scores ${worst} out of 100.`
+                : `The weakest of ${plural(contracts.length, 'audited contract')} scores ${worst} out of 100.`,
+    };
+}
+
 export async function* buildRepoReport(input: BuildInput): AsyncGenerator<ReportEvent> {
     const reportId = crypto.randomUUID();
     const createdAt = new Date().toISOString();
-    const { planned, skipped, notes } = planContracts(input.files, input.cap);
+    // The tier says what someone is entitled to; the wall clock says what one
+    // request can deliver. Taking the smaller of the two is what stops a Pro
+    // report from dying at the ceiling with most of the repository unmeasured.
+    const effectiveCap = Math.min(input.cap, CONTRACTS_PER_RUN);
+    const { planned, skipped, notes } = planContracts(input.files, effectiveCap);
     const chains = selectChains(input.chains);
 
     yield {
@@ -821,31 +852,31 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
             done: index + 1,
             total: planned.length,
             label: `Measured ${path}`,
+            // Everything finished so far, so a run that is cut off still leaves
+            // a readable report behind at the id the client was already given.
+            snapshot: {
+                reportId,
+                createdAt,
+                origin: input.origin,
+                health: healthAcross(contracts),
+                counts,
+                contracts: [...contracts],
+                skipped,
+                notes: [
+                    ...notes,
+                    'This report was still running when it was saved, so some contracts may be missing.',
+                ],
+                redacted: false,
+            },
         };
         yield { type: 'contract', contract: report };
     }
 
-    const scores = contracts
-        .map((contract) => contract.health)
-        .filter((health): health is Health => health !== null)
-        .map((health) => health.score);
-
-    let health: Health | null = null;
-    if (scores.length > 0) {
-        const worst = Math.min(...scores);
-        health = {
-            score: worst,
-            grade: gradeFor(worst),
-            headline:
-                contracts.length === 1
-                    ? `This contract scores ${worst} out of 100.`
-                    : `The weakest of ${plural(contracts.length, 'audited contract')} scores ${worst} out of 100.`,
-        };
-        if (contracts.length > 1) {
-            notes.push(
-                'A repository is only as safe as its worst contract, so the score above is the lowest of the contracts audited rather than their average.',
-            );
-        }
+    const health = healthAcross(contracts);
+    if (health !== null && contracts.length > 1) {
+        notes.push(
+            'A repository is only as safe as its worst contract, so the score above is the lowest of the contracts audited rather than their average.',
+        );
     }
 
     for (const note of auditNotes) notes.push(note);

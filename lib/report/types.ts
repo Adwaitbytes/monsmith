@@ -253,7 +253,15 @@ export type ReportEvent =
     | { type: 'started'; reportId: string; planned: Array<{ id: string; path: string }>; skipped: SkippedContract[] }
     | { type: 'section'; contractId: string; section: SectionKind; result: Section<unknown> }
     | { type: 'contract'; contract: ContractReport }
-    | { type: 'progress'; done: number; total: number; label: string }
+    /**
+     * Carries the report as it stands, so the route can persist partial work.
+     *
+     * A run that hits the platform's wall clock is killed outright. Without a
+     * snapshot the only write happens at `complete`, so everything measured up
+     * to that point is lost and the permalink the client already has points at
+     * nothing. The client can ignore this field; the server cannot afford to.
+     */
+    | { type: 'progress'; done: number; total: number; label: string; snapshot?: RepoReport }
     | { type: 'complete'; report: RepoReport }
     | { type: 'error'; message: string };
 
@@ -268,3 +276,20 @@ export const CONTRACT_CAP: Readonly<Record<'free' | 'pro' | 'enterprise', number
     pro: 50,
     enterprise: 200,
 };
+
+/**
+ * Contracts one request can actually finish, whatever the tier allows.
+ *
+ * A full audit costs roughly twenty seconds a contract: four analyses plus a
+ * threat model, the findings pass, and a second model reviewing them. The
+ * platform kills the request at three hundred seconds. So the paid caps above
+ * were arithmetic that could never run: fifty contracts is about eighteen
+ * minutes of work, and every Pro report would have died at the ceiling with
+ * most of the repository unmeasured.
+ *
+ * The tier caps stay as the entitlement, because that is a pricing decision and
+ * auditing a large repository across several runs is a real answer to it. This
+ * is the engineering one, and the report says plainly when it applies rather
+ * than quietly auditing twelve contracts and calling it a repository.
+ */
+export const CONTRACTS_PER_RUN = 10;

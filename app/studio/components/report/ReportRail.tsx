@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
-import { AlertTriangle, ChevronRight, ExternalLink, Loader2, MinusCircle, Play, RotateCw } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Loader2, MinusCircle, Play, RotateCw } from 'lucide-react';
 
 import type { ChainFitReport } from '@/lib/chainfit/report';
 import type { GasProfile } from '@/lib/gasProfiler';
@@ -634,6 +634,82 @@ function AnalysisSection({
 
 // ============= HEALTH SECTION =============
 
+/**
+ * What the audit went looking for.
+ *
+ * The threat model was being computed and discarded, which was the single
+ * biggest thing wrong with this report: it is the part that separates an audit
+ * from a linter, and nobody could see it. A reader who disagrees with a finding
+ * can now check whether the threat behind it was framed correctly, and a clean
+ * contract reads as "these five things were tested" rather than the much less
+ * useful "nothing found".
+ *
+ * Collapsed by default. It is the most interesting thing here for someone who
+ * wants it and pure noise above the findings for someone who does not.
+ */
+function ThreatModel({ report }: { report: RepoReport }) {
+    const withThreats = asList(report.contracts).filter(
+        (contract) => asList(contract.threats).length > 0,
+    );
+    if (withThreats.length === 0) return null;
+
+    const total = withThreats.reduce(
+        (sum, contract) => sum + asList(contract.threats).length,
+        0,
+    );
+
+    return (
+        <section className="border-b border-border-subtle px-5 py-4">
+            <details className="group">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-2 outline-none ring-accent-line focus-visible:ring-2">
+                    <span className="text-[11px] font-medium uppercase tracking-wider text-text-muted">
+                        Threat model
+                    </span>
+                    <span className="flex items-center gap-1.5 text-[11px] text-text-muted">
+                        {total} tested
+                        <ChevronDown
+                            size={13}
+                            className="transition-transform group-open:rotate-180 motion-reduce:transition-none"
+                        />
+                    </span>
+                </summary>
+
+                <div className="mt-3 space-y-3.5">
+                    {withThreats.map((contract) => (
+                        <div key={contract.id}>
+                            {withThreats.length > 1 && (
+                                <p className="mb-1.5 font-mono text-[10.5px] text-text-muted">
+                                    {contract.name}
+                                </p>
+                            )}
+                            {contract.purpose !== undefined && (
+                                <p className="mb-2.5 text-[12.5px] leading-relaxed text-text-secondary">
+                                    {contract.purpose}
+                                </p>
+                            )}
+                            <ul className="space-y-2">
+                                {asList(contract.threats).map((threat, index) => (
+                                    <li
+                                        key={`${contract.id}:${index}`}
+                                        className="border-l-2 border-border-strong pl-3"
+                                    >
+                                        <p className="text-[12.5px] font-medium text-text-primary">
+                                            {threat.title}
+                                        </p>
+                                        <p className="mt-0.5 text-[12px] leading-relaxed text-text-muted">
+                                            {threat.approach}
+                                        </p>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ))}
+                </div>
+            </details>
+        </section>
+    );
+}
+
 function HealthSection({
     report,
     onOpenContract,
@@ -908,6 +984,8 @@ function ReportDocument({
             />
 
             <HealthSection report={report} onOpenContract={onOpenContract} />
+
+            <ThreatModel report={report} />
 
             {SECTION_KINDS.map((kind) => (
                 <AnalysisSection

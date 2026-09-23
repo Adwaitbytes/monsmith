@@ -146,7 +146,38 @@ export async function POST(request: Request) {
                     if (!open || request.signal.aborted) break;
 
                     if (event.type !== "complete") {
-                        send(event);
+                        /*
+                          Persist as we go, so a run the platform kills still
+                          leaves something at the id the client already holds.
+
+                          Without this the only write happens at `complete`, and
+                          a repository large enough to hit the wall clock lost
+                          every contract it had already measured. Worse, the
+                          client promotes its partial to a finished report and
+                          offers to share it, so the link it hands out points at
+                          a row that was never written. A failure to save is
+                          logged and swallowed: it costs the permalink, not the
+                          report on screen.
+                        */
+                        if (event.type === "progress" && event.snapshot !== undefined) {
+                            try {
+                                await saveReport(event.snapshot, owner);
+                            } catch (error) {
+                                console.error("Partial report persistence failed:", error);
+                            }
+                        }
+                        // The snapshot is for the server. Stripping it keeps a
+                        // full copy of the report off the wire on every tick.
+                        send(
+                            event.type === "progress"
+                                ? {
+                                      type: "progress",
+                                      done: event.done,
+                                      total: event.total,
+                                      label: event.label,
+                                  }
+                                : event,
+                        );
                         continue;
                     }
 
