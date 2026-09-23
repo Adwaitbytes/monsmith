@@ -53,7 +53,7 @@ import { GasProfiler } from "./components/GasProfiler";
 import { ChainFitReport } from "./components/ChainFitReport";
 import { SAMPLE_CONTRACTS } from "../compare/samples";
 import { generateFromTemplate, ARCHITECT_TO_TEMPLATE, CONTRACT_TEMPLATES } from "@/lib/contractTemplates";
-import { track } from "@/lib/track";
+import { track, visitorId } from "@/lib/track";
 import { createPaymentHeader } from "@/utils/q402";
 import { getEthereumProvider } from "@/lib/ethereum";
 import { deployFromWallet, constructorInputs, isConstructorPayable, type ConstructorInput } from "@/lib/deploy";
@@ -1594,7 +1594,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
       const id = report.state.report.reportId;
       const challenge = await fetch(`/api/report/${id}/unlock`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-visitor-id": visitorId() },
         body: JSON.stringify({ userAddress: address, network }),
       });
       const offer = await challenge.json();
@@ -1603,7 +1603,11 @@ Be concise but thorough. Format your response with markdown for readability.`;
         const header = await createPaymentHeader(address, offer.paymentDetails);
         const paid = await fetch(`/api/report/${id}/unlock`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-Payment": header },
+          headers: {
+            "Content-Type": "application/json",
+            "X-Payment": header,
+            "x-visitor-id": visitorId(),
+          },
           body: JSON.stringify({ userAddress: address, network }),
         });
         const settled = await paid.json();
@@ -2027,6 +2031,9 @@ Be concise but thorough. Format your response with markdown for readability.`;
 
               <ReportHistory
                 onOpen={(reportId) => window.open(`/report/${reportId}`, "_blank", "noopener")}
+                refreshKey={
+                  report.state.status === "ready" ? report.state.report.reportId : "none"
+                }
                 {...(report.state.status === "ready"
                   ? { activeReportId: report.state.report.reportId }
                   : {})}

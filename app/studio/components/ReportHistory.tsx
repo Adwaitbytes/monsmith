@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Clock, ExternalLink, Loader2 } from 'lucide-react';
 
 import type { ReportSummary } from '@/lib/report/store';
+import { visitorId } from '@/lib/track';
 
 /**
  * Reports already run, so nobody pays for the same one twice.
@@ -23,6 +24,14 @@ export interface ReportHistoryProps {
     onOpen: (reportId: string) => void;
     /** Highlights the one currently on screen. */
     activeReportId?: string | null;
+    /**
+     * Changes when a new report lands, prompting a reload.
+     *
+     * Fetched once on mount, the list silently went stale the moment someone
+     * ran a report, so the feature that exists to stop people re-running things
+     * would not show the thing they had just run.
+     */
+    refreshKey?: string | number;
 }
 
 function relative(iso: string): string {
@@ -47,14 +56,19 @@ function gradeOf(score: number | null): { text: string; tone: string } {
     return { text: 'F', tone: 'text-red-700 dark:text-red-300 border-red-500/30 bg-red-500/10' };
 }
 
-export function ReportHistory({ onOpen, activeReportId }: ReportHistoryProps) {
+export function ReportHistory({ onOpen, activeReportId, refreshKey }: ReportHistoryProps) {
     const [reports, setReports] = useState<ReportSummary[] | null>(null);
 
     useEffect(() => {
         let live = true;
         void (async () => {
             try {
-                const response = await fetch('/api/reports');
+                // The same anonymous identity the reports were saved under.
+                // Without it the server has nobody to look up and every
+                // signed-out visitor sees an empty history of their own work.
+                const response = await fetch('/api/reports', {
+                    headers: { 'x-visitor-id': visitorId() },
+                });
                 const data = (await response.json()) as { reports?: ReportSummary[] };
                 if (live) setReports(data.reports ?? []);
             } catch {
@@ -66,7 +80,7 @@ export function ReportHistory({ onOpen, activeReportId }: ReportHistoryProps) {
         return () => {
             live = false;
         };
-    }, []);
+    }, [refreshKey]);
 
     return (
         <section className="border-t border-border-subtle">
