@@ -26,6 +26,7 @@ import { RepoAudit } from "./RepoAudit";
 import { AuthControls } from "../AuthControls";
 import { useViewer } from "@/lib/auth/useViewer";
 import { ExecutionGraph } from "./ExecutionGraph";
+import { useHeavyVisuals } from "./useHeavyVisuals";
 import { LiveStats } from "./LiveStats";
 import { FAQ, FOUNDER } from "@/lib/seo";
 import { SiteFooter } from "../SiteChrome";
@@ -113,6 +114,7 @@ export default function LandingPage() {
   // hero, which is client-only already, so the server can assume light and
   // let the client correct it after hydration without a mismatch.
   const isDark = mounted && theme === "dark";
+  const heavyVisuals = useHeavyVisuals();
 
   return (
     <div className="min-h-screen bg-background text-text-primary selection:bg-accent-soft">
@@ -199,10 +201,19 @@ export default function LandingPage() {
       {/* --------------------------------------------------------------- Hero */}
       <section className="relative overflow-hidden px-6 pb-24 pt-36">
         <div className="pointer-events-none absolute inset-0 blueprint-grid opacity-40" />
-        {/* WebGL parallel-execution field, masked so it fades behind the headline */}
-        <div className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(130%_105%_at_74%_18%,black,transparent_72%)]">
-          <HeroScene dark={isDark} />
-        </div>
+        {/*
+          The WebGL field, for visitors it is worth the bytes for.
+
+          Masked to a fade behind the headline, so the grid and the wash under
+          it carry the hero on their own when this does not load. Reduced
+          motion was already being shown a frozen frame, which meant paying for
+          three.js and getting a still image out of it.
+        */}
+        {heavyVisuals && (
+          <div className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(130%_105%_at_74%_18%,black,transparent_72%)]">
+            <HeroScene dark={isDark} />
+          </div>
+        )}
         <div className="pointer-events-none absolute inset-x-0 top-0 h-[520px] accent-veil" />
 
         <div className="relative mx-auto max-w-6xl">
