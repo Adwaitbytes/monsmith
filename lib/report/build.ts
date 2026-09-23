@@ -354,7 +354,25 @@ function parallelFindings(
     path: string,
     analysis: ParallelAnalysisResult,
 ): Array<Omit<Finding, 'id'>> {
-    const hotspots = analysis.hotspots.map((hotspot) => hotspotFinding(path, hotspot));
+    // Contended slots repeat the same sentence per variable for the same
+    // reason gas findings did, so they group above the same threshold.
+    const hotspots =
+        analysis.hotspots.length > GROUP_ABOVE
+            ? [
+                  {
+                      severity: 'medium' as const,
+                      title: `${plural(analysis.hotspots.length, 'storage slot')} serialise this contract`,
+                      source: 'parallel' as const,
+                      file: path,
+                      description: `Every write to these forces the entrypoints touching them into a queue on Monad: ${analysis.hotspots
+                          .slice(0, 12)
+                          .map((hotspot) => hotspot.variable)
+                          .join(', ')}${analysis.hotspots.length > 12 ? `, and ${analysis.hotspots.length - 12} more` : ''}.`,
+                      fix: 'Key the state by the caller where the value is theirs, or split a shared counter into stripes that sum back.',
+                  },
+              ]
+            : analysis.hotspots.map((hotspot) => hotspotFinding(path, hotspot));
+
     const suggestions = analysis.suggestions
         // "Already optimal" is a verdict, not a finding, and the score says it.
         .filter((suggestion) => suggestion.type !== 'already_optimal')
@@ -380,10 +398,64 @@ function gasFinding(path: string, fn: FunctionGas): Omit<Finding, 'id'> {
     };
 }
 
+/**
+ * Gas findings, grouped rather than one per function.
+ *
+ * Emitting a finding for every unbounded function is how a report ends up
+ * claiming three hundred and ten medium issues. On a forty function contract
+ * that is forty near-identical rows saying the same sentence about a different
+ * name, and the three findings that actually matter are buried somewhere in the
+ * middle of them. A reader stops reading, which costs more than missing a
+ * finding would.
+ *
+ * Firms that do this for a living write it once and list the sites. Below the
+ * threshold each one is still worth its own row, because a report with two
+ * unbounded functions should name them rather than making you expand a group.
+ */
+const GROUP_ABOVE = 3;
+
+function groupedGasFinding(
+    path: string,
+    functions: readonly FunctionGas[],
+    kind: 'unbounded' | 'expensive',
+): Omit<Finding, 'id'> {
+    const names = functions.map((fn) => fn.name);
+    const shown = names.slice(0, 12).join(', ');
+    const rest = names.length > 12 ? `, and ${names.length - 12} more` : '';
+
+    return {
+        severity: kind === 'unbounded' ? 'medium' : 'low',
+        title:
+            kind === 'unbounded'
+                ? `${plural(functions.length, 'function')} have no gas bound`
+                : `${plural(functions.length, 'function')} cost enough gas to notice`,
+        source: 'gas',
+        file: path,
+        description:
+            kind === 'unbounded'
+                ? `solc could not bound these, so their cost depends on a loop whose length is decided at runtime and a caller can push them past the block gas limit: ${shown}${rest}.`
+                : `These are above the threshold where cost becomes something users notice: ${shown}${rest}.`,
+        fix:
+            kind === 'unbounded'
+                ? 'Bound the loops, or let callers process a range they choose so the work per transaction is theirs to cap.'
+                : 'Look for storage reads inside loops and values that could be cached in memory.',
+    };
+}
+
 function gasFindings(path: string, profile: GasProfile): Array<Omit<Finding, 'id'>> {
-    return profile.functions
-        .filter((fn) => fn.classification === 'unbounded' || fn.classification === 'expensive')
-        .map((fn) => gasFinding(path, fn));
+    const unbounded = profile.functions.filter((fn) => fn.classification === 'unbounded');
+    const expensive = profile.functions.filter((fn) => fn.classification === 'expensive');
+
+    const out: Array<Omit<Finding, 'id'>> = [];
+    for (const [group, kind] of [
+        [unbounded, 'unbounded'],
+        [expensive, 'expensive'],
+    ] as const) {
+        if (group.length === 0) continue;
+        if (group.length > GROUP_ABOVE) out.push(groupedGasFinding(path, group, kind));
+        else out.push(...group.map((fn) => gasFinding(path, fn)));
+    }
+    return out;
 }
 
 function chainFitFindings(path: string, report: ChainFitReport): Array<Omit<Finding, 'id'>> {

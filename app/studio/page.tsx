@@ -6,7 +6,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeftRight,
   Files,
+  Fuel,
+  Network,
   Rocket,
+  Scale,
   Radio,
   ShieldCheck,
   Shield,
@@ -40,6 +43,10 @@ import type { QuickActionType } from "@/lib/supabase";
 import { MigrationWizard } from "./components/MigrationWizard";
 import { Markdown } from "./components/Markdown";
 import { ContractInteraction } from "./components/ContractInteraction";
+import { CompileArtifacts } from "./components/CompileArtifacts";
+import { ParallelProfiler } from "./components/ParallelProfiler";
+import { GasProfiler } from "./components/GasProfiler";
+import { ChainFitReport } from "./components/ChainFitReport";
 import { SAMPLE_CONTRACTS } from "../compare/samples";
 import { generateFromTemplate, ARCHITECT_TO_TEMPLATE, CONTRACT_TEMPLATES } from "@/lib/contractTemplates";
 import { track } from "@/lib/track";
@@ -96,6 +103,29 @@ import {
     PYTHON_TEMPLATES,
     TEMPLATES,
 } from "./templates";
+
+/**
+ * How a console line is coloured.
+ *
+ * The old version matched on emoji prefixes and hardcoded dark-theme colours,
+ * so every line was grey on a light background and the meaning was carried by a
+ * character rather than by the words. Matching on what the line says survives
+ * the emoji being removed, and the tokens follow the theme the way the rest of
+ * the studio does.
+ */
+function consoleLineClass(line: string): string {
+    const text = line.toLowerCase();
+    if (/(failed|error|could not|reverted|denied)/.test(text)) {
+        return 'text-red-600 dark:text-red-400';
+    }
+    if (/(warning|skipped|cut short|not measured)/.test(text)) {
+        return 'text-amber-600 dark:text-amber-400';
+    }
+    if (/(deployed|compiled|imported|unlocked|connected|copied|opened|created)/.test(text)) {
+        return 'text-emerald-700 dark:text-emerald-400';
+    }
+    return 'text-text-secondary';
+}
 
 export default function StudioPage() {
   const { theme, toggleTheme } = useThemeStore();
@@ -212,6 +242,7 @@ export default function StudioPage() {
   const sidebarResize = useResizable({ initial: 200, min: 160, max: 420, edge: "right", storageKey: "ms.w.sidebar" });
   const aiResize = useResizable({ initial: 380, min: 300, max: 720, edge: "left", storageKey: "ms.w.ai" });
   const railResize = useResizable({ initial: 460, min: 360, max: 900, edge: "left", storageKey: "ms.w.rail" });
+  const toolResize = useResizable({ initial: 560, min: 400, max: 1000, edge: "left", storageKey: "ms.w.tool" });
   const migrationResize = useResizable({ initial: 450, min: 360, max: 860, edge: "left", storageKey: "ms.w.migration" });
   const interactResize = useResizable({ initial: 420, min: 340, max: 820, edge: "left", storageKey: "ms.w.interact" });
   const terminalResize = useResizable({ initial: 180, min: 90, max: 520, edge: "top", storageKey: "ms.h.terminal" });
@@ -1628,6 +1659,19 @@ Be concise but thorough. Format your response with markdown for readability.`;
           }
         : {}),
     },
+    /*
+      Every tool that exists, reachable.
+
+      The parallel profiler, the execution graph inside it, the optimisation
+      panel and the gas profiler were all built, and the toolbar cut left them
+      unreachable from the studio: they survived only on the share page. The
+      report rail summarises what they measure, which is not the same as the
+      tool itself, and summarising something is a poor reason to delete the
+      thing that produced it.
+    */
+    { id: "parallel", label: "Parallel execution and graph", icon: <Network size={19} /> },
+    { id: "gas", label: "Gas profiler", icon: <Fuel size={19} /> },
+    { id: "chainfit", label: "Chain fit", icon: <Scale size={19} /> },
     { id: "ai", label: "AI assistant", icon: <Brain size={19} /> },
     { id: "interact", label: "Interact with a deployment", icon: <Radio size={19} /> },
     { id: "migration", label: "Migrate from another chain", icon: <ArrowLeftRight size={19} /> },
@@ -1661,6 +1705,12 @@ Be concise but thorough. Format your response with markdown for readability.`;
     if (id === "interact" && next !== null) openSidePanel("interact");
     if (id === "migration" && next !== null) openSidePanel("migration");
   };
+
+  /** Which measurement tool is docked, if any. */
+  const toolPanel =
+    activeView === "parallel" || activeView === "gas" || activeView === "chainfit"
+      ? activeView
+      : null;
 
   const commands = buildCommands(
     {
@@ -1814,6 +1864,13 @@ Be concise but thorough. Format your response with markdown for readability.`;
                 onNotify={addConsoleOutput}
               />
 
+              <CompileArtifacts
+                contractName={currentFileName.replace(/\.sol$/i, "") || "Contract"}
+                abi={(compileResult?.abi as unknown[] | undefined) ?? null}
+                bytecode={compileResult?.bytecode ?? null}
+                onNotify={addConsoleOutput}
+              />
+
               {/*
                 The two template lists that used to hang under the file tree are
                 gone. Ten permanent buttons for something a person does once, at
@@ -1929,14 +1986,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
               </div>
               <div className="p-4 h-[calc(100%-32px)] overflow-y-auto font-mono text-xs space-y-1">
                 {consoleOutput.map((line: string, i: number) => (
-                  <div key={i} className={
-                    line.startsWith("✅") ? "text-green-400" :
-                    line.startsWith("❌") ? "text-red-400" :
-                    line.startsWith("⚠️") ? "text-yellow-400" :
-                    line.startsWith("🔨") || line.startsWith("🚀") || line.startsWith("🤖") ? "text-purple-400" :
-                    line.startsWith("💳") ? "text-cyan-400" :
-                    "text-gray-400"
-                  }>
+                  <div key={i} className={consoleLineClass(line)}>
                     {line}
                   </div>
                 ))}
@@ -2571,7 +2621,16 @@ Be concise but thorough. Format your response with markdown for readability.`;
           like it did too much. Here it is one scrolling document that fills
           itself in as the measurements land.
         */}
-        {railOpen && (
+        {/*
+          The rail and the tool panel share the right dock, one at a time.
+
+          Open together they left the editor a few hundred pixels wide, which is
+          how a layout ends up with four columns and no room to read code. VS
+          Code's secondary side bar shows one view at a time for the same
+          reason, and a tool that measures the open file is not useful beside a
+          summary of the same measurement anyway.
+        */}
+        {railOpen && toolPanel === null && (
           <>
         <ResizeHandle
           edge="left"
@@ -2606,6 +2665,40 @@ Be concise but thorough. Format your response with markdown for readability.`;
             }}
           />
         </div>
+          </>
+        )}
+
+        {/*
+          The measurement tools, each in its own dock.
+
+          These are the full instruments, not the rail's summary of them: the
+          profiler carries the execution graph and the optimisation panel, and
+          the gas and chain fit views show every function rather than a headline
+          number. The rail answers "is this good"; these answer "why".
+        */}
+        {toolPanel !== null && (
+          <>
+            <ResizeHandle
+              edge="left"
+              label="Resize the tool panel"
+              isDragging={toolResize.isDragging}
+              onPointerDown={toolResize.onPointerDown}
+              onReset={toolResize.reset}
+            />
+            <div
+              style={{ width: toolResize.size }}
+              className="flex min-w-0 shrink-0 flex-col overflow-hidden border-l border-border-subtle panel-surface"
+            >
+              {toolPanel === "parallel" && (
+                <ParallelProfiler code={code} onClose={() => setActiveView(null)} />
+              )}
+              {toolPanel === "gas" && (
+                <GasProfiler code={code} onClose={() => setActiveView(null)} />
+              )}
+              {toolPanel === "chainfit" && (
+                <ChainFitReport code={code} onClose={() => setActiveView(null)} />
+              )}
+            </div>
           </>
         )}
 

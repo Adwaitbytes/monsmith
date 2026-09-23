@@ -42,10 +42,14 @@
   --accent-soft: rgba(109, 40, 217, 0.08);
   --accent-line: rgba(109, 40, 217, 0.22);
 
-  /* The terminal keeps a dark canvas in both themes: it is a console, and
-     coloured log output is unreadable on white. It is tinted, not black. */
-  --terminal-bg: #1c1c26;
-  --terminal-text: #e6e6ef;
+  /* The console follows the theme, the way an editor's does.
+     It used to stay dark in the light theme on the reasoning that coloured log
+     output is unreadable on white. That was true of raw ANSI colour, which this
+     console does not emit: it writes plain lines through one styled component.
+     A dark slab sitting under a light editor just read as a piece that had not
+     been finished. */
+  --terminal-bg: #f1f1f5;
+  --terminal-text: #2a2a35;
 
   --scrollbar-thumb: rgba(16, 16, 29, 0.18);
   --scrollbar-thumb-hover: rgba(16, 16, 29, 0.3);
