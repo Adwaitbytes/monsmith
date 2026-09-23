@@ -95,6 +95,7 @@ import { StatusBar } from "./components/StatusBar";
 import { EditorTabs } from "./components/EditorTabs";
 import { ReportRail, type RailState } from "./components/report/ReportRail";
 import { buildCommands, modifierLabel } from "./commands";
+import { useShortcuts } from "./useShortcuts";
 import { useReportStream } from "@/lib/report/useReportStream";
 import { useGitHub, importFailed } from "@/lib/github/useGitHub";
 import type { ReportOrigin } from "@/lib/report/types";
@@ -1784,6 +1785,31 @@ Be concise but thorough. Format your response with markdown for readability.`;
     activeView === "parallel" || activeView === "gas" || activeView === "chainfit"
       ? activeView
       : null;
+
+  /*
+    The keys the interface already claims, actually bound.
+
+    These follow VS Code rather than inventing a scheme, because the muscle
+    memory arrives with the person. `useMemo` is not used deliberately: the
+    handlers close over current state, and a memoised list would keep firing
+    last render's closures.
+  */
+  useShortcuts([
+    { key: "b", mod: true, run: () => setSideBarView((v) => (v === null ? "explorer" : null)) },
+    { key: "j", mod: true, run: toggleTerminal },
+    { key: "enter", mod: true, run: () => runReport() },
+    { key: "s", mod: true, run: () => void handleCompile() },
+    {
+      key: "escape",
+      run: () => {
+        // Escape walks out of whatever is in front, innermost first, rather
+        // than closing everything and losing the place you were in.
+        if (paletteOpen) setPaletteOpen(false);
+        else if (repoPickerOpen) setRepoPickerOpen(false);
+        else if (activeView !== null) setActiveView(null);
+      },
+    },
+  ]);
 
   const commands = buildCommands(
     {

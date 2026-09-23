@@ -123,6 +123,7 @@ export function buildCommands(
         {
             id: 'build.compile',
             label: 'Compile',
+            hint: `${mod}S`,
             group: 'Analyse',
             keywords: ['build', 'solc', 'bytecode'],
             run: actions.compile,
@@ -213,6 +214,7 @@ export function buildCommands(
         {
             id: 'terminal.toggle',
             label: 'Toggle the console',
+            hint: `${mod}J`,
             group: 'Tools',
             keywords: ['output', 'log', 'terminal'],
             run: actions.openTerminal,
