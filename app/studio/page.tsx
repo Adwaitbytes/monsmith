@@ -1512,13 +1512,14 @@ Be concise but thorough. Format your response with markdown for readability.`;
       }
 
       addFiles(result.files);
-      setRepoOrigin({
+      const origin: ReportOrigin = {
         kind: "github",
         owner: result.ref.owner,
         repo: result.ref.repo,
         ref: result.ref.ref,
         private: result.private,
-      });
+      };
+      setRepoOrigin(origin);
       setRepoLabel(`${result.ref.owner}/${result.ref.repo}`);
       setShowStart(false);
 
@@ -1529,8 +1530,19 @@ Be concise but thorough. Format your response with markdown for readability.`;
       if (result.truncated) {
         addConsoleOutput("GitHub truncated the file tree, so this import may be partial.");
       }
+
+      /*
+        Then actually audit it.
+        
+        The button that starts this says "Audit it" and the card beside it
+        promises that every contract in the repository gets the full report.
+        Importing and stopping there keeps neither promise: it drops somebody
+        into an editor full of code they did not write, with the thing they
+        asked for one more click away and no sign that it is coming.
+      */
+      void report.run({ files: solidityFiles(result.files), origin });
     },
-    [github, addFiles, addConsoleOutput],
+    [github, addFiles, addConsoleOutput, report],
   );
 
   const handleOmnibox = useCallback(
