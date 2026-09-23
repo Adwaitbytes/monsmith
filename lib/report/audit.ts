@@ -67,6 +67,18 @@ export interface Threat {
 export interface AuditFinding {
     title: string;
     severity: Severity;
+    /**
+     * What an attacker walks away with, and what it costs to try.
+     *
+     * Severity alone tells a reader how alarmed to be without telling them
+     * anything they can act on. "An attacker drains the entire deposit pool for
+     * the price of one transaction" is a different sentence from "high", and it
+     * is the one that decides whether this ships today. Audit firms lead with
+     * it for that reason.
+     */
+    loss?: string;
+    /** What has to be true for the attack to work. Cheap preconditions matter. */
+    preconditions?: string;
     /** 0 to 1. Below the floor, a finding is dropped rather than hedged. */
     confidence: number;
     line: number | null;
@@ -388,6 +400,11 @@ given the actors and the external interactions above. Return JSON:
 // ============= PASS 3: WHERE IT ACTUALLY BREAKS =============
 
 const FIND_SYSTEM = `You are one of the best smart contract auditors in the world.
+
+Contracts you miss cost people their savings. Write as though the reader has to
+decide today whether to ship, because they do: say what an attacker ends up
+holding and what it cost them to try. A severity label alone tells someone how
+alarmed to be and nothing they can act on.
 You are testing a threat model against real code. Every finding must cite a line
 number and quote the code it rests on, and must describe an attack that would
 actually work against THIS code. If a threat turns out not to be exploitable
@@ -422,6 +439,8 @@ Return JSON:
   "lineEnd":<last line of it, usually within a few lines of lineStart>,
   "attack":"numbered steps an attacker takes",
   "impact":"what is lost, concretely",
+  "loss":"what the attacker ends up holding, and what it cost them to try",
+  "preconditions":"what must be true first, and how hard that is to arrange",
   "fix":"the change to make, described in prose"
 }]}
 
@@ -488,6 +507,12 @@ the response.`;
                         : excerpt(line, Number.isFinite(rawEnd) ? Math.round(rawEnd) : line),
                 attack: String(finding.attack ?? ""),
                 impact: String(finding.impact ?? ""),
+                ...(typeof finding.loss === "string" && finding.loss.length > 0
+                    ? { loss: finding.loss }
+                    : {}),
+                ...(typeof finding.preconditions === "string" && finding.preconditions.length > 0
+                    ? { preconditions: finding.preconditions }
+                    : {}),
                 fix: String(finding.fix ?? ""),
             };
         })
@@ -627,6 +652,80 @@ Do not include source code or code fences in any field.`;
     return { kept, rejected };
 }
 
+/**
+ * Collapses findings that are the same issue wearing two titles.
+ *
+ * A single reentrancy came back twice, once as "Reentrancy vulnerability in
+ * withdraw" and once as "Multiple withdrawals before balance update". Both were
+ * true and both described the same line. A report that says the same thing
+ * twice reads as padded, and padding is how a reader decides the rest is padded
+ * too.
+ *
+ * Two findings are treated as one when they point at the same place and their
+ * titles share most of their meaningful words. The more severe of the pair
+ * survives, because collapsing a critical into a medium would be a worse error
+ * than leaving a duplicate in.
+ */
+const STOPWORDS = new Set([
+    "the", "a", "an", "in", "of", "to", "and", "or", "for", "on", "with",
+    "before", "after", "is", "are", "can", "be", "vulnerability", "issue",
+    "function", "contract", "potential", "possible",
+]);
+
+function meaningfulWords(title: string): Set<string> {
+    return new Set(
+        title
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, " ")
+            .split(/\s+/)
+            .filter((word) => word.length > 2 && !STOPWORDS.has(word)),
+    );
+}
+
+function overlap(a: Set<string>, b: Set<string>): number {
+    if (a.size === 0 || b.size === 0) return 0;
+    let shared = 0;
+    for (const word of a) if (b.has(word)) shared += 1;
+    return shared / Math.min(a.size, b.size);
+}
+
+function dedupe(findings: readonly AuditFinding[]): AuditFinding[] {
+    const kept: AuditFinding[] = [];
+
+    for (const finding of findings) {
+        const words = meaningfulWords(finding.title);
+        const twin = kept.findIndex((existing) => {
+            // Same line is the strong signal; nearby lines in the same function
+            // are usually the same defect described from a different angle.
+            const nearby =
+                finding.line !== null &&
+                existing.line !== null &&
+                Math.abs(finding.line - existing.line) <= 6;
+            if (!nearby) return false;
+            return overlap(words, meaningfulWords(existing.title)) >= 0.5;
+        });
+
+        if (twin === -1) {
+            kept.push(finding);
+            continue;
+        }
+
+        // Keep whichever reads as worse, and the higher confidence of the two.
+        const existing = kept[twin];
+        const order: Severity[] = ["critical", "high", "medium", "low", "info"];
+        const worse =
+            order.indexOf(finding.severity) < order.indexOf(existing.severity)
+                ? finding
+                : existing;
+        kept[twin] = {
+            ...worse,
+            confidence: Math.max(finding.confidence, existing.confidence),
+        };
+    }
+
+    return kept;
+}
+
 // ============= THE AUDIT =============
 
 export interface DeepAuditOptions {
@@ -683,8 +782,10 @@ export async function deepAudit(
 
     const candidates = await findVulnerabilities(description, threats, source, deadline);
 
+    const deduped = dedupe(candidates);
+
     const { kept, rejected } = await review(
-        candidates,
+        deduped,
         source,
         deadline,
         options.confirmed ?? [],
@@ -715,6 +816,16 @@ export async function deepAudit(
     };
 }
 
+/**
+ * Exposed for tests only.
+ *
+ * `dedupe` is pure and its behaviour is a correctness question rather than a
+ * stylistic one: collapsing a critical into a medium would silently lose a
+ * finding, which is the kind of bug that only shows up in a report nobody
+ * double-checked. It is tested directly rather than through a live model call.
+ */
+export const __testing = { dedupe };
+
 /** Audit findings in the report's own shape. */
 export function toFindings(audit: DeepAudit, contractId: string): Finding[] {
     return audit.findings.map((finding, index) => ({
@@ -723,7 +834,15 @@ export function toFindings(audit: DeepAudit, contractId: string): Finding[] {
         title: finding.title,
         source: "ai" as const,
         ...(finding.line !== null ? { line: finding.line } : {}),
-        description: [finding.impact, "", "How it is exploited:", finding.attack]
+        description: [
+            finding.impact,
+            finding.loss !== undefined ? `\nWhat the attacker gets: ${finding.loss}` : "",
+            finding.preconditions !== undefined
+                ? `\nWhat has to be true first: ${finding.preconditions}`
+                : "",
+            "\nHow it is exploited:",
+            finding.attack,
+        ]
             .filter((part) => part.length > 0)
             .join("\n"),
         evidence: finding.evidence,
