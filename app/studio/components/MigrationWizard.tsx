@@ -156,7 +156,7 @@ export function MigrationWizard({ onImportCode, onClose }: MigrationWizardProps)
   const getGradeColor = (grade: string) => {
     switch (grade) {
       case 'A': return 'text-green-600 dark:text-green-400';
-      case 'B': return 'text-blue-600 dark:text-blue-400';
+      case 'B': return 'text-accent dark:text-accent';
       case 'C': return 'text-yellow-400';
       case 'D': return 'text-orange-600 dark:text-orange-400';
       case 'F': return 'text-red-600 dark:text-red-400';
@@ -169,9 +169,9 @@ export function MigrationWizard({ onImportCode, onClose }: MigrationWizardProps)
       case 'critical': return 'bg-red-500/20 text-red-600 dark:text-red-400 border-red-500/30';
       case 'high': return 'bg-orange-500/20 text-orange-600 dark:text-orange-400 border-orange-500/30';
       case 'medium': return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
-      case 'low': return 'bg-blue-500/20 text-blue-600 dark:text-blue-400 border-blue-500/30';
-      case 'info': return 'bg-gray-500/20 text-text-secondary border-gray-500/30';
-      default: return 'bg-gray-500/20 text-text-secondary border-gray-500/30';
+      case 'low': return 'bg-accent/20 text-accent dark:text-accent border-accent-line/30';
+      case 'info': return 'bg-surface-overlay/20 text-text-secondary border-gray-500/30';
+      default: return 'bg-surface-overlay/20 text-text-secondary border-gray-500/30';
     }
   };
 
@@ -265,12 +265,12 @@ export function MigrationWizard({ onImportCode, onClose }: MigrationWizardProps)
       <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
-            <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className="w-5 h-5 text-accent dark:text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
             </svg>
             <span className="font-semibold">Contract Migration</span>
           </div>
-          <span className="text-xs bg-blue-500/15 text-blue-700 dark:text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
+          <span className="text-xs bg-accent/15 text-accent dark:text-accent dark:text-accent px-2 py-0.5 rounded-full font-medium">
             ETH → Monad
           </span>
         </div>
@@ -307,7 +307,7 @@ export function MigrationWizard({ onImportCode, onClose }: MigrationWizardProps)
                 onClick={() => setInputMode('address')}
                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                   inputMode === 'address'
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-accent text-white'
                     : 'text-text-secondary hover:text-white'
                 }`}
               >
@@ -317,7 +317,7 @@ export function MigrationWizard({ onImportCode, onClose }: MigrationWizardProps)
                 onClick={() => setInputMode('code')}
                 className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
                   inputMode === 'code'
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-accent text-white'
                     : 'text-text-secondary hover:text-white'
                 }`}
               >
@@ -335,7 +335,7 @@ export function MigrationWizard({ onImportCode, onClose }: MigrationWizardProps)
                   <select
                     value={network}
                     onChange={(e) => setNetwork(e.target.value as NetworkType)}
-                    className="w-full px-4 py-2.5 panel-surface border border-border-subtle rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                    className="w-full px-4 py-2.5 panel-surface border border-border-subtle rounded-lg text-white focus:border-accent-line focus:outline-none"
                   >
                     <option value="ethereum">Ethereum Mainnet</option>
                     <option value="sepolia">Sepolia Testnet</option>
@@ -353,7 +353,7 @@ export function MigrationWizard({ onImportCode, onClose }: MigrationWizardProps)
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     placeholder="0x..."
-                    className="w-full px-4 py-2.5 panel-surface border border-border-subtle rounded-lg text-white placeholder-gray-600 focus:border-blue-500 focus:outline-none font-mono"
+                    className="w-full px-4 py-2.5 panel-surface border border-border-subtle rounded-lg text-white placeholder-gray-600 focus:border-accent-line focus:outline-none font-mono"
                   />
                   <p className="mt-1 text-xs text-text-muted">
                     Any contract verified on Sourcify, Blockscout or Etherscan. No API key needed.
@@ -378,7 +378,7 @@ contract MyContract {
     // Paste your contract code here...
 }"
                   rows={12}
-                  className="w-full px-4 py-3 panel-surface border border-border-subtle rounded-lg text-white placeholder-gray-600 focus:border-blue-500 focus:outline-none font-mono text-sm resize-none"
+                  className="w-full px-4 py-3 panel-surface border border-border-subtle rounded-lg text-white placeholder-gray-600 focus:border-accent-line focus:outline-none font-mono text-sm resize-none"
                 />
               </div>
             )}
@@ -393,23 +393,23 @@ contract MyContract {
             </button>
 
             {/* Info Box */}
-            <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-              <h4 className="font-medium text-blue-600 dark:text-blue-400 mb-2">What happens during analysis?</h4>
+            <div className="p-4 bg-accent/10 border border-accent-line/30 rounded-lg">
+              <h4 className="font-medium text-accent dark:text-accent mb-2">What happens during analysis?</h4>
               <ul className="space-y-1 text-sm text-text-secondary">
                 <li className="flex items-center gap-2">
-                  <span className="text-blue-600 dark:text-blue-400">1.</span>
+                  <span className="text-accent dark:text-accent">1.</span>
                   Fetch verified source from Sourcify or Blockscout
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-blue-600 dark:text-blue-400">2.</span>
+                  <span className="text-accent dark:text-accent">2.</span>
                   Check for Monad compatibility issues
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-blue-600 dark:text-blue-400">3.</span>
+                  <span className="text-accent dark:text-accent">3.</span>
                   Analyze parallel execution potential
                 </li>
                 <li className="flex items-center gap-2">
-                  <span className="text-blue-600 dark:text-blue-400">4.</span>
+                  <span className="text-accent dark:text-accent">4.</span>
                   Auto-fix safe issues & suggest optimizations
                 </li>
               </ul>
@@ -605,7 +605,7 @@ contract MyContract {
             <div className="flex gap-3">
               <button
                 onClick={() => setStep('diff')}
-                className="flex-1 py-2.5 bg-border-subtle hover:bg-gray-700 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                className="flex-1 py-2.5 bg-border-subtle hover:bg-surface-overlay rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -635,7 +635,7 @@ contract MyContract {
           {/* Footer */}
           <div className="px-4 py-3 border-t border-border-subtle flex items-center justify-between text-xs text-text-muted">
             <span>Analysis time: {result.metadata.analysisTimeMs}ms</span>
-            <button onClick={resetWizard} className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:text-blue-300">
+            <button onClick={resetWizard} className="text-accent dark:text-accent hover:text-accent dark:text-accent">
               Analyze Another
             </button>
           </div>
@@ -658,7 +658,7 @@ contract MyContract {
             </button>
             <button
               onClick={handleImportMigrated}
-              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition-colors"
+              className="px-4 py-1.5 bg-accent hover:bg-accent rounded-lg text-sm font-medium transition-colors"
             >
               Import Optimized Code
             </button>

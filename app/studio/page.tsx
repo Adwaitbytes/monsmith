@@ -45,6 +45,7 @@ import { Markdown } from "./components/Markdown";
 import { ContractInteraction } from "./components/ContractInteraction";
 import { CompileArtifacts } from "./components/CompileArtifacts";
 import { ReportHistory } from "./components/ReportHistory";
+import { Assistant } from "./components/Assistant";
 import { ParallelProfiler } from "./components/ParallelProfiler";
 import { GasProfiler } from "./components/GasProfiler";
 import { ChainFitReport } from "./components/ChainFitReport";
@@ -2890,6 +2891,23 @@ Be concise but thorough. Format your response with markdown for readability.`;
         from a 32px icon. The picker is the one extra question GitHub forces,
         asked at the moment it becomes relevant instead of as a gate.
       */}
+      {/*
+        The assistant floats rather than docking, because asking a question is
+        not a mode: you reach for it mid-read, get an answer, and carry on. It
+        is handed the open file and the findings so it argues from the same
+        facts the report does rather than offering a second opinion.
+      */}
+      <Assistant
+        code={code}
+        fileName={currentFileName === "" ? "your contract" : currentFileName}
+        isDark={isDark}
+        findings={
+          report.state.status === "ready"
+            ? report.state.report.contracts.flatMap((contract) => contract.findings)
+            : []
+        }
+      />
+
       <CommandPalette commands={commands} open={paletteOpen} onOpenChange={setPaletteOpen} />
 
       <WelcomeTour
