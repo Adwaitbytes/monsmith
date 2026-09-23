@@ -220,9 +220,18 @@ export default function StudioPage() {
   const [repoPickerOpen, setRepoPickerOpen] = useState(false);
   const [showStart, setShowStart] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
-  // Which activity-bar view owns the side bar. Null closes it, the way clicking
-  // the active icon in VS Code collapses the panel.
-  const [activeView, setActiveView] = useState<string | null>("explorer");
+  /*
+    Two independent regions, because they are two independent questions.
+
+    The explorer and search live on the left, beside the editor. The report and
+    the measurement tools live on the right. Running one flag across both meant
+    opening Chain Fit closed the file tree, which is not a trade anyone wants to
+    make: you open a tool to look at a contract you still need to navigate to.
+    VS Code keeps its primary and secondary side bars independent for the same
+    reason.
+  */
+  const [sideBarView, setSideBarView] = useState<string | null>("explorer");
+  const [activeView, setActiveView] = useState<string | null>(null);
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [railOpen, setRailOpen] = useState(true);
   // Below this width the editor is at its floor, so the right dock stands down
@@ -1713,6 +1722,9 @@ Be concise but thorough. Format your response with markdown for readability.`;
     { id: "migration", label: "Migrate from another chain", icon: <ArrowLeftRight size={19} /> },
   ];
 
+  /** Which region an activity-bar icon belongs to. */
+  const SIDEBAR_VIEWS = new Set(["explorer", "search"]);
+
   const selectView = (id: string) => {
     /*
       Every icon in the rail does something, which is the whole point.
@@ -1727,6 +1739,12 @@ Be concise but thorough. Format your response with markdown for readability.`;
       setPaletteOpen(true);
       return;
     }
+
+    // The left side bar toggles on its own and never disturbs the right dock.
+    if (SIDEBAR_VIEWS.has(id)) {
+      setSideBarView((current) => (current === id ? null : id));
+      return;
+    }
     if (id === "report") {
       setRailOpen((open) => !open);
       // An explicit toggle outranks the narrow-screen default, in both
@@ -1736,13 +1754,29 @@ Be concise but thorough. Format your response with markdown for readability.`;
       return;
     }
 
-    // Clicking the open view closes the side bar, which is the gesture people
-    // already have from VS Code.
+    /*
+      One toggle, not two.
+
+      This used to set the view and then call `openSidePanel`, which toggles the
+      same flag, so every click cancelled itself and the panel never appeared.
+      That is the cost of a helper that both opens and closes: called from
+      something that has already decided, it undoes the decision.
+    */
     const next = activeView === id ? null : id;
     setActiveView(next);
-    if (id === "ai" && next !== null) openSidePanel("ai");
-    if (id === "interact" && next !== null) openSidePanel("interact");
-    if (id === "migration" && next !== null) openSidePanel("migration");
+
+    if (next !== null) {
+      const eventFor: Record<string, "ai_generate" | "interact_read" | "migration" | "parallel_analysis" | "gas_profile" | "chain_fit"> = {
+        ai: "ai_generate",
+        interact: "interact_read",
+        migration: "migration",
+        parallel: "parallel_analysis",
+        gas: "gas_profile",
+        chainfit: "chain_fit",
+      };
+      const event = eventFor[next];
+      if (event !== undefined) track(event, { walletAddress, detail: { opened: true } });
+    }
   };
 
   /** Which measurement tool is docked, if any. */
@@ -1871,7 +1905,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
         */}
         <ActivityBar
           items={activityItems}
-          active={activeView}
+          active={activeView ?? sideBarView}
           onSelect={selectView}
           footer={
             <button
@@ -1887,7 +1921,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
         />
         {/* Sidebar */}
         <AnimatePresence>
-          {activeView === "explorer" && (
+          {sideBarView === "explorer" && (
             <motion.div
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: sidebarResize.size, opacity: 1 }}
