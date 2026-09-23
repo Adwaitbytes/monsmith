@@ -1,9 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import {
+  ArrowLeftRight,
+  Files,
+  Rocket,
+  Radio,
+  ShieldCheck,
   Shield,
   Brain,
   Terminal,
@@ -74,8 +79,11 @@ import { Omnibox, type OmniboxIntent } from "./components/Omnibox";
 import { StartCards } from "./components/StartCards";
 import { RepoPicker } from "./components/RepoPicker";
 import { WelcomeTour, tourSeen } from "./components/WelcomeTour";
+import { ActivityBar, type ActivityItem } from "./components/ActivityBar";
+import { StatusBar } from "./components/StatusBar";
+import { EditorTabs } from "./components/EditorTabs";
 import { ReportRail, type RailState } from "./components/report/ReportRail";
-import { buildCommands } from "./commands";
+import { buildCommands, modifierLabel } from "./commands";
 import { useReportStream } from "@/lib/report/useReportStream";
 import { useGitHub, importFailed } from "@/lib/github/useGitHub";
 import type { ReportOrigin } from "@/lib/report/types";
@@ -93,6 +101,7 @@ export default function StudioPage() {
   const { theme, toggleTheme } = useThemeStore();
   const { walletAddress, isConnected, network, setUser, disconnect, setNetwork } = useUserStore();
   const { 
+    isCompiling,
     isDeploying, 
     compileResult, 
     consoleOutput,
@@ -118,6 +127,7 @@ export default function StudioPage() {
   const activePath = useWorkspace((state) => state.activePath);
   const writeFile = useWorkspace((state) => state.writeFile);
   const addFiles = useWorkspace((state) => state.addFiles);
+  const setActive = useWorkspace((state) => state.setActive);
 
   const code = (activePath === null ? undefined : files[activePath]) ?? "";
   const currentFileName = activePath === null ? "" : basenameOf(activePath);
@@ -183,6 +193,11 @@ export default function StudioPage() {
   const [repoPickerOpen, setRepoPickerOpen] = useState(false);
   const [showStart, setShowStart] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  // Which activity-bar view owns the side bar. Null closes it, the way clicking
+  // the active icon in VS Code collapses the panel.
+  const [activeView, setActiveView] = useState<string | null>("explorer");
+  const [openTabs, setOpenTabs] = useState<string[]>([]);
+  const [railOpen, setRailOpen] = useState(true);
   const [unlocking, setUnlocking] = useState(false);
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [repoOrigin, setRepoOrigin] = useState<ReportOrigin>({ kind: "workspace" });
@@ -1504,6 +1519,149 @@ Be concise but thorough. Format your response with markdown for readability.`;
           ? { status: "ready", report: report.state.report }
           : { status: "error", message: report.state.message };
 
+  /*
+    Errors and warnings, from the compiler and the audit together.
+
+    A developer reading a status bar wants one count of things wrong, not one
+    number from solc and a different one from the report. Compiler errors and
+    critical or high findings both mean "this is not ready", so they are counted
+    as the same thing.
+  */
+  const problemCounts = useMemo(() => {
+    const diagnostics = compileResult?.errors?.length ?? 0;
+    const warnings = compileResult?.warnings?.length ?? 0;
+
+    let findingErrors = 0;
+    let findingWarnings = 0;
+    if (report.state.status === "ready") {
+      for (const contract of report.state.report.contracts) {
+        findingErrors += contract.counts.critical + contract.counts.high;
+        findingWarnings += contract.counts.medium + contract.counts.low;
+      }
+    }
+    return { errors: diagnostics + findingErrors, warnings: warnings + findingWarnings };
+  }, [compileResult, report.state]);
+
+  const compileState: "idle" | "working" | "ok" | "failed" = isCompiling
+    ? "working"
+    : compileResult === null
+      ? "idle"
+      : compileResult.success
+        ? "ok"
+        : "failed";
+
+  /*
+    Tabs follow whatever the workspace considers open.
+
+    Derived rather than pushed, so opening a file from the tree, the palette,
+    an import or a deep link all produce a tab without each of those call sites
+    having to remember to add one. Forgetting exactly one of them is how a tab
+    strip ends up disagreeing with the editor.
+  */
+  useEffect(() => {
+    if (activePath === null) return;
+    setOpenTabs((current) => (current.includes(activePath) ? current : [...current, activePath]));
+  }, [activePath]);
+
+  // A file deleted or renamed away must not leave a tab pointing at nothing.
+  useEffect(() => {
+    setOpenTabs((current) => {
+      const live = current.filter((path) => files[path] !== undefined);
+      return live.length === current.length ? current : live;
+    });
+  }, [files]);
+
+  /*
+    Hand the AMD loader back after Monaco has taken what it needs.
+
+    Monaco ships an AMD loader that installs a global `define` carrying an `amd`
+    marker. Any UMD script that loads afterwards sees that marker, decides it is
+    in an AMD environment, and registers itself as an anonymous module. Monaco's
+    loader then rejects it with "Can only have one anonymous define call per
+    script file" and the script never initialises.
+
+    Clerk's sign-in UI is a UMD script, and it loads lazily, which means it
+    always arrived after Monaco. The result was that sign-in silently did not
+    work anywhere the editor was mounted, and the console blamed Clerk's CDN
+    rather than us. Chasing that error to the wrong place cost real time.
+
+    Only the marker is removed. Monaco keeps `define` itself and its module
+    registry, so everything it has already loaded keeps working; what changes is
+    that later UMD scripts take the plain browser-global path they were written
+    to fall back to.
+  */
+  const releaseAmdLoader = useCallback(() => {
+    const amdDefine = (window as unknown as { define?: { amd?: unknown } }).define;
+    if (amdDefine?.amd !== undefined) delete amdDefine.amd;
+  }, []);
+
+  const closeTab = (path: string) => {
+    setOpenTabs((current) => {
+      const next = current.filter((entry) => entry !== path);
+      // Closing the file you are looking at should land you somewhere, not on
+      // an empty editor.
+      if (path === activePath && next.length > 0) {
+        const fallback = next[Math.min(current.indexOf(path), next.length - 1)];
+        if (fallback !== undefined) setActive(fallback);
+      }
+      return next;
+    });
+  };
+
+  /** The activity bar's tools. Distinct shapes, each opening in the same place. */
+  const activityItems: ActivityItem[] = [
+    { id: "explorer", label: "Explorer", icon: <Files size={19} />, shortcut: `${modifierLabel()}B` },
+    {
+      id: "search",
+      label: "Search files and commands",
+      icon: <Search size={19} />,
+      shortcut: `${modifierLabel()}K`,
+    },
+    {
+      id: "report",
+      label: "Contract report",
+      icon: <ShieldCheck size={19} />,
+      ...(problemCounts.errors + problemCounts.warnings > 0
+        ? {
+            badge: problemCounts.errors + problemCounts.warnings,
+            badgeTone: (problemCounts.errors > 0 ? "bad" : "warn") as "bad" | "warn",
+          }
+        : {}),
+    },
+    { id: "ai", label: "AI assistant", icon: <Brain size={19} /> },
+    { id: "interact", label: "Interact with a deployment", icon: <Radio size={19} /> },
+    { id: "migration", label: "Migrate from another chain", icon: <ArrowLeftRight size={19} /> },
+  ];
+
+  const selectView = (id: string) => {
+    /*
+      Every icon in the rail does something, which is the whole point.
+
+      Two of them did not on the first pass, and a control that looks live and
+      is not is worse than no control at all: it is the same failure as the nine
+      identical icons, just quieter. Search hands off to the palette, which is
+      already the thing that searches, and the report icon shows and hides the
+      report the way its own panel toggle would.
+    */
+    if (id === "search") {
+      setPaletteOpen(true);
+      return;
+    }
+    if (id === "report") {
+      setRailOpen((open) => !open);
+      setActiveView("report");
+      return;
+    }
+
+    // Clicking the open view closes the side bar, which is the gesture people
+    // already have from VS Code.
+    const next = activeView === id ? null : id;
+    setActiveView(next);
+    if (id === "ai" && next !== null) openSidePanel("ai");
+    if (id === "interact" && next !== null) openSidePanel("interact");
+    if (id === "migration" && next !== null) openSidePanel("migration");
+  };
+
   const commands = buildCommands(
     {
       runReport,
@@ -1576,6 +1734,23 @@ Be concise but thorough. Format your response with markdown for readability.`;
         primaryBlockedReason={primaryBlockedReason}
         onPrimary={handlePrimary}
         onOpenPalette={() => setPaletteOpen(true)}
+        actions={[
+          {
+            label: "Compile",
+            icon: <Hammer size={14} />,
+            onClick: () => void handleCompile(),
+            busy: isCompiling,
+          },
+          {
+            label: "Deploy",
+            icon: <Rocket size={14} />,
+            onClick: handleDeploy,
+            busy: isDeploying,
+            ...(compileResult?.success === true
+              ? {}
+              : { blockedReason: "Compile the contract first." }),
+          },
+        ]}
         account={
           <AccountMenu
             theme={isDark ? "dark" : "light"}
@@ -1596,9 +1771,31 @@ Be concise but thorough. Format your response with markdown for readability.`;
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden min-w-0">
+        {/*
+          Tools get their own lane rather than competing in the top bar. This is
+          the part the first cut got wrong: the fix for nine identical icons in
+          a row was never to delete them, it was to give each one a distinct
+          shape and a predictable home.
+        */}
+        <ActivityBar
+          items={activityItems}
+          active={activeView}
+          onSelect={selectView}
+          footer={
+            <button
+              onClick={toggleTerminal}
+              aria-label="Toggle the console"
+              className={`grid h-10 w-10 place-items-center rounded-lg outline-none ring-accent-line transition-colors focus-visible:ring-2 ${
+                terminalOpen ? "text-text-primary" : "text-text-muted hover:text-text-secondary"
+              }`}
+            >
+              <Terminal size={18} />
+            </button>
+          }
+        />
         {/* Sidebar */}
         <AnimatePresence>
-          {sidebarOpen && (
+          {activeView === "explorer" && (
             <motion.div
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: sidebarResize.size, opacity: 1 }}
@@ -1607,7 +1804,13 @@ Be concise but thorough. Format your response with markdown for readability.`;
               className={`border-r flex flex-col min-w-0 flex-shrink-0 overflow-hidden ${"panel-surface border"}`}
             >
               <FileExplorer
-                onOpen={(path) => addConsoleOutput(`📂 Opened: ${path}`)}
+                onOpen={(path) => {
+                  // Opening a file is a decision to start work, so the start
+                  // cards get out of the way. Leaving them over the editor made
+                  // the tree look broken: you click a file and nothing appears.
+                  setShowStart(false);
+                  addConsoleOutput(`Opened ${path}`);
+                }}
                 onNotify={addConsoleOutput}
               />
 
@@ -1662,6 +1865,15 @@ Be concise but thorough. Format your response with markdown for readability.`;
             </div>
           )}
 
+          {!showStart && (
+            <EditorTabs
+              tabs={openTabs.map((path) => ({ path, name: basenameOf(path) }))}
+              activePath={activePath}
+              onSelect={(path) => setActive(path)}
+              onClose={closeTab}
+            />
+          )}
+
           {/* Monaco Editor */}
           <div className={`${showStart ? "hidden" : terminalOpen ? "flex-1" : "h-full"} min-h-0`}>
             <MonacoEditor
@@ -1670,6 +1882,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
               theme={isDark ? "vs-dark" : "light"}
               value={code}
               onChange={(value) => setCode(value || "")}
+              onMount={releaseAmdLoader}
               options={{
                 fontSize: 14,
                 fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
@@ -2358,6 +2571,8 @@ Be concise but thorough. Format your response with markdown for readability.`;
           like it did too much. Here it is one scrolling document that fills
           itself in as the measurements land.
         */}
+        {railOpen && (
+          <>
         <ResizeHandle
           edge="left"
           label="Resize the report"
@@ -2391,6 +2606,8 @@ Be concise but thorough. Format your response with markdown for readability.`;
             }}
           />
         </div>
+          </>
+        )}
 
         {interactOpen && (
           <ResizeHandle
@@ -2511,6 +2728,25 @@ Be concise but thorough. Format your response with markdown for readability.`;
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/*
+        Ambient state, along the bottom.
+
+        Network and wallet were in a dropdown, which is the wrong home for a
+        fact you need to be sure of before every deploy. State you have to open
+        a menu to read is state you will eventually get wrong, and the version
+        of that mistake here sends a contract to mainnet.
+      */}
+      <StatusBar
+        network={network}
+        onNetworkClick={() => setNetwork(network === "testnet" ? "mainnet" : "testnet")}
+        wallet={walletAddress}
+        onWalletClick={() => (isConnected ? disconnect() : void connectWallet())}
+        problems={problemCounts}
+        onProblemsClick={() => setActiveView("report")}
+        compileState={compileState}
+        language={language}
+      />
 
       {/*
         Everything the toolbar used to carry, in the two places that scale.

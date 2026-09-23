@@ -9,30 +9,40 @@ import { MonsmithMark } from '../../landing/MonsmithMark';
 import { modifierLabel } from '../commands';
 
 /**
- * The studio's top bar, at four controls.
+ * The studio's top bar.
  *
- * It carried seventeen. Three action buttons, a language toggle, a network
- * pill, a theme button, a terminal button, and six unlabelled 32px icons for
- * six side panels, two of which used the same icon as each other and so could
- * not be told apart at all. The feedback was that the product looked like it
- * did too much to understand, and that was a fair reading of this bar.
+ * It carried seventeen controls, nine of them unlabelled 32px icons, two of
+ * which shared a glyph and so could not be told apart at all. That was the
+ * complaint, and it was a fair one.
  *
- * What is left is the smallest set that answers the only two questions someone
- * has on arrival: where am I, and what do I do next.
+ * The first fix read it as "too many buttons" and deleted capability, compile
+ * and deploy included. That was wrong, and VS Code is the proof: it carries far
+ * more than this and reads as calm, because every control is labelled, visually
+ * distinct, and lives in a predictable lane. The problem was never the count.
+ * It was nine things that looked identical competing in one row.
+ *
+ * So the bar carries what a contract IDE is actually for:
  *
  *   identity   the mark and the file being worked on
- *   palette    one hint that everything else is a keystroke away
- *   action     exactly one primary button, labelled by what comes next
- *   account    the settings that were masquerading as actions
+ *   palette    the long tail, one keystroke away
+ *   actions    compile and deploy, labelled, distinct, disabled with a reason
+ *   primary    the one thing to do next, emphasised over the rest
+ *   account    settings, which are state rather than actions
  *
- * Compile is gone as a button because compiling is not a goal anyone has. The
- * report compiles on its own, and the button that remains says the thing the
- * person actually wants: deploy it, or audit it. Everything removed lives in
- * the command palette or the account menu, so nothing was taken away from the
- * product, only from the bar.
+ * Everything else moved to a lane of its own: tools to the activity bar on the
+ * left, ambient state to the status bar along the bottom.
  */
 
 export type PrimaryAction = 'report' | 'deploy';
+
+export interface BarAction {
+    label: string;
+    icon: React.ReactNode;
+    onClick: () => void;
+    busy?: boolean;
+    /** Disabled with the reason on hover, rather than failing after the click. */
+    blockedReason?: string;
+}
 
 export interface StudioBarProps {
     /** Path of the open file, or the repository when one was imported. */
@@ -46,6 +56,15 @@ export interface StudioBarProps {
     onPrimary: () => void;
     onOpenPalette: () => void;
     account: React.ReactNode;
+    /**
+     * The everyday actions, beside the primary one.
+     *
+     * Cutting these was an over-correction. Compile and deploy are the two
+     * things a contract IDE exists to do, and the original complaint was about
+     * nine unlabelled icons that looked alike, not about having actions at all.
+     * Labelled, distinct and few is the shape that was actually being asked for.
+     */
+    actions?: readonly BarAction[];
 }
 
 const PRIMARY_COPY: Record<PrimaryAction, { label: string; busy: string; icon: typeof Rocket }> = {
@@ -64,6 +83,7 @@ export function StudioBar({
     onPrimary,
     onOpenPalette,
     account,
+    actions = [],
 }: StudioBarProps) {
     const copy = PRIMARY_COPY[primary];
     const Icon = copy.icon;
@@ -101,7 +121,34 @@ export function StudioBar({
             </button>
 
             {/* One action, and the settings that were pretending to be actions */}
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1.5">
+                {actions.map((action) => {
+                    const blocked = action.blockedReason !== undefined;
+                    return (
+                        <button
+                            key={action.label}
+                            onClick={action.onClick}
+                            disabled={blocked || action.busy === true}
+                            title={action.blockedReason}
+                            className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[12.5px] font-medium outline-none ring-accent-line transition-colors focus-visible:ring-2 ${
+                                blocked || action.busy === true
+                                    ? 'cursor-not-allowed border-border-subtle text-text-muted'
+                                    : 'border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary'
+                            }`}
+                        >
+                            {action.busy === true ? (
+                                <Loader2
+                                    size={14}
+                                    className="animate-spin motion-reduce:animate-none"
+                                />
+                            ) : (
+                                action.icon
+                            )}
+                            {action.label}
+                        </button>
+                    );
+                })}
+
                 <motion.button
                     onClick={onPrimary}
                     disabled={busy || blocked}
