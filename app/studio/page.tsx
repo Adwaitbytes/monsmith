@@ -48,6 +48,7 @@ import { ContractInteraction } from "./components/ContractInteraction";
 import { CompileArtifacts } from "./components/CompileArtifacts";
 import { ReportHistory } from "./components/ReportHistory";
 import { Assistant } from "./components/Assistant";
+import { VoiceAgent } from "./components/VoiceAgent";
 import { ParallelProfiler } from "./components/ParallelProfiler";
 import { GasProfiler } from "./components/GasProfiler";
 import { ChainFitReport } from "./components/ChainFitReport";
@@ -240,6 +241,7 @@ export default function StudioPage() {
   const narrow = useNarrowViewport();
   const balance = useBalance(walletAddress, network);
   const [railForced, setRailForced] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [repoOrigin, setRepoOrigin] = useState<ReportOrigin>({ kind: "workspace" });
@@ -397,8 +399,14 @@ export default function StudioPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Connect wallet
-  const connectWallet = async () => {
+  /**
+   * Connects a wallet, stably.
+   *
+   * Declared as a plain function it was rebuilt on every render, so every
+   * callback that depended on it was rebuilt too, and the memoisation around
+   * them bought nothing. It closes over nothing that changes.
+   */
+  const connectWallet = useCallback(async () => {
     const ethereum = getEthereumProvider();
     if (ethereum) {
       try {
@@ -416,12 +424,12 @@ export default function StudioPage() {
         // Track in Supabase - get or create user and store UUID
         track("wallet_connect", { walletAddress: address });
             } catch (err) {
-        addConsoleOutput(`❌ Wallet connection failed: ${errorMessage(err)}`);
+        addConsoleOutput(`Wallet connection failed: ${errorMessage(err)}`);
       }
     } else {
-      addConsoleOutput("❌ Please install MetaMask");
+      addConsoleOutput("No wallet detected. Install MetaMask to deploy.");
     }
-  };
+  }, [addConsoleOutput, setUser]);
 
   // Compile contract.
   // `sourceOverride` lets the architect compile code it just generated: reading
@@ -1523,7 +1531,9 @@ Be concise but thorough. Format your response with markdown for readability.`;
       }
       if (intent.kind === "address") {
         setRepoOrigin({ kind: "address", address: intent.address, chainId: 1 });
-        openSidePanel("migration");
+        // Set the view directly rather than through the toggling helper: this
+        // has already decided, and a helper that also closes would undo it.
+        setActiveView("migration");
         return;
       }
       const name = `contracts/Pasted${Date.now()}.sol`;
@@ -1796,6 +1806,18 @@ Be concise but thorough. Format your response with markdown for readability.`;
     activeView === "parallel" || activeView === "gas" || activeView === "chainfit"
       ? activeView
       : null;
+
+  /*
+    Whether anything else already occupies the right dock.
+
+    The first version of this only knew about the three measurement tools, so
+    opening the migration wizard left the report beside it and the editor
+    squeezed between the two again. Listing the exceptions was the mistake:
+    every panel added afterwards had to remember to join the list, and the one
+    that forgot produced exactly this bug. Asking whether the dock is free
+    cannot be forgotten by a panel that does not exist yet.
+  */
+  const dockTaken = activeView !== null && activeView !== "report";
 
   /*
     The keys the interface already claims, actually bound.
@@ -2765,7 +2787,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
           reason, and a tool that measures the open file is not useful beside a
           summary of the same measurement anyway.
         */}
-        {railOpen && toolPanel === null && (!narrow || railForced) && (
+        {railOpen && !dockTaken && (!narrow || railForced) && (
           <>
         <ResizeHandle
           edge="left"
@@ -2995,7 +3017,18 @@ Be concise but thorough. Format your response with markdown for readability.`;
         is handed the open file and the findings so it argues from the same
         facts the report does rather than offering a second opinion.
       */}
+      {/*
+        A line to a person, stacked above the assistant.
+
+        Two different offers in one place: the assistant answers about the
+        contract on screen, and this is for the questions a model should not be
+        answering. Which agent picks up depends on where the caller is, resolved
+        server-side because a browser cannot see its own address.
+      */}
+      <VoiceAgent offset={assistantOpen} />
+
       <Assistant
+        onOpenChange={setAssistantOpen}
         code={code}
         fileName={currentFileName === "" ? "your contract" : currentFileName}
         isDark={isDark}

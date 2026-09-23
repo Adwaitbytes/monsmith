@@ -39,6 +39,8 @@ export interface AssistantProps {
     findings?: readonly Finding[];
     /** Markdown rendering still keys off the theme rather than tokens. */
     isDark?: boolean;
+    /** Reported so neighbouring floating controls can move out of the way. */
+    onOpenChange?: (open: boolean) => void;
 }
 
 function suggestionsFor(code: string, findings: readonly Finding[]): string[] {
@@ -60,8 +62,24 @@ function suggestionsFor(code: string, findings: readonly Finding[]): string[] {
     return out.slice(0, 3);
 }
 
-export function Assistant({ code, fileName, findings = [], isDark = false }: AssistantProps) {
+export function Assistant({
+    code,
+    fileName,
+    findings = [],
+    isDark = false,
+    onOpenChange,
+}: AssistantProps) {
     const [open, setOpen] = useState(false);
+
+    // Kept as one call site so the panel and whatever sits beside it cannot
+    // disagree about whether it is showing.
+    const setPanelOpen = useCallback(
+        (next: boolean) => {
+            setOpen(next);
+            onOpenChange?.(next);
+        },
+        [onOpenChange],
+    );
     const [turns, setTurns] = useState<Turn[]>([]);
     const [input, setInput] = useState('');
     const [busy, setBusy] = useState(false);
@@ -139,7 +157,7 @@ export function Assistant({ code, fileName, findings = [], isDark = false }: Ass
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.9 }}
                         transition={{ duration: reduce ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }}
-                        onClick={() => setOpen(true)}
+                        onClick={() => setPanelOpen(true)}
                         aria-label="Ask the assistant"
                         className="group fixed bottom-9 right-5 z-40 flex items-center gap-2 rounded-full border border-border-subtle bg-surface-raised py-2.5 pl-3.5 pr-4 shadow-[var(--shadow-panel)] outline-none ring-accent-line transition-transform hover:-translate-y-0.5 focus-visible:ring-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
                     >
@@ -169,7 +187,7 @@ export function Assistant({ code, fileName, findings = [], isDark = false }: Ass
                                 {fileName}
                             </span>
                             <button
-                                onClick={() => setOpen(false)}
+                                onClick={() => setPanelOpen(false)}
                                 aria-label="Close the assistant"
                                 className="rounded-md p-1 text-text-muted outline-none ring-accent-line transition-colors hover:text-text-primary focus-visible:ring-2"
                             >
