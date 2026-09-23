@@ -28,6 +28,8 @@ export interface StartCardsProps {
     onPickAddress: () => void;
     onPickTemplate: () => void;
     githubConnected: boolean;
+    /** Offers the walkthrough to someone who wants it, rather than imposing it. */
+    onShowTour?: () => void;
     /** Where the GitHub App install flow starts. Absent means the install is
      *  not configured, so the card falls back to asking for a pasted link. */
     connectUrl?: string;
@@ -89,6 +91,7 @@ export function StartCards({
     onPickAddress,
     onPickTemplate,
     githubConnected,
+    onShowTour,
     connectUrl,
 }: StartCardsProps) {
     const modifier = useSyncExternalStore(subscribeToPlatform, readModifier, serverModifier);
@@ -149,12 +152,29 @@ export function StartCards({
                 </button>
             </div>
 
-            <p className="mt-6 text-[12px] text-text-muted">
-                Press{' '}
+            <p className="mt-6 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12px] text-text-muted">
+                <span>Press</span>
                 <kbd className="rounded border border-border-subtle bg-surface-sunken px-1.5 py-0.5 font-mono text-[11px] text-text-secondary">
                     {modifier}K
-                </kbd>{' '}
-                for everything else.
+                </kbd>
+                <span>for everything else.</span>
+                {onShowTour !== undefined && (
+                    <>
+                        <span aria-hidden>·</span>
+                        {/*
+                          Offered, not imposed. The walkthrough used to open over
+                          a first visit before anything had happened, which trades
+                          time to first result for an explanation nobody asked for
+                          yet. Someone who wants it can still have it.
+                        */}
+                        <button
+                            onClick={onShowTour}
+                            className="rounded text-text-secondary underline decoration-border-strong underline-offset-4 outline-none ring-accent-line transition-colors hover:text-text-primary hover:decoration-accent focus-visible:ring-2"
+                        >
+                            New here? Take the tour
+                        </button>
+                    </>
+                )}
             </p>
         </section>
     );

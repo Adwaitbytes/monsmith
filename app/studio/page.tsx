@@ -89,7 +89,7 @@ import { CommandPalette } from "./components/CommandPalette";
 import { Omnibox, type OmniboxIntent } from "./components/Omnibox";
 import { StartCards } from "./components/StartCards";
 import { RepoPicker } from "./components/RepoPicker";
-import { WelcomeTour, tourSeen } from "./components/WelcomeTour";
+import { WelcomeTour } from "./components/WelcomeTour";
 import { ActivityBar, type ActivityItem } from "./components/ActivityBar";
 import { StatusBar } from "./components/StatusBar";
 import { EditorTabs } from "./components/EditorTabs";
@@ -375,9 +375,20 @@ export default function StudioPage() {
     const existing = Object.keys(useWorkspace.getState().files);
     const fresh = existing.length <= 1;
     setShowStart(fresh);
-    // The tour explains what the product is; the cards are how you start. A
-    // returning visitor has been told once and is not told again.
-    if (fresh && !tourSeen()) setTourOpen(true);
+
+    /*
+      No modal before the product.
+
+      The tour used to open over a first visit, four cards deep, before anything
+      had happened. Remix is the thing to beat here and it wins on exactly this:
+      open the URL, make a file, hit compile, seconds to a real result. A
+      walkthrough in front of that trades the one metric that matters for an
+      explanation nobody asked for yet.
+
+      So the cards stay, one keystroke away and offered by name in the palette,
+      and the studio opens on something you can act on. Someone who wants the
+      tour can have it; someone who wants to audit a contract is not stopped.
+    */
     // The picker needs this the moment a card is clicked, and it is one cheap
     // request rather than a wait at the point of intent.
     void github.prepare();
@@ -2021,6 +2032,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
                       openSidePanel("migration");
                     }}
                     onPickTemplate={() => setPaletteOpen(true)}
+                    onShowTour={() => setTourOpen(true)}
                     githubConnected={github.status?.connected === true}
                     {...(github.status?.installUrl != null
                       ? { connectUrl: github.status.installUrl }
