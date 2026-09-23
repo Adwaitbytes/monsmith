@@ -65,6 +65,15 @@ import {
 export interface BuildInput {
     /** Workspace-relative path to source. Non-Solidity entries are ignored. */
     files: Record<string, string>;
+    /**
+     * Audit only these paths, when the caller chose a subset.
+     *
+     * Every file still reaches the compiler, because a contract that imports a
+     * sibling cannot be compiled without it. This narrows what is audited, not
+     * what is available to solc, and those are different questions that a
+     * single list would have conflated.
+     */
+    only?: readonly string[];
     origin: ReportOrigin;
     /** Contracts audited in this report, from the viewer's tier. */
     cap: number;
@@ -780,7 +789,21 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
     // request can deliver. Taking the smaller of the two is what stops a Pro
     // report from dying at the ceiling with most of the repository unmeasured.
     const effectiveCap = Math.min(input.cap, CONTRACTS_PER_RUN);
-    const { planned, skipped, notes } = planContracts(input.files, effectiveCap);
+    const { planned: allPlanned, skipped, notes } = planContracts(input.files, effectiveCap);
+
+    // A selection filters the plan rather than the file map, so the compiler
+    // still sees every source and imports keep resolving.
+    const chosen = input.only === undefined ? null : new Set(input.only);
+    const planned = chosen === null ? allPlanned : allPlanned.filter((entry) => chosen.has(entry.path));
+
+    if (chosen !== null) {
+        const dropped = allPlanned.length - planned.length;
+        if (dropped > 0) {
+            notes.push(
+                `${plural(dropped, 'other contract')} in this workspace ${dropped === 1 ? 'was' : 'were'} not audited, because this run was limited to what you selected.`,
+            );
+        }
+    }
     const chains = selectChains(input.chains);
 
     yield {

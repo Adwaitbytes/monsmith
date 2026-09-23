@@ -37,6 +37,15 @@ interface ReportBody {
     origin?: unknown;
     chains?: unknown;
     visitorId?: unknown;
+    /** Paths to audit. Absent means every auditable contract in `files`. */
+    only?: unknown;
+}
+
+/** The chosen subset, or null when the caller did not narrow the run. */
+function readOnly(value: unknown): string[] | null {
+    if (!Array.isArray(value)) return null;
+    const paths = value.filter((entry): entry is string => typeof entry === "string");
+    return paths.length > 0 ? paths : null;
 }
 
 /** Path to source, rejecting anything that is not both strings. */
@@ -135,11 +144,14 @@ export async function POST(request: Request) {
             };
 
             try {
+                const selection = readOnly(body.only);
+
                 for await (const event of buildRepoReport({
                     files,
                     origin: readOrigin(body.origin),
                     cap: CONTRACT_CAP[viewer.tier],
                     chains: readChains(body.chains),
+                    ...(selection !== null ? { only: selection } : {}),
                 })) {
                     // Breaking out of the loop closes the generator, which stops
                     // the work rather than leaving it to finish into nothing.

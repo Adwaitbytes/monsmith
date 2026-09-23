@@ -44,6 +44,7 @@ import { MigrationWizard } from "./components/MigrationWizard";
 import { Markdown } from "./components/Markdown";
 import { ContractInteraction } from "./components/ContractInteraction";
 import { CompileArtifacts } from "./components/CompileArtifacts";
+import { ReportHistory } from "./components/ReportHistory";
 import { ParallelProfiler } from "./components/ParallelProfiler";
 import { GasProfiler } from "./components/GasProfiler";
 import { ChainFitReport } from "./components/ChainFitReport";
@@ -1397,17 +1398,50 @@ Be concise but thorough. Format your response with markdown for readability.`;
   const workspaceTitle = repoLabel ?? (currentFileName === "" ? "Untitled" : currentFileName);
   const workspaceSubtitle = repoLabel !== null && activePath !== null ? activePath : undefined;
 
-  const runReport = useCallback(() => {
-    const solidity = solidityFiles(files);
-    if (Object.keys(solidity).length === 0) {
-      addConsoleOutput("There is no Solidity in the workspace to measure.");
+  /**
+   * Runs the report over a chosen set, or over everything.
+   *
+   * Auditing the whole workspace was the only option, which is wrong in both
+   * directions. Someone working on one contract waited minutes for nine others
+   * they did not change, and someone with a forty file repository could not say
+   * which ten mattered. The compiler still receives every file so imports
+   * resolve; the selection decides what gets audited, not what gets compiled.
+   */
+  const runReport = useCallback(
+    (only?: readonly string[]) => {
+      const solidity = solidityFiles(files);
+      if (Object.keys(solidity).length === 0) {
+        addConsoleOutput("There is no Solidity in the workspace to measure.");
+        return;
+      }
+
+      const chosen = only !== undefined && only.length > 0 ? only : undefined;
+      setShowStart(false);
+      setUnlockError(null);
+      void report.run({
+        files: solidity,
+        origin: repoOrigin,
+        ...(chosen !== undefined ? { only: [...chosen] } : {}),
+      });
+
+      addConsoleOutput(
+        chosen === undefined
+          ? `Measuring every contract in the workspace.`
+          : `Measuring ${chosen.length === 1 ? basenameOf(chosen[0]) : `${chosen.length} selected contracts`}.`,
+      );
+      track("audit", { walletAddress, detail: { surface: "report", origin: repoOrigin.kind } });
+    },
+    [files, report, repoOrigin, walletAddress, addConsoleOutput],
+  );
+
+  /** Audits just the file in the editor, which is the common case while editing. */
+  const runReportForActiveFile = useCallback(() => {
+    if (activePath === null || !activePath.toLowerCase().endsWith(".sol")) {
+      addConsoleOutput("Open a Solidity file to audit it on its own.");
       return;
     }
-    setShowStart(false);
-    setUnlockError(null);
-    void report.run({ files: solidity, origin: repoOrigin });
-    track("audit", { walletAddress, detail: { surface: "report", origin: repoOrigin.kind } });
-  }, [files, report, repoOrigin, walletAddress, addConsoleOutput]);
+    runReport([activePath]);
+  }, [activePath, runReport, addConsoleOutput]);
 
   const handlePrimary = () => {
     if (primaryAction === "deploy") handleDeploy();
@@ -1714,7 +1748,8 @@ Be concise but thorough. Format your response with markdown for readability.`;
 
   const commands = buildCommands(
     {
-      runReport,
+      runReport: () => runReport(),
+      runReportForFile: runReportForActiveFile,
       compile: () => void handleCompile(),
       deploy: handleDeploy,
       importFromGitHub: openRepoPicker,
@@ -1862,6 +1897,13 @@ Be concise but thorough. Format your response with markdown for readability.`;
                   addConsoleOutput(`Opened ${path}`);
                 }}
                 onNotify={addConsoleOutput}
+              />
+
+              <ReportHistory
+                onOpen={(reportId) => window.open(`/report/${reportId}`, "_blank", "noopener")}
+                {...(report.state.status === "ready"
+                  ? { activeReportId: report.state.report.reportId }
+                  : {})}
               />
 
               <CompileArtifacts
@@ -2651,7 +2693,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
             onUnlock={() => void unlockReport()}
             unlocking={unlocking}
             unlockError={unlockError}
-            onRerun={runReport}
+            onRerun={() => runReport()}
             onShare={() => {
               if (report.state.status !== "ready") return;
               void navigator.clipboard.writeText(

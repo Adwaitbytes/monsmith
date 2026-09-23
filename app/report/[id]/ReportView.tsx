@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ShieldAlert } from 'lucide-react';
 
 import type { RepoReport } from '@/lib/report/types';
 import { ReportRail } from '../../studio/components/report/ReportRail';
@@ -40,6 +40,23 @@ export function ReportView({ report, createdAtLabel }: ReportViewProps) {
     return (
         <main className="mx-auto max-w-3xl px-6 py-12">
             <header className="mb-8">
+                {/*
+                  A way back, because a report is usually not where someone
+                  meant to end up permanently. Pointing at the studio rather
+                  than at browser history: a report reached from a shared link
+                  has no history to go back to, and a dead back button is worse
+                  than none.
+                */}
+                <Link
+                    href="/studio"
+                    className="group mb-6 inline-flex items-center gap-1.5 text-[12.5px] text-text-muted outline-none ring-accent-line transition-colors hover:text-text-secondary focus-visible:ring-2"
+                >
+                    <ArrowLeft
+                        size={13}
+                        className="transition-transform group-hover:-translate-x-0.5 motion-reduce:transition-none"
+                    />
+                    Back to the studio
+                </Link>
                 <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-text-muted">
                     Contract audit
                 </p>

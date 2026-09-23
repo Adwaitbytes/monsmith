@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * @title SimpleDAO Template
  * @dev Basic DAO with proposal and voting mechanism
  */
-contract GenContract is Ownable {
+contract SimpleDAO is Ownable {
     struct Proposal {
         string description;
         uint256 voteCount;

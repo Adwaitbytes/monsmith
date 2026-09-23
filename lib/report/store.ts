@@ -139,6 +139,84 @@ export async function loadReport(reportId: string): Promise<StoredReport | null>
     };
 }
 
+/** A row in someone's report history. Summary only: the page lists, not reads. */
+export interface ReportSummary {
+    reportId: string;
+    createdAt: string;
+    origin: ReportOrigin;
+    healthScore: number | null;
+    contracts: number;
+    subject: string;
+}
+
+/**
+ * Reports this owner has produced, newest first.
+ *
+ * A report that took five minutes of compute and cannot be found again is a
+ * report that gets run twice. They were already being stored for the permalink,
+ * so the only thing missing was a way back to them, and a list is that.
+ *
+ * Summaries are assembled here rather than by reading each payload, because a
+ * history page that deserialises fifty full reports to render fifty rows is a
+ * page that gets slower every time someone uses the product.
+ */
+export async function reportsFor(
+    owner: ReportOwner,
+    limit = 50,
+): Promise<ReportSummary[]> {
+    const sql = client();
+    if (sql === null) return [];
+    await ensureSchema();
+
+    const key = owner.userId ?? owner.visitorId;
+    if (key === null) return [];
+
+    const rows = (await (owner.userId !== null
+        ? sql`
+            SELECT report_id, origin, health_score, created_at,
+                   jsonb_array_length(payload -> 'contracts') AS contract_count,
+                   payload -> 'contracts' -> 0 ->> 'name' AS first_name
+            FROM reports
+            WHERE user_id = ${key}
+            ORDER BY created_at DESC
+            LIMIT ${limit}
+          `
+        : sql`
+            SELECT report_id, origin, health_score, created_at,
+                   jsonb_array_length(payload -> 'contracts') AS contract_count,
+                   payload -> 'contracts' -> 0 ->> 'name' AS first_name
+            FROM reports
+            WHERE visitor_id = ${key}
+            ORDER BY created_at DESC
+            LIMIT ${limit}
+          `)) as Array<{
+        report_id: string;
+        origin: ReportOrigin;
+        health_score: number | null;
+        created_at: string;
+        contract_count: number | null;
+        first_name: string | null;
+    }>;
+
+    return rows.map((row) => ({
+        reportId: row.report_id,
+        createdAt: new Date(row.created_at).toISOString(),
+        origin: row.origin,
+        healthScore: row.health_score,
+        contracts: row.contract_count ?? 0,
+        subject: subjectOf(row.origin, row.first_name),
+    }));
+}
+
+/** What to call a report in a list, from cheapest identifying detail first. */
+function subjectOf(origin: ReportOrigin, firstContract: string | null): string {
+    if (origin?.kind === 'github') return `${origin.owner}/${origin.repo}`;
+    if (origin?.kind === 'address') {
+        return `${origin.address.slice(0, 8)}…${origin.address.slice(-4)}`;
+    }
+    return firstContract ?? 'Workspace';
+}
+
 /**
  * Whether a viewer may see the full report.
  *

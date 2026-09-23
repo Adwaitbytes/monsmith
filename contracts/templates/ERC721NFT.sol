@@ -10,7 +10,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * @title ERC721NFT Template
  * @dev NFT collection with minting and URI management
  */
-contract GenContract is ERC721, ERC721URIStorage, ERC721Burnable, Ownable {
+contract ERC721NFT is ERC721, ERC721URIStorage, ERC721Burnable, Ownable {
     uint256 private _nextTokenId;
 
     constructor(

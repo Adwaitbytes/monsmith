@@ -48,6 +48,8 @@ export interface RunReportInput {
     files: Record<string, string>;
     origin: ReportOrigin;
     chains?: string[];
+    /** Audit only these paths. Everything is still sent, so imports resolve. */
+    only?: string[];
 }
 
 /** Sections land one at a time, so a contract exists before it is complete. */

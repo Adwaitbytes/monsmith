@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * @title ERC20Token Template
  * @dev Standard ERC20 token with mint and burn capabilities
  */
-contract GenContract is ERC20, ERC20Burnable, Ownable {
+contract ERC20Token is ERC20, ERC20Burnable, Ownable {
     constructor(
         string memory name,
         string memory symbol,

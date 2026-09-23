@@ -42,6 +42,8 @@ export interface Command {
  */
 export interface StudioActions {
     runReport: () => void;
+    /** Audits only the file in the editor, for the edit-and-recheck loop. */
+    runReportForFile: () => void;
     compile: () => void;
     deploy: () => void;
     importFromGitHub: () => void;
@@ -95,6 +97,13 @@ export function buildCommands(
             group: 'Analyse',
             keywords: ['audit', 'security', 'scan', 'check', 'analyse', 'analyze', 'everything'],
             run: actions.runReport,
+        },
+        {
+            id: 'report.file',
+            label: 'Audit only the open file',
+            group: 'Analyse',
+            keywords: ['single', 'this file', 'current', 'quick', 'one'],
+            run: actions.runReportForFile,
         },
         {
             id: 'report.share',

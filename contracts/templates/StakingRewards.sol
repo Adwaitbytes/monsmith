@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  * @title StakingRewards Template
  * @dev Simple staking contract with reward distribution
  */
-contract GenContract is Ownable, ReentrancyGuard {
+contract StakingRewards is Ownable, ReentrancyGuard {
     IERC20 public stakingToken;
     IERC20 public rewardToken;
 
