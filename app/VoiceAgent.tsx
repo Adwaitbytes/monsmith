@@ -4,6 +4,8 @@ import React, { useCallback, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Loader2, Phone } from 'lucide-react';
 
+import { useIDEStore } from '@/lib/store';
+
 /**
  * A line to a person, above the assistant.
  *
@@ -23,12 +25,10 @@ import { Loader2, Phone } from 'lucide-react';
  * was in the middle of, which for this product is a running audit.
  */
 
-export interface VoiceAgentProps {
-    /** Raised when the assistant is open, so the two never overlap. */
-    offset?: boolean;
-}
-
-export function VoiceAgent({ offset = false }: VoiceAgentProps) {
+export function VoiceAgent() {
+    // Read from the store rather than a prop: this renders in the root layout,
+    // above every page, and only one of those pages has an assistant to avoid.
+    const offset = useIDEStore((state) => state.assistantOpen);
     const [connecting, setConnecting] = useState(false);
     const [failed, setFailed] = useState(false);
     const reduce = useReducedMotion();

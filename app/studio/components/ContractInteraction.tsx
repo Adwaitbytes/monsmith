@@ -86,7 +86,7 @@ export function ContractInteraction({ abi, deployedAddress, walletAddress, onClo
       if (fn.kind === "read") {
         const result = await callRead(address.trim() as Address, abi, fn, args[key] ?? []);
         setCalls((prev) => ({ ...prev, [key]: { status: "done", outputs: result.outputs } }));
-        onLog(`📖 ${fn.name}() → ${result.outputs.map((o) => o.value).join(", ")}`);
+        onLog(` ${fn.name}() → ${result.outputs.map((o) => o.value).join(", ")}`);
         return;
       }
 
@@ -97,7 +97,7 @@ export function ContractInteraction({ abi, deployedAddress, walletAddress, onClo
       const raw = values[key]?.trim();
       const valueWei = raw ? BigInt(Math.round(parseFloat(raw) * 1e18)) : undefined;
 
-      onLog(`🔑 Confirm ${fn.name}() in your wallet...`);
+      onLog(`Confirm ${fn.name}() in your wallet...`);
       const result = await sendWrite(
         address.trim() as Address,
         abi,
@@ -111,12 +111,12 @@ export function ContractInteraction({ abi, deployedAddress, walletAddress, onClo
         ...prev,
         [key]: { status: "done", txHash: result.txHash, explorerUrl: result.explorerUrl },
       }));
-      onLog(`✅ ${fn.name}() mined, gas ${result.gasUsed}`);
+      onLog(` ${fn.name}() mined, gas ${result.gasUsed}`);
       void refreshBalance();
     } catch (error) {
       const detail = errorMessage(error);
       setCalls((prev) => ({ ...prev, [key]: { status: "error", detail } }));
-      onLog(`❌ ${fn.name}(): ${detail}`);
+      onLog(` ${fn.name}(): ${detail}`);
     }
   };
 

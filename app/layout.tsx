@@ -5,6 +5,7 @@ import { ThemeSync } from "./ThemeSync";
 import { PostHogProvider } from "./PostHogProvider";
 import { AuthProvider } from "./AuthProvider";
 import { JsonLd } from "./JsonLd";
+import { VoiceAgent } from "./VoiceAgent";
 import {
   FOUNDER,
   SITE_DESCRIPTION,
@@ -139,6 +140,16 @@ export default function RootLayout({
         <AuthProvider>
           <PostHogProvider>{children}</PostHogProvider>
         </AuthProvider>
+        {/*
+          A line to a person, on every page.
+
+          It sits in the layout rather than in the studio because the questions
+          it exists for arrive from anywhere: someone reading the landing page
+          deciding whether this fits their team, someone on a shared report
+          wondering who produced it. Putting it only where the code is would
+          miss most of the people who want it.
+        */}
+        <VoiceAgent />
       </body>
     </html>
   );

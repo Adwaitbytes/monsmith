@@ -125,6 +125,15 @@ interface CompileResult {
 }
 
 interface IDEState {
+  /**
+   * Whether the studio's assistant panel is showing.
+   *
+   * Lives here rather than in the studio because the call button sits in the
+   * root layout, where it is available on every page, and the two share a
+   * corner. Without this they would overlap on the one page that has both.
+   */
+  assistantOpen: boolean;
+  setAssistantOpen: (open: boolean) => void;
   isCompiling: boolean;
   isDeploying: boolean;
   compileResult: CompileResult | null;
@@ -143,10 +152,12 @@ interface IDEState {
 }
 
 export const useIDEStore = create<IDEState>((set, get) => ({
+  assistantOpen: false,
+  setAssistantOpen: (assistantOpen) => set({ assistantOpen }),
   isCompiling: false,
   isDeploying: false,
   compileResult: null,
-  consoleOutput: ['🟣 Monsmith IDE initialized...'],
+  consoleOutput: ['Ready. Output from compiling, deploying and importing appears here.'],
   terminalOpen: true,
   sidebarOpen: true,
   aiPanelOpen: false,

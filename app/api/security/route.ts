@@ -140,7 +140,7 @@ export async function POST(req: Request) {
         severity: "info",
         title: "Uses OpenZeppelin Contracts",
         description: "Contract uses battle-tested OpenZeppelin libraries",
-        recommendation: "✓ Good practice - continue using audited libraries"
+        recommendation: "Good practice - continue using audited libraries"
       });
     }
     
@@ -202,13 +202,13 @@ export async function POST(req: Request) {
     // Deployment recommendation
     let deploymentRecommendation = "";
     if (criticalCount > 0) {
-      deploymentRecommendation = "🛑 DEPLOYMENT NOT RECOMMENDED - Critical vulnerabilities detected. Fix immediately.";
+      deploymentRecommendation = "DEPLOYMENT NOT RECOMMENDED - Critical vulnerabilities detected. Fix immediately.";
     } else if (highCount > 0) {
-      deploymentRecommendation = "⚠️ DEPLOY WITH CAUTION - High severity issues detected. Review carefully.";
+      deploymentRecommendation = "DEPLOY WITH CAUTION - High severity issues detected. Review carefully.";
     } else if (mediumCount > 0) {
-      deploymentRecommendation = "✓ DEPLOYABLE - Medium issues detected. Consider fixing for production.";
+      deploymentRecommendation = "DEPLOYABLE - Medium issues detected. Consider fixing for production.";
     } else {
-      deploymentRecommendation = "✅ SAFE TO DEPLOY - No critical issues detected. Standard best practices followed.";
+      deploymentRecommendation = "SAFE TO DEPLOY - No critical issues detected. Standard best practices followed.";
     }
     
     return NextResponse.json({
@@ -227,7 +227,7 @@ export async function POST(req: Request) {
         },
         issues,
         timestamp: new Date().toISOString(),
-        disclaimer: "⚠️ This is an automated analysis. Professional audit recommended for production contracts."
+        disclaimer: "This is an automated analysis. Professional audit recommended for production contracts."
       }
     });
     

@@ -48,7 +48,6 @@ import { ContractInteraction } from "./components/ContractInteraction";
 import { CompileArtifacts } from "./components/CompileArtifacts";
 import { ReportHistory } from "./components/ReportHistory";
 import { Assistant } from "./components/Assistant";
-import { VoiceAgent } from "./components/VoiceAgent";
 import { ParallelProfiler } from "./components/ParallelProfiler";
 import { GasProfiler } from "./components/GasProfiler";
 import { ChainFitReport } from "./components/ChainFitReport";
@@ -241,7 +240,7 @@ export default function StudioPage() {
   const narrow = useNarrowViewport();
   const balance = useBalance(walletAddress, network);
   const [railForced, setRailForced] = useState(false);
-  const [assistantOpen, setAssistantOpen] = useState(false);
+  const setAssistantOpen = useIDEStore((state) => state.setAssistantOpen);
   const [unlocking, setUnlocking] = useState(false);
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [repoOrigin, setRepoOrigin] = useState<ReportOrigin>({ kind: "workspace" });
@@ -415,11 +414,11 @@ export default function StudioPage() {
         });
         const address = accounts?.[0];
         if (!address) {
-          addConsoleOutput("❌ No account returned by the wallet");
+          addConsoleOutput("No account returned by the wallet");
           return;
         }
         setUser({ walletAddress: address });
-        addConsoleOutput(`✅ Wallet connected: ${address.slice(0, 6)}...${address.slice(-4)}`);
+        addConsoleOutput(`Wallet connected: ${address.slice(0, 6)}...${address.slice(-4)}`);
         
         // Track in Supabase - get or create user and store UUID
         track("wallet_connect", { walletAddress: address });
@@ -434,11 +433,20 @@ export default function StudioPage() {
   // Compile contract.
   // `sourceOverride` lets the architect compile code it just generated: reading
   // `code` here would return the pre-update value until React re-renders.
+  /**
+   * Compiles, with no wallet required.
+   *
+   * This used to refuse outright until a wallet was connected, which made the
+   * most basic operation in the product the one thing a visitor could not do.
+   * Compiling runs solc on the server and charges nothing: the paid actions are
+   * audit and deploy, and compile was never on that list. Remix asks for no
+   * wallet to compile and neither should this.
+   *
+   * The payment branch below stays, because the server is allowed to change its
+   * mind about what costs money. It now asks for a wallet at the point one is
+   * actually needed rather than at the door.
+   */
   const handleCompile = async (sourceOverride?: string) => {
-    if (!isConnected) {
-      addConsoleOutput("⚠️ Please connect wallet first");
-      return;
-    }
 
     const source = sourceOverride ?? code;
 
@@ -458,7 +466,7 @@ export default function StudioPage() {
 
     // Handle Python contracts via PyMon API
     if (language === "python") {
-      addConsoleOutput("🐍 Transpiling Python contract...");
+      addConsoleOutput("Transpiling Python contract...");
 
       try {
         // First transpile Python to Solidity
@@ -474,7 +482,7 @@ export default function StudioPage() {
         const transpileResult = await readJson<TranspileResponse>(transpileRes);
 
         if (!transpileResult.success) {
-          addConsoleOutput(`❌ Transpilation failed: ${transpileResult.error}`);
+          addConsoleOutput(`Transpilation failed: ${transpileResult.error}`);
           setCompileResult({
             success: false,
             errors: [{ message: transpileResult.error ?? "Transpilation failed" }],
@@ -484,17 +492,17 @@ export default function StudioPage() {
         }
 
         if (!transpileResult.solidityCode) {
-          addConsoleOutput("❌ Transpiler returned no Solidity output");
+          addConsoleOutput("Transpiler returned no Solidity output");
           setCompileResult({ success: false, errors: [{ message: "Transpiler returned no Solidity output" }] });
           setCompiling(false);
           return;
         }
 
-        addConsoleOutput(`✅ Transpiled to Solidity: ${transpileResult.contractName ?? "contract"}`);
+        addConsoleOutput(`Transpiled to Solidity: ${transpileResult.contractName ?? "contract"}`);
         setTranspiledSolidity(transpileResult.solidityCode);
 
         // Now compile the Solidity code
-        addConsoleOutput("🔨 Compiling generated Solidity...");
+        addConsoleOutput("Compiling generated Solidity...");
 
         let res = await fetch("/api/agent", {
           method: "POST",
@@ -506,11 +514,16 @@ export default function StudioPage() {
           }),
         });
 
-        // Handle payment if required
+        // Handle payment if the server asks for it.
         if (res.status === 402) {
+          if (walletAddress === null) {
+            addConsoleOutput("This compile needs a payment. Connect a wallet to continue.");
+            setCompiling(false);
+            return;
+          }
           const data = await readJson<PaymentChallenge>(res);
-          addConsoleOutput("💳 Signature required for compilation...");
-          const xPaymentHeader = await createPaymentHeader(walletAddress!, data.paymentDetails);
+          addConsoleOutput("Signature required for compilation...");
+          const xPaymentHeader = await createPaymentHeader(walletAddress, data.paymentDetails);
 
           res = await fetch("/api/agent", {
             method: "POST",
@@ -530,19 +543,19 @@ export default function StudioPage() {
         const compileTime = Date.now() - startTime;
 
         if (result.success) {
-          addConsoleOutput(`✅ Python contract compiled in ${compileTime}ms`);
-          addConsoleOutput(`📦 Bytecode size: ${(result.bytecode?.length || 0) / 2} bytes`);
+          addConsoleOutput(`Python contract compiled in ${compileTime}ms`);
+          addConsoleOutput(`Bytecode size: ${(result.bytecode?.length || 0) / 2} bytes`);
           setCompileResult({
             success: true,
             bytecode: result.bytecode,
             abi: result.abi || transpileResult.abi,
           });
         } else {
-          addConsoleOutput(`❌ Compilation failed`);
+          addConsoleOutput(`Compilation failed`);
           setCompileResult({ success: false, errors: result.errors });
         }
       } catch (err) {
-        addConsoleOutput(`❌ Error: ${errorMessage(err)}`);
+        addConsoleOutput(`Error: ${errorMessage(err)}`);
         setCompileResult({ success: false, errors: [{ message: errorMessage(err) }] });
       }
 
@@ -551,7 +564,7 @@ export default function StudioPage() {
     }
 
     // Standard Solidity compilation
-    addConsoleOutput("🔨 Compiling contract...");
+    addConsoleOutput("Compiling contract...");
 
     try {
       let res = await fetch("/api/agent", {
@@ -565,11 +578,16 @@ export default function StudioPage() {
         }),
       });
 
-      // Handle payment if required
+      // Handle payment if the server asks for it.
       if (res.status === 402) {
+        if (walletAddress === null) {
+          addConsoleOutput("This compile needs a payment. Connect a wallet to continue.");
+          setCompiling(false);
+          return;
+        }
         const data = await readJson<PaymentChallenge>(res);
-        addConsoleOutput("💳 Signature required for compilation...");
-        const xPaymentHeader = await createPaymentHeader(walletAddress!, data.paymentDetails);
+        addConsoleOutput("Signature required for compilation...");
+        const xPaymentHeader = await createPaymentHeader(walletAddress, data.paymentDetails);
         
         res = await fetch("/api/agent", {
           method: "POST",
@@ -593,8 +611,8 @@ export default function StudioPage() {
         // Named, because a file can declare several contracts and only one is
         // built. Silently deploying the wrong one is worse than not deploying.
         const built = result.contractName === undefined ? "" : ` ${result.contractName}`;
-        addConsoleOutput(`✅ Compiled${built} in ${compileTime}ms`);
-        addConsoleOutput(`📦 Bytecode size: ${(result.bytecode?.length || 0) / 2} bytes`);
+        addConsoleOutput(`Compiled${built} in ${compileTime}ms`);
+        addConsoleOutput(`Bytecode size: ${(result.bytecode?.length || 0) / 2} bytes`);
         setCompileResult({
           success: true,
           bytecode: result.bytecode,
@@ -606,7 +624,7 @@ export default function StudioPage() {
         if (result.libraries !== undefined && result.libraries.length > 0) {
           const names = result.libraries.map((library) => library.name).join(", ");
           addConsoleOutput(
-            `🔗 Links against ${result.libraries.length} librar${result.libraries.length === 1 ? "y" : "ies"}: ${names}. ` +
+            `Links against ${result.libraries.length} librar${result.libraries.length === 1 ? "y" : "ies"}: ${names}. ` +
             `Deploying will put ${result.libraries.length === 1 ? "it" : "them"} on chain first.`
           );
         }
@@ -617,7 +635,7 @@ export default function StudioPage() {
           detail: { bytes: result.contractSize, language },
         });
       } else {
-        addConsoleOutput(`❌ Compilation failed`);
+        addConsoleOutput(`Compilation failed`);
         if (result.errors) {
           result.errors.forEach((err) => {
             addConsoleOutput(`   ${err.message}`);
@@ -642,7 +660,7 @@ export default function StudioPage() {
         });
       }
     } catch (err) {
-      addConsoleOutput(`❌ Error: ${errorMessage(err)}`);
+      addConsoleOutput(`Error: ${errorMessage(err)}`);
       setCompileResult({ success: false, errors: [{ message: errorMessage(err) }] });
     } finally {
       setCompiling(false);
@@ -680,15 +698,15 @@ export default function StudioPage() {
   // Deploy contract
   const handleDeploy = async () => {
     if (!compileResult?.success) {
-      addConsoleOutput("⚠️ Please compile successfully first");
+      addConsoleOutput("Please compile successfully first");
       return;
     }
     if (!walletAddress) {
-      addConsoleOutput("⚠️ Connect a wallet to deploy");
+      addConsoleOutput("Connect a wallet to deploy");
       return;
     }
     if (!compileResult.abi || !compileResult.bytecode) {
-      addConsoleOutput("⚠️ Compile output is missing the ABI or bytecode. Compile again.");
+      addConsoleOutput("Compile output is missing the ABI or bytecode. Compile again.");
       return;
     }
 
@@ -740,8 +758,8 @@ export default function StudioPage() {
     setCtorPayable(false);
     setCtorError(null);
     setDeploying(true);
-    addConsoleOutput(`🚀 Deploying ${language === "python" ? "Python" : "Solidity"} contract to Monad testnet...`);
-    addConsoleOutput("🔑 Confirm the transaction in your wallet...");
+    addConsoleOutput(`Deploying ${language === "python" ? "Python" : "Solidity"} contract to Monad testnet...`);
+    addConsoleOutput("Confirm the transaction in your wallet...");
 
     try {
       const result = await deployFromWallet(
@@ -757,10 +775,10 @@ export default function StudioPage() {
         }
       );
 
-      addConsoleOutput(`✅ Contract deployed!`);
-      addConsoleOutput(`📍 Address: ${result.address}`);
-      addConsoleOutput(`🔗 TX: ${result.txHash}`);
-      addConsoleOutput(`🔎 ${result.explorerUrl}`);
+      addConsoleOutput(`Contract deployed!`);
+      addConsoleOutput(`Address: ${result.address}`);
+      addConsoleOutput(`TX: ${result.txHash}`);
+      addConsoleOutput(` ${result.explorerUrl}`);
       setDeployedAddress(result.address);
       setShowDeployModal(true);
 
@@ -776,7 +794,7 @@ export default function StudioPage() {
         },
       });
     } catch (err) {
-      addConsoleOutput(`❌ Deployment failed: ${errorMessage(err)}`);
+      addConsoleOutput(`Deployment failed: ${errorMessage(err)}`);
     } finally {
       setDeploying(false);
     }
@@ -793,21 +811,21 @@ export default function StudioPage() {
     // in the editor. Switching back and forth used to destroy both.
     if (newLang === "python") {
       openWith("contracts/MyContract.py", DEFAULT_PYTHON_CONTRACT);
-      addConsoleOutput("🐍 Switched to Python mode (PyMon)");
+      addConsoleOutput("Switched to Python mode (PyMon)");
     } else {
       openWith("contracts/MyToken.sol", DEFAULT_CONTRACT);
-      addConsoleOutput("📜 Switched to Solidity mode");
+      addConsoleOutput("Switched to Solidity mode");
     }
   };
 
   // Python Security Audit
   const handlePythonAudit = async () => {
     if (language !== "python") {
-      addConsoleOutput("⚠️ Audit only available for Python contracts");
+      addConsoleOutput("Audit only available for Python contracts");
       return;
     }
 
-    addConsoleOutput("🔍 Running security audit...");
+    addConsoleOutput("Running security audit...");
 
     try {
       const res = await fetch("/api/pymon", {
@@ -822,36 +840,36 @@ export default function StudioPage() {
       const result = await readJson<PymonAuditResponse>(res);
 
       if (result.success) {
-        addConsoleOutput(`📊 Security Score: ${result.score}/100 (${result.riskLevel})`);
-        addConsoleOutput(`📋 Found ${result.findings?.length || 0} issues`);
+        addConsoleOutput(`Security Score: ${result.score}/100 (${result.riskLevel})`);
+        addConsoleOutput(`Found ${result.findings?.length || 0} issues`);
 
         if (result.findings && result.findings.length > 0) {
           result.findings.forEach((f) => {
-            const icon = f.severity === 'critical' ? '🔴' :
-              f.severity === 'high' ? '🟠' :
-                f.severity === 'medium' ? '🟡' : '🟢';
+            const icon = f.severity === 'critical' ? '' :
+              f.severity === 'high' ? '' :
+                f.severity === 'medium' ? '' : '';
             addConsoleOutput(`   ${icon} [${f.severity.toUpperCase()}] ${f.title}`);
           });
         }
 
         if (result.bestPractices && result.bestPractices.length > 0) {
-          addConsoleOutput("💡 Recommendations:");
+          addConsoleOutput("Recommendations:");
           result.bestPractices.forEach((tip: string) => {
             addConsoleOutput(`   • ${tip}`);
           });
         }
       } else {
-        addConsoleOutput(`❌ Audit failed: ${result.error}`);
+        addConsoleOutput(`Audit failed: ${result.error}`);
       }
     } catch (err) {
-      addConsoleOutput(`❌ Error: ${errorMessage(err)}`);
+      addConsoleOutput(`Error: ${errorMessage(err)}`);
     }
   };
 
   // Security Audit
   const handleAudit = async () => {
     setAILoading(true);
-    addConsoleOutput("🔒 Running security audit...");
+    addConsoleOutput("Running security audit...");
 
     try {
       const res = await fetch("/api/security", {
@@ -863,14 +881,14 @@ export default function StudioPage() {
       const result = await readJson<SecurityAuditResponse>(res);
 
       if (!result.success || !result.analysis) {
-        addConsoleOutput(`❌ Audit failed: ${result.error ?? "Unknown error"}`);
+        addConsoleOutput(`Audit failed: ${result.error ?? "Unknown error"}`);
         return;
       }
 
       const { riskLevel, issues, securityScore, deploymentRecommendation } = result.analysis;
-      addConsoleOutput(`🛡️ Security Score: ${securityScore}/100`);
-      addConsoleOutput(`⚠️ Risk Level: ${riskLevel.toUpperCase()}`);
-      addConsoleOutput(`📋 Issues found: ${issues.length}`);
+      addConsoleOutput(`Security Score: ${securityScore}/100`);
+      addConsoleOutput(`Risk Level: ${riskLevel.toUpperCase()}`);
+      addConsoleOutput(`Issues found: ${issues.length}`);
 
       setAIResponse(`## Security Audit Report\n\n**Risk Level:** ${riskLevel}\n**Score:** ${securityScore}/100\n\n${deploymentRecommendation}\n\n### Issues Found:\n${
         issues.length
@@ -886,7 +904,7 @@ export default function StudioPage() {
         detail: { securityScore, riskLevel, issues: issues.length },
       });
     } catch (err) {
-      addConsoleOutput(`❌ Audit failed: ${errorMessage(err)}`);
+      addConsoleOutput(`Audit failed: ${errorMessage(err)}`);
     } finally {
       setAILoading(false);
     }
@@ -897,14 +915,14 @@ export default function StudioPage() {
     const template = TEMPLATES[templateKey];
     setLanguage("solidity");
     openWith(`contracts/${template.name.replace(/\s+/g, '')}.sol`, template.code);
-    addConsoleOutput(`📄 Loaded template: ${template.name}`);
+    addConsoleOutput(`Loaded template: ${template.name}`);
   };
 
   const loadPythonTemplate = (templateKey: keyof typeof PYTHON_TEMPLATES) => {
     const template = PYTHON_TEMPLATES[templateKey];
     setLanguage("python");
     openWith(`contracts/${template.name.replace(/\s+/g, '')}.py`, template.code);
-    addConsoleOutput(`🐍 Loaded Python template: ${template.name}`);
+    addConsoleOutput(`Loaded Python template: ${template.name}`);
   };
 
   /**
@@ -921,7 +939,7 @@ export default function StudioPage() {
   // ============= QUICK ACTIONS =============
   const handleQuickAction = async (action: QuickActionType) => {
     if (!code.trim()) {
-      addConsoleOutput("⚠️ No code to analyze");
+      addConsoleOutput("No code to analyze");
       return;
     }
 
@@ -976,7 +994,7 @@ Look for:
     };
 
     try {
-      addConsoleOutput(`🤖 Running ${action} analysis...`);
+      addConsoleOutput(`Running ${action} analysis...`);
 
       const res = await fetch("/api/agent", {
         method: "POST",
@@ -993,7 +1011,7 @@ Look for:
       if (result.success) {
         const response = result.answer || result.response || "Analysis complete";
         setAIResponse(response);
-        addConsoleOutput(`✅ ${action.charAt(0).toUpperCase() + action.slice(1)} analysis complete`);
+        addConsoleOutput(` ${action.charAt(0).toUpperCase() + action.slice(1)} analysis complete`);
         
         // Ensure AI panel is visible
         showAIPanel();
@@ -1001,14 +1019,14 @@ Look for:
         track("ai_generate", { walletAddress, detail: { mode: action } });
       } else {
         const errorMsg = result.error || "Unknown error";
-        setAIResponse(`❌ Analysis failed: ${errorMsg}`);
-        addConsoleOutput(`❌ Analysis failed: ${errorMsg}`);
+        setAIResponse(`Analysis failed: ${errorMsg}`);
+        addConsoleOutput(`Analysis failed: ${errorMsg}`);
         showAIPanel();
       }
     } catch (err) {
       const errorMsg = errorMessage(err) || "Request failed";
-      setAIResponse(`❌ Error: ${errorMsg}`);
-      addConsoleOutput(`❌ Error: ${errorMsg}`);
+      setAIResponse(`Error: ${errorMsg}`);
+      addConsoleOutput(`Error: ${errorMsg}`);
       showAIPanel();
     } finally {
       setAILoading(false);
@@ -1018,7 +1036,7 @@ Look for:
   // ============= ARCHITECT MODE HANDLER =============
   const handleArchitectGenerate = async () => {
     if (!selectedContractType) {
-      addConsoleOutput("⚠️ Please select a contract type");
+      addConsoleOutput("Please select a contract type");
       return;
     }
 
@@ -1026,12 +1044,12 @@ Look for:
     if (!contractType) return;
 
     setArchitectGenerating(true);
-    addConsoleOutput(`🏗️ Architect generating ${contractType.name}...`);
+    addConsoleOutput(`Architect generating ${contractType.name}...`);
 
     // ALWAYS switch to Solidity mode when generating contracts
     if (language !== "solidity") {
       setLanguage("solidity");
-      addConsoleOutput(`📝 Switched to Solidity mode for contract generation`);
+      addConsoleOutput(`Switched to Solidity mode for contract generation`);
     }
 
     try {
@@ -1040,7 +1058,7 @@ Look for:
 
       // Check if we have a pre-built template for this contract type
       if (templateId && CONTRACT_TEMPLATES[templateId]) {
-        addConsoleOutput(`📦 Using pre-built template for guaranteed compilation...`);
+        addConsoleOutput(`Using pre-built template for guaranteed compilation...`);
 
         // Map user params to template params
         const templateParams: Record<string, string> = {};
@@ -1102,11 +1120,11 @@ Look for:
 
         // Generate from template
         generatedCode = generateFromTemplate(templateId, templateParams);
-        addConsoleOutput(`✅ Template applied successfully!`);
+        addConsoleOutput(`Template applied successfully!`);
 
       } else {
         // Fallback to AI generation for types without templates
-        addConsoleOutput(`🤖 Using AI generation...`);
+        addConsoleOutput(`Using AI generation...`);
 
         const paramsDescription = Object.entries(architectParams)
           .filter(([_, value]) => value)
@@ -1138,8 +1156,7 @@ CRITICAL REQUIREMENTS - YOUR CODE MUST COMPILE:
 6. Add receive() external payable {} at the end
 7. NO constructor parameters - hardcode all values
 
-OUTPUT: ONLY valid Solidity code starting with "// SPDX-License-Identifier: MIT"
-NO markdown, NO explanations, NO code blocks.`;
+OUTPUT: ONLY valid Solidity code starting with "// SPDX-License-Identifier: MIT"NO markdown, NO explanations, NO code blocks.`;
 
         const res = await fetch("/api/agent", {
           method: "POST",
@@ -1187,22 +1204,22 @@ NO markdown, NO explanations, NO code blocks.`;
       const fileName = `${contractType.name.replace(/\s+/g, '')}.sol`;
       openWith(`contracts/${fileName}`, generatedCode);
 
-      addConsoleOutput(`✅ ${contractType.name} contract generated successfully!`);
-      addConsoleOutput(`📄 File: ${fileName}`);
+      addConsoleOutput(` ${contractType.name} contract generated successfully!`);
+      addConsoleOutput(`File: ${fileName}`);
 
       // Auto-compile the code we just produced. Passing it explicitly avoids
       // compiling the previous contract from a stale closure.
       if (isConnected) {
-        addConsoleOutput(`🔄 Auto-compiling to verify...`);
+        addConsoleOutput(`Auto-compiling to verify...`);
         await handleCompile(generatedCode);
       } else {
-        addConsoleOutput(`💡 Connect a wallet to compile and deploy this contract.`);
+        addConsoleOutput(`Connect a wallet to compile and deploy this contract.`);
       }
 
       track("ai_generate", { walletAddress, detail: { mode: "architect", type: contractType.name } });
 
     } catch (err) {
-      addConsoleOutput(`❌ Error: ${errorMessage(err)}`);
+      addConsoleOutput(`Error: ${errorMessage(err)}`);
     } finally {
       setArchitectGenerating(false);
     }
@@ -1217,20 +1234,18 @@ NO markdown, NO explanations, NO code blocks.`;
     setArchitectChatHistory(prev => [...prev, { role: "user", content: message }]);
     setArchitectChatInput("");
     setArchitectGenerating(true);
-    addConsoleOutput(`🏗️ Architect generating contract from request...`);
+    addConsoleOutput(`Architect generating contract from request...`);
 
     // Switch to Solidity mode
     if (language !== "solidity") {
       setLanguage("solidity");
-      addConsoleOutput(`📝 Switched to Solidity mode`);
+      addConsoleOutput(`Switched to Solidity mode`);
     }
 
     try {
       const architectPrompt = `You are a senior Solidity architect. Generate a production-ready, secure, and gas-optimized smart contract for Monad Network.
 
-USER REQUEST: "${message}"
-
-CRITICAL REQUIREMENTS - YOUR CODE MUST COMPILE:
+USER REQUEST: "${message}"CRITICAL REQUIREMENTS - YOUR CODE MUST COMPILE:
 1. Use EXACTLY: pragma solidity ^0.8.24;
 2. Start with: // SPDX-License-Identifier: MIT
 3. Use ONLY these OpenZeppelin imports (copy exactly):
@@ -1248,8 +1263,7 @@ CRITICAL REQUIREMENTS - YOUR CODE MUST COMPILE:
 8. NO constructor parameters - hardcode sensible defaults
 9. Make the contract feature-complete based on the user's request
 
-OUTPUT: ONLY valid Solidity code starting with "// SPDX-License-Identifier: MIT"
-NO markdown, NO explanations, NO code blocks, JUST THE CODE.`;
+OUTPUT: ONLY valid Solidity code starting with "// SPDX-License-Identifier: MIT"NO markdown, NO explanations, NO code blocks, JUST THE CODE.`;
 
       const res = await fetch("/api/agent", {
         method: "POST",
@@ -1299,19 +1313,19 @@ NO markdown, NO explanations, NO code blocks, JUST THE CODE.`;
       // Add assistant response to chat
       setArchitectChatHistory(prev => [...prev, {
         role: "assistant",
-        content: `✅ Generated **${contractName}** contract!\n\n📄 File: ${fileName}${isConnected ? "\n🔄 Auto-compiling to verify..." : "\n💡 Connect a wallet to compile it."}`
+        content: `Generated **${contractName}** contract!\n\n File: ${fileName}${isConnected ? "\n Auto-compiling to verify..." : "\n Connect a wallet to compile it."}`
       }]);
 
-      addConsoleOutput(`✅ ${contractName} contract generated!`);
-      addConsoleOutput(`📄 File: ${fileName}`);
+      addConsoleOutput(` ${contractName} contract generated!`);
+      addConsoleOutput(`File: ${fileName}`);
 
       // Auto-compile the code we just produced. Passing it explicitly avoids
       // compiling the previous contract from a stale closure.
       if (isConnected) {
-        addConsoleOutput(`🔄 Auto-compiling to verify...`);
+        addConsoleOutput(`Auto-compiling to verify...`);
         await handleCompile(generatedCode);
       } else {
-        addConsoleOutput(`💡 Connect a wallet to compile and deploy this contract.`);
+        addConsoleOutput(`Connect a wallet to compile and deploy this contract.`);
       }
 
       // Track analytics
@@ -1320,9 +1334,9 @@ NO markdown, NO explanations, NO code blocks, JUST THE CODE.`;
     } catch (err) {
       setArchitectChatHistory(prev => [...prev, {
         role: "assistant",
-        content: `❌ Error: ${errorMessage(err)}\n\nPlease try again with more specific requirements.`
+        content: `Error: ${errorMessage(err)}\n\nPlease try again with more specific requirements.`
       }]);
-      addConsoleOutput(`❌ Error: ${errorMessage(err)}`);
+      addConsoleOutput(`Error: ${errorMessage(err)}`);
     } finally {
       setArchitectGenerating(false);
     }
@@ -1379,13 +1393,13 @@ Be concise but thorough. Format your response with markdown for readability.`;
       } else {
         setResearchHistory(prev => [...prev, {
           role: "assistant",
-          content: `❌ Error: ${result.error || "Failed to get response"}`
+          content: `Error: ${result.error || "Failed to get response"}`
         }]);
       }
     } catch (err) {
       setResearchHistory(prev => [...prev, {
         role: "assistant",
-        content: `❌ Error: ${errorMessage(err)}`
+        content: `Error: ${errorMessage(err)}`
       }]);
     } finally {
       setResearchLoading(false);
@@ -2919,7 +2933,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
                     setLanguage("solidity");
                   }
                   setMigrationOpen(false);
-                  addConsoleOutput(`✅ Imported: ${fileName}`);
+                  addConsoleOutput(`Imported: ${fileName}`);
                 }}
                 onClose={() => setMigrationOpen(false)}
               />
@@ -2949,7 +2963,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
                 <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
                   <CheckCircle2 size={32} className="text-white" />
                 </div>
-                <h2 className="text-2xl font-bold mb-2">Contract Deployed! 🎉</h2>
+                <h2 className="text-2xl font-bold mb-2">Contract Deployed! </h2>
                 <p className={`text-sm mb-6 ${isDark ? "text-gray-400" : "text-gray-600"}`}>
                   Your contract is now live on Monad {network}
                 </p>
@@ -3017,16 +3031,6 @@ Be concise but thorough. Format your response with markdown for readability.`;
         is handed the open file and the findings so it argues from the same
         facts the report does rather than offering a second opinion.
       */}
-      {/*
-        A line to a person, stacked above the assistant.
-
-        Two different offers in one place: the assistant answers about the
-        contract on screen, and this is for the questions a model should not be
-        answering. Which agent picks up depends on where the caller is, resolved
-        server-side because a browser cannot see its own address.
-      */}
-      <VoiceAgent offset={assistantOpen} />
-
       <Assistant
         onOpenChange={setAssistantOpen}
         code={code}

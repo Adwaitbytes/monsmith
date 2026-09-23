@@ -237,6 +237,7 @@ export async function POST(req: Request) {
         // Only the LLM-backed actions need a model provider. compile/deploy/transfer
         // run entirely on solc and viem, so they must stay available without one.
         const AI_ACTIONS = ["research", "generate", "architect", "audit", "explain_error"];
+        const PAID_ACTIONS = ["audit", "deploy"];
         const aiAvailable = hasAIProvider();
         if (AI_ACTIONS.includes(action) && !aiAvailable) {
             return NextResponse.json({
@@ -244,19 +245,32 @@ export async function POST(req: Request) {
             }, { status: 503 });
         }
 
-        if (!userAddress) {
-            return NextResponse.json({ error: "Policy Violation: No authenticated wallet." }, { status: 403 });
+        /*
+         * A wallet is required only where one is actually used.
+         *
+         * Every action was gated behind this, compile included, which made the
+         * most basic operation in the product refuse to run for anyone who had
+         * not connected a wallet first. Compiling runs solc on this server and
+         * charges nothing; it has no use for an address. The actions that do
+         * are the ones that spend: a deploy signs from that wallet, a transfer
+         * sends from it, and the paid actions settle against it.
+         */
+        const WALLET_ACTIONS = ["deploy", "transfer", ...PAID_ACTIONS];
+        if (WALLET_ACTIONS.includes(action) && !userAddress) {
+            return NextResponse.json(
+                { error: `"${action}" needs a connected wallet.` },
+                { status: 403 },
+            );
         }
 
-        // Deny list check
-        const incomingUser = userAddress.toLowerCase();
+        // Deny list check, for the actions that carry a wallet at all.
+        const incomingUser = (userAddress ?? "").toLowerCase();
         const DENY_LIST = ["0xdead00000000000000000000000000000000beef"];
         if (DENY_LIST.includes(incomingUser)) {
-            return NextResponse.json({ error: "❌ Policy Violation: Wallet Address is Denylisted." }, { status: 403 });
+            return NextResponse.json({ error: "This wallet address is not permitted." }, { status: 403 });
         }
 
         // Q402 Payment gate for premium actions
-        const PAID_ACTIONS = ["audit", "deploy"];
         if (PAID_ACTIONS.includes(action)) {
             const paymentHeader = req.headers.get("x-payment");
             if (!paymentHeader) {
