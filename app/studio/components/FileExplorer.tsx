@@ -23,6 +23,8 @@ import {
     useWorkspace,
 } from '@/lib/workspace';
 
+import { SectionHeader } from './SidePanel';
+
 /**
  * The file tree.
  *
@@ -79,12 +81,15 @@ function sortedChildren(node: TreeNode): TreeNode[] {
 }
 
 export interface FileExplorerProps {
+    /** Collapse state, owned by the side panel so one section can grow. */
+    expanded?: boolean;
+    onToggle?: () => void;
     /** Called when the open file changes, so the editor can follow. */
     onOpen: (path: string) => void;
     onNotify?: (message: string) => void;
 }
 
-export function FileExplorer({ onOpen, onNotify }: FileExplorerProps) {
+export function FileExplorer({ onOpen, onNotify, expanded = true, onToggle }: FileExplorerProps) {
     const files = useWorkspace((state) => state.files);
     const folders = useWorkspace((state) => state.folders);
     const activePath = useWorkspace((state) => state.activePath);
@@ -357,20 +362,29 @@ contract ${basenameOf(withExtension).replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-
         );
     };
 
+    const action = 'rounded p-1 text-text-muted outline-none ring-accent-line transition-colors hover:bg-border-subtle hover:text-text-primary focus-visible:ring-2';
+
     return (
-        <div className="flex h-full flex-col">
-            <div className="flex items-center justify-between px-3 py-2">
-                <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                    Explorer
-                </span>
-                <span className="flex items-center gap-0.5">
+        <section
+            className={`flex min-h-0 flex-col border-b border-border-subtle ${
+                expanded ? 'flex-1' : 'shrink-0'
+            }`}
+        >
+            <SectionHeader
+                open={expanded}
+                onToggle={onToggle ?? (() => undefined)}
+                title="Explorer"
+                count={fileCount}
+                actions={
+                    <>
                     <button
                         onClick={() => {
                             setCreating({ kind: 'file', parent: 'contracts' });
                             setDraft('');
                         }}
                         title="New file"
-                        className="rounded p-1 text-text-muted transition-colors hover:bg-border-subtle hover:text-text-primary"
+                        aria-label="New file"
+                        className={action}
                     >
                         <FilePlus size={14} />
                     </button>
@@ -380,26 +394,30 @@ contract ${basenameOf(withExtension).replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-
                             setDraft('');
                         }}
                         title="New folder"
-                        className="rounded p-1 text-text-muted transition-colors hover:bg-border-subtle hover:text-text-primary"
+                        aria-label="New folder"
+                        className={action}
                     >
                         <FolderPlus size={14} />
                     </button>
                     <button
                         onClick={() => uploadRef.current?.click()}
                         title="Upload files or a folder"
-                        className="rounded p-1 text-text-muted transition-colors hover:bg-border-subtle hover:text-text-primary"
+                        aria-label="Upload files or a folder"
+                        className={action}
                     >
                         <Upload size={14} />
                     </button>
                     <button
                         onClick={download}
                         title="Download the workspace"
-                        className="rounded p-1 text-text-muted transition-colors hover:bg-border-subtle hover:text-text-primary"
+                        aria-label="Download the workspace"
+                        className={action}
                     >
                         <Download size={14} />
                     </button>
-                </span>
-            </div>
+                    </>
+                }
+            />
 
             <input
                 ref={uploadRef}
@@ -412,7 +430,8 @@ contract ${basenameOf(withExtension).replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-
                 {...{ webkitdirectory: '', directory: '' }}
             />
 
-            <div className="min-h-0 flex-1 overflow-y-auto pb-3">
+            {expanded && (
+            <div className="min-h-0 flex-1 overflow-y-auto pb-2">
                 {creating !== null && creating.parent === '' && (
                     <input
                         autoFocus
@@ -430,15 +449,18 @@ contract ${basenameOf(withExtension).replace(/\.[^.]+$/, '').replace(/[^A-Za-z0-
                 {sortedChildren(tree).map((node) => renderNode(node, 0))}
                 {fileCount === 0 && (
                     <p className="px-3 py-4 text-[12px] leading-relaxed text-text-muted">
-                        No files. Create one, or upload a folder.
+                        No files yet. Create one, or upload a folder.
                     </p>
                 )}
             </div>
+            )}
 
-            <p className="border-t border-border-subtle px-3 py-2 text-[10.5px] leading-relaxed text-text-muted">
-                {fileCount} file{fileCount === 1 ? '' : 's'}, saved in this browser. Compiling uses
-                every .sol file here, so your imports resolve.
-            </p>
-        </div>
+            {expanded && fileCount > 0 && (
+                <p className="shrink-0 px-3 pb-2 pt-1 text-[10.5px] leading-relaxed text-text-muted">
+                    Saved in this browser. Compiling uses every .sol file here, so your imports
+                    resolve.
+                </p>
+            )}
+        </section>
     );
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Check, Copy, Download, FileJson } from 'lucide-react';
+import { Check, Copy, Download } from 'lucide-react';
 
 /**
  * What a compile produced, in a form you can take away.
@@ -16,8 +16,12 @@ import { Check, Copy, Download, FileJson } from 'lucide-react';
  * deploy pipeline expects to find on disk. Offering only one of them means half
  * the people have to do the conversion themselves.
  *
- * Shown only after a compile succeeds. An empty artifacts panel is a promise
- * the product cannot keep yet.
+ * Shown only after a compile succeeds, because the compile is what produces
+ * them. Deploying adds an address on a chain; it does not add an ABI, and a
+ * panel that appeared at deploy time would teach the opposite.
+ *
+ * Renders rows only. The heading, the chevron and the collapsed state belong to
+ * the side panel, which has three of these to keep looking like one thing.
  */
 
 export interface CompileArtifactsProps {
@@ -52,23 +56,32 @@ function Row({
     onDownload: () => void;
     copied: boolean;
 }) {
+    /*
+      Two lines, not one.
+
+      Written as a single row — label on the left, Copy and Download on the
+      right — the two buttons are about 150px of unshrinkable content, and this
+      column is a resizable 260. The label had nowhere left to go and printed
+      itself over the buttons. Stacking gives the actions the full width at any
+      panel size, and the pair reads as one control rather than two crowded ones.
+    */
     return (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-border-subtle bg-surface-sunken px-3 py-2.5">
-            <div className="min-w-0">
-                <p className="text-[12.5px] font-medium text-text-primary">{label}</p>
-                <p className="truncate font-mono text-[10.5px] text-text-muted">{hint}</p>
+        <div className="rounded-lg border border-border-subtle bg-surface-sunken p-2.5">
+            <div className="flex items-baseline justify-between gap-2">
+                <p className="shrink-0 text-[12px] font-medium text-text-primary">{label}</p>
+                <p className="truncate font-mono text-[10px] text-text-muted">{hint}</p>
             </div>
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
                 <button
                     onClick={onCopy}
-                    className="flex items-center gap-1.5 rounded-md border border-border-subtle px-2.5 py-1.5 text-[11.5px] text-text-secondary outline-none ring-accent-line transition-colors hover:border-border-strong hover:text-text-primary focus-visible:ring-2"
+                    className="flex items-center justify-center gap-1.5 rounded-md border border-border-subtle bg-surface-base px-2 py-1.5 text-[11.5px] text-text-secondary outline-none ring-accent-line transition-colors hover:border-border-strong hover:text-text-primary focus-visible:ring-2"
                 >
-                    {copied ? <Check size={12} /> : <Copy size={12} />}
+                    {copied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
                     {copied ? 'Copied' : 'Copy'}
                 </button>
                 <button
                     onClick={onDownload}
-                    className="flex items-center gap-1.5 rounded-md border border-border-subtle px-2.5 py-1.5 text-[11.5px] text-text-secondary outline-none ring-accent-line transition-colors hover:border-border-strong hover:text-text-primary focus-visible:ring-2"
+                    className="flex items-center justify-center gap-1.5 rounded-md border border-border-subtle bg-surface-base px-2 py-1.5 text-[11.5px] text-text-secondary outline-none ring-accent-line transition-colors hover:border-border-strong hover:text-text-primary focus-visible:ring-2"
                 >
                     <Download size={12} />
                     Download
@@ -102,18 +115,11 @@ export function CompileArtifacts({
     }).length;
 
     return (
-        <section className="space-y-2 border-t border-border-subtle px-4 py-3.5">
-            <div className="flex items-center gap-2">
-                <FileJson size={13} className="text-text-muted" />
-                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                    Compiled artifacts
-                </h3>
-            </div>
-
+        <div className="space-y-2 px-3 pb-3">
             {abi !== null && (
                 <Row
                     label="ABI"
-                    hint={`${functions} function${functions === 1 ? '' : 's'} · ${(abiText.length / 1024).toFixed(1)} KB`}
+                    hint={`${functions} fn${functions === 1 ? '' : 's'} · ${(abiText.length / 1024).toFixed(1)} KB`}
                     copied={copied === 'abi'}
                     onCopy={() => {
                         void navigator.clipboard.writeText(abiText);
@@ -147,7 +153,7 @@ export function CompileArtifacts({
             {deployedBytecode !== null && deployedBytecode !== undefined && deployedBytecode.length > 0 && (
                 <Row
                     label="Runtime bytecode"
-                    hint={`What an explorer compares against · ${(deployedBytecode.length / 2 / 1024).toFixed(1)} KB`}
+                    hint={`Runtime · ${(deployedBytecode.length / 2 / 1024).toFixed(1)} KB`}
                     copied={copied === 'runtime'}
                     onCopy={() => {
                         void navigator.clipboard.writeText(deployedBytecode);
@@ -179,9 +185,9 @@ export function CompileArtifacts({
                     className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-border-subtle px-3 py-2 text-[12px] font-medium text-text-secondary outline-none ring-accent-line transition-colors hover:border-border-strong hover:text-text-primary focus-visible:ring-2"
                 >
                     <Download size={12} />
-                    Download the full artifact
+                    Download full artifact
                 </button>
             )}
-        </section>
+        </div>
     );
 }

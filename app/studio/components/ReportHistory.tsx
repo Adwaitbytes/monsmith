@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Clock, ExternalLink, Loader2 } from 'lucide-react';
+import { ExternalLink, Loader2 } from 'lucide-react';
 
 import type { ReportSummary } from '@/lib/report/store';
 import { visitorId } from '@/lib/track';
@@ -32,6 +32,13 @@ export interface ReportHistoryProps {
      * would not show the thing they had just run.
      */
     refreshKey?: string | number;
+    /**
+     * How many reports came back.
+     *
+     * The count belongs in the section header, which is rendered by the panel
+     * rather than here, and the list is the only thing that knows it.
+     */
+    onCount?: (count: number) => void;
 }
 
 function relative(iso: string): string {
@@ -56,7 +63,7 @@ function gradeOf(score: number | null): { text: string; tone: string } {
     return { text: 'F', tone: 'text-red-700 dark:text-red-300 border-red-500/30 bg-red-500/10' };
 }
 
-export function ReportHistory({ onOpen, activeReportId, refreshKey }: ReportHistoryProps) {
+export function ReportHistory({ onOpen, activeReportId, refreshKey, onCount }: ReportHistoryProps) {
     const [reports, setReports] = useState<ReportSummary[] | null>(null);
 
     useEffect(() => {
@@ -70,30 +77,24 @@ export function ReportHistory({ onOpen, activeReportId, refreshKey }: ReportHist
                     headers: { 'x-visitor-id': visitorId() },
                 });
                 const data = (await response.json()) as { reports?: ReportSummary[] };
-                if (live) setReports(data.reports ?? []);
+                if (!live) return;
+                setReports(data.reports ?? []);
+                onCount?.(data.reports?.length ?? 0);
             } catch {
                 // An unreachable history reads as an empty one. The studio does
                 // not depend on it and must not show an error for it.
-                if (live) setReports([]);
+                if (!live) return;
+                setReports([]);
+                onCount?.(0);
             }
         })();
         return () => {
             live = false;
         };
-    }, [refreshKey]);
+    }, [refreshKey, onCount]);
 
     return (
-        <section className="border-t border-border-subtle">
-            <div className="flex items-center gap-2 px-3 py-2.5">
-                <Clock size={12} className="text-text-muted" />
-                <h3 className="flex-1 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-                    Past reports
-                </h3>
-                {reports !== null && reports.length > 0 && (
-                    <span className="text-[10.5px] tabular-nums text-text-muted">{reports.length}</span>
-                )}
-            </div>
-
+        <div className="pb-1">
             {reports === null && (
                 <p className="flex items-center gap-1.5 px-3 pb-3 text-[11.5px] text-text-muted">
                     <Loader2 size={11} className="animate-spin motion-reduce:animate-none" />
@@ -108,7 +109,7 @@ export function ReportHistory({ onOpen, activeReportId, refreshKey }: ReportHist
                 </p>
             )}
 
-            <div className="max-h-56 overflow-y-auto pb-1">
+            <div>
                 {reports?.map((entry) => {
                     const grade = gradeOf(entry.healthScore);
                     const active = entry.reportId === activeReportId;
@@ -143,6 +144,6 @@ export function ReportHistory({ onOpen, activeReportId, refreshKey }: ReportHist
                     );
                 })}
             </div>
-        </section>
+        </div>
     );
 }

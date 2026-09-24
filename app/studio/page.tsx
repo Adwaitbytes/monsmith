@@ -47,6 +47,7 @@ import { Markdown } from "./components/Markdown";
 import { ContractInteraction } from "./components/ContractInteraction";
 import { CompileArtifacts } from "./components/CompileArtifacts";
 import { ReportHistory } from "./components/ReportHistory";
+import { SidePanelSection, useSection } from "./components/SidePanel";
 import { Assistant } from "./components/Assistant";
 import { ParallelProfiler } from "./components/ParallelProfiler";
 import { GasProfiler } from "./components/GasProfiler";
@@ -232,6 +233,16 @@ export default function StudioPage() {
     reason.
   */
   const [sideBarView, setSideBarView] = useState<string | null>("explorer");
+
+  /*
+    The side panel's sections. Kept here rather than inside each one because
+    only the container can enforce the rule that makes the column work: exactly
+    one section grows and the rest size to their contents.
+  */
+  const [filesOpen, toggleFiles] = useSection("files");
+  const [reportsOpen, toggleReports] = useSection("reports");
+  const [artifactsOpen, toggleArtifacts] = useSection("artifacts");
+  const [reportCount, setReportCount] = useState(0);
   const [activeView, setActiveView] = useState<string | null>(null);
   const [openTabs, setOpenTabs] = useState<string[]>([]);
   const [railOpen, setRailOpen] = useState(true);
@@ -252,7 +263,7 @@ export default function StudioPage() {
   const isDark = theme === "dark";
 
   // Docked panels are drag-resizable; sizes persist per panel.
-  const sidebarResize = useResizable({ initial: 200, min: 160, max: 420, edge: "right", storageKey: "ms.w.sidebar" });
+  const sidebarResize = useResizable({ initial: 248, min: 180, max: 420, edge: "right", storageKey: "ms.w.sidebar" });
   const aiResize = useResizable({ initial: 380, min: 300, max: 720, edge: "left", storageKey: "ms.w.ai" });
   const railResize = useResizable({ initial: 460, min: 360, max: 900, edge: "left", storageKey: "ms.w.rail" });
   const toolResize = useResizable({ initial: 560, min: 400, max: 1000, edge: "left", storageKey: "ms.w.tool" });
@@ -2022,6 +2033,14 @@ Be concise but thorough. Format your response with markdown for readability.`;
         primaryBlockedReason={primaryBlockedReason}
         onPrimary={handlePrimary}
         onOpenPalette={() => setPaletteOpen(true)}
+        /*
+          Deploy appears once, wherever it currently belongs.
+
+          It was listed here unconditionally while the primary button also
+          becomes Deploy as soon as there is something to deploy, so a compiled
+          contract put two of them side by side, one outlined and one filled,
+          saying the same word. Whichever slot is showing it, the other drops it.
+        */
         actions={[
           {
             label: "Compile",
@@ -2029,15 +2048,19 @@ Be concise but thorough. Format your response with markdown for readability.`;
             onClick: () => void handleCompile(),
             busy: isCompiling,
           },
-          {
-            label: "Deploy",
-            icon: <Rocket size={14} />,
-            onClick: handleDeploy,
-            busy: isDeploying,
-            ...(compileResult?.success === true
-              ? {}
-              : { blockedReason: "Compile the contract first." }),
-          },
+          ...(primaryAction === "deploy"
+            ? []
+            : [
+                {
+                  label: "Deploy",
+                  icon: <Rocket size={14} />,
+                  onClick: handleDeploy,
+                  busy: isDeploying,
+                  ...(compileResult?.success === true
+                    ? {}
+                    : { blockedReason: "Compile the contract first." }),
+                },
+              ]),
         ]}
         account={
           <AccountMenu
@@ -2094,6 +2117,8 @@ Be concise but thorough. Format your response with markdown for readability.`;
               className={`border-r flex flex-col min-w-0 flex-shrink-0 overflow-hidden ${"panel-surface border"}`}
             >
               <FileExplorer
+                expanded={filesOpen}
+                onToggle={toggleFiles}
                 onOpen={(path) => {
                   // Opening a file is a decision to start work, so the start
                   // cards get out of the way. Leaving them over the editor made
@@ -2104,22 +2129,44 @@ Be concise but thorough. Format your response with markdown for readability.`;
                 onNotify={addConsoleOutput}
               />
 
-              <ReportHistory
-                onOpen={(reportId) => window.open(`/report/${reportId}`, "_blank", "noopener")}
-                refreshKey={
-                  report.state.status === "ready" ? report.state.report.reportId : "none"
-                }
-                {...(report.state.status === "ready"
-                  ? { activeReportId: report.state.report.reportId }
-                  : {})}
-              />
+              <SidePanelSection
+                open={reportsOpen}
+                onToggle={toggleReports}
+                title="Past reports"
+                count={reportCount}
+              >
+                <ReportHistory
+                  onOpen={(reportId) => window.open(`/report/${reportId}`, "_blank", "noopener")}
+                  onCount={setReportCount}
+                  refreshKey={
+                    report.state.status === "ready" ? report.state.report.reportId : "none"
+                  }
+                  {...(report.state.status === "ready"
+                    ? { activeReportId: report.state.report.reportId }
+                    : {})}
+                />
+              </SidePanelSection>
 
-              <CompileArtifacts
-                contractName={currentFileName.replace(/\.sol$/i, "") || "Contract"}
-                abi={(compileResult?.abi as unknown[] | undefined) ?? null}
-                bytecode={compileResult?.bytecode ?? null}
-                onNotify={addConsoleOutput}
-              />
+              {/*
+                Artifacts appear when a compile produces them, which is the
+                honest answer to where an ABI comes from: the compiler writes
+                it, and deploying only adds an address. A section that showed up
+                after a deploy would be teaching the wrong thing.
+              */}
+              {compileResult?.success === true && (
+                <SidePanelSection
+                  open={artifactsOpen}
+                  onToggle={toggleArtifacts}
+                  title="Compiled artifacts"
+                >
+                  <CompileArtifacts
+                    contractName={currentFileName.replace(/\.sol$/i, "") || "Contract"}
+                    abi={(compileResult?.abi as unknown[] | undefined) ?? null}
+                    bytecode={compileResult?.bytecode ?? null}
+                    onNotify={addConsoleOutput}
+                  />
+                </SidePanelSection>
+              )}
 
               {/*
                 The two template lists that used to hang under the file tree are
