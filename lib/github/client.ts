@@ -82,7 +82,7 @@ export async function githubFetch(
         clearTimeout(timer);
     }
 
-    if (!response.ok) throw failureFor(response);
+    if (!response.ok) throw failureFor(response, headers.Authorization !== undefined);
 
     try {
         return (await response.json()) as unknown;
@@ -91,10 +91,24 @@ export async function githubFetch(
     }
 }
 
-function failureFor(response: Response): GitHubError {
+function failureFor(response: Response, authenticated: boolean): GitHubError {
     const status = response.status;
 
     if (status === 404) {
+        /*
+          GitHub answers 404, not 403, for a private repository the caller
+          cannot see: it will not confirm that one exists. So an anonymous 404
+          is genuinely ambiguous, and reporting it as "does not exist" told
+          somebody holding a perfectly good private repo that their URL was
+          wrong, with no way forward. Said as a question about access, the next
+          step is obvious and the studio can offer it.
+        */
+        if (!authenticated) {
+            return new GitHubError(
+                'That repository is private or does not exist. Connect GitHub to import a private repository.',
+                'needs-auth',
+            );
+        }
         return new GitHubError(
             'That repository does not exist, or this account cannot see it.',
             'not-found',

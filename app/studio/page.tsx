@@ -1527,7 +1527,9 @@ Be concise but thorough. Format your response with markdown for readability.`;
       const result = await github.importRepo(target);
       if (importFailed(result)) {
         addConsoleOutput(result.message);
-        if (result.installUrl !== undefined) setRepoPickerOpen(true);
+        // A private repository reads as "not found" to anyone who cannot see
+        // it, so the picker opens for both and offers the way in.
+        if (result.connectable === true) setRepoPickerOpen(true);
         return;
       }
 

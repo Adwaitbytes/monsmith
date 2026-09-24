@@ -260,6 +260,22 @@ export function seedWorkspace(defaultContract: string): void {
     useWorkspace.getState().reset({ [DEFAULT_PATH]: defaultContract }, DEFAULT_PATH);
 }
 
+/**
+ * Empties the workspace, on sign-out.
+ *
+ * Files live in this browser rather than on a server, which is what lets the
+ * studio work without an account. The cost is that signing out left whatever
+ * had been imported — private repository contents included — sitting in the
+ * file tree for whoever opened the laptop next. Signing out has to take them
+ * with it.
+ *
+ * The studio reseeds its starter contract on the next mount, so this leaves an
+ * empty workspace rather than choosing a replacement for it.
+ */
+export function clearWorkspace(): void {
+    useWorkspace.getState().reset({});
+}
+
 /** Solidity sources, for compiling the workspace as one project. */
 export function solidityFiles(files: Record<string, string>): Record<string, string> {
     const sources: Record<string, string> = {};

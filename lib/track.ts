@@ -3,25 +3,11 @@
 import type { EventType } from "./analytics";
 import { capture as capturePostHog } from "./posthog";
 
-const VISITOR_KEY = "monsmith.visitor";
+// The identity itself lives in its own module: report history reads it too,
+// and reaching it through here meant importing the analytics client to do so.
+export { resetVisitorId, visitorId } from "./visitor";
 
-/**
- * A stable id for this browser.
- *
- * Without one, an anonymous visitor counts as a new user on every page load and
- * the totals become meaningless. It is random and carries no personal data; a
- * wallet address is attached separately only once the user connects one.
- */
-export function visitorId(): string {
-  if (typeof window === "undefined") return "";
-
-  let id = window.localStorage.getItem(VISITOR_KEY);
-  if (!id) {
-    id = crypto.randomUUID();
-    window.localStorage.setItem(VISITOR_KEY, id);
-  }
-  return id;
-}
+import { visitorId } from "./visitor";
 
 interface TrackOptions {
   status?: "success" | "error";

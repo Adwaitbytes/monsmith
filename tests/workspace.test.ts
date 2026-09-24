@@ -15,6 +15,7 @@ import assert from "node:assert/strict";
 import "./helpers/local-storage.ts";
 
 import {
+    clearWorkspace,
     folderSet,
     normalisePath,
     seedWorkspace,
@@ -165,4 +166,45 @@ test("renaming a file that is not open leaves the open file alone", () => {
     // Which is why the explorer follows a rename with an explicit open.
     assert.equal(useWorkspace.getState().setActive("c.sol"), true);
     assert.equal(useWorkspace.getState().activePath, "c.sol");
+});
+
+/*
+  Signing out has to take the session's files with it.
+
+  The workspace lives in this browser, which is what lets the studio work
+  without an account, and what left an imported private repository sitting in
+  the file tree for whoever opened the laptop next.
+*/
+
+test("clearing takes every file, including imported ones", () => {
+    useWorkspace.getState().reset(
+        {
+            "contracts/MyToken.sol": "contract MyToken {}",
+            "src/private/Secret.sol": "contract Secret {}",
+        },
+        "contracts/MyToken.sol",
+    );
+
+    clearWorkspace();
+
+    assert.deepEqual(useWorkspace.getState().files, {});
+    assert.equal(useWorkspace.getState().activePath, null);
+});
+
+test("clearing leaves the workspace ready to seed, not half-populated", () => {
+    useWorkspace.getState().reset({ "a.sol": "A" }, "a.sol");
+    clearWorkspace();
+
+    // The studio seeds its starter contract on the next mount. That only
+    // happens for a workspace that reads as genuinely empty.
+    seedWorkspace("contract Starter {}");
+    assert.deepEqual(Object.values(useWorkspace.getState().files), ["contract Starter {}"]);
+});
+
+test("clearing bumps the revision so anything watching refetches", () => {
+    useWorkspace.getState().reset({ "a.sol": "A" }, "a.sol");
+    const before = useWorkspace.getState().revision;
+
+    clearWorkspace();
+    assert.ok(useWorkspace.getState().revision > before);
 });

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { ExternalLink, Loader2 } from 'lucide-react';
 
 import type { ReportSummary } from '@/lib/report/store';
-import { visitorId } from '@/lib/track';
+import { visitorId } from '@/lib/visitor';
 
 /**
  * Reports already run, so nobody pays for the same one twice.

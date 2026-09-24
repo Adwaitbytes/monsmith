@@ -6,6 +6,7 @@ import { PostHogProvider } from "./PostHogProvider";
 import { AuthProvider } from "./AuthProvider";
 import { JsonLd } from "./JsonLd";
 import { VoiceAgent } from "./VoiceAgent";
+import { SessionReset } from "./SessionReset";
 import {
   FOUNDER,
   SITE_DESCRIPTION,
@@ -138,6 +139,8 @@ export default function RootLayout({
       >
         <ThemeSync />
         <AuthProvider>
+          {/* Inside the provider: it reads the session it is watching. */}
+          <SessionReset />
           <PostHogProvider>{children}</PostHogProvider>
         </AuthProvider>
         {/*

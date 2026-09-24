@@ -41,8 +41,18 @@ export interface ImportedRepo {
 
 interface ImportFailure {
     message: string;
-    /** Present when connecting would fix it, so the UI can offer that. */
+    /** Present when there is an installation to send them to. */
     installUrl?: string;
+    /**
+     * Whether connecting an account could make this import work.
+     *
+     * Read from the failure code rather than from the presence of an install
+     * URL. A signed-out visitor has no URL to be given yet — there is nobody to
+     * issue it to — and they are exactly the person who needs to be offered the
+     * way in, so keying the offer off the URL hid it from the only audience
+     * that could not do without it.
+     */
+    connectable?: boolean;
 }
 
 export function useGitHub() {
@@ -114,6 +124,7 @@ export function useGitHub() {
                 const data = (await response.json()) as Record<string, unknown>;
 
                 if (!response.ok) {
+                    const failure = typeof data.failure === 'string' ? data.failure : null;
                     return {
                         message:
                             typeof data.error === 'string'
@@ -121,6 +132,9 @@ export function useGitHub() {
                                 : 'That repository could not be imported.',
                         ...(typeof data.installUrl === 'string'
                             ? { installUrl: data.installUrl }
+                            : {}),
+                        ...(failure === 'needs-auth' || failure === 'not-found'
+                            ? { connectable: true }
                             : {}),
                     };
                 }

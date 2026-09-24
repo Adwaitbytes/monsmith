@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { SignInButton } from '@clerk/nextjs';
 import { Github, Loader2, Lock, Search, X } from 'lucide-react';
 
 import type { RepoSummary } from '@/lib/github/source';
@@ -215,10 +216,9 @@ function PickerBody({
                             {connected === false && (
                                 <div className="px-4 py-6">
                                     <p className="text-[13px] leading-relaxed text-text-secondary">
-                                        Connect GitHub to list your repositories, including private
-                                        ones. Monsmith asks for read access to repository contents
-                                        and nothing else, and you choose which repositories it can
-                                        see.
+                                        {signedIn
+                                            ? 'Connect GitHub to list your repositories, including private ones. Monsmith asks for read access to repository contents and nothing else, and you choose which repositories it can see.'
+                                            : 'Private repositories need a connected GitHub account, and an installation is tied to one, so signing in comes first. Monsmith asks for read access to repository contents and nothing else, and you choose which repositories it can see.'}
                                     </p>
                                     <div className="mt-5 flex flex-wrap gap-2">
                                         {/*
@@ -237,10 +237,19 @@ function PickerBody({
                                                 Connect GitHub
                                             </a>
                                         ) : !signedIn ? (
-                                            <p className="text-[12.5px] text-text-secondary">
-                                                Sign in first. An installation is tied to an account,
-                                                so connecting needs one.
-                                            </p>
+                                            /*
+                                              A sentence telling somebody to
+                                              sign in, with nothing to sign in
+                                              with, is where this dialog used
+                                              to end. The modal keeps them on
+                                              the page, so the editor they have
+                                              open survives the detour.
+                                            */
+                                            <SignInButton mode="modal">
+                                                <button className="rounded-lg bg-accent px-4 py-2 text-[12.5px] font-semibold text-white outline-none ring-accent-line transition-opacity hover:opacity-90 focus-visible:ring-2">
+                                                    Sign in to connect GitHub
+                                                </button>
+                                            </SignInButton>
                                         ) : !appAvailable ? (
                                             <p className="text-[12.5px] text-text-muted">
                                                 GitHub is not set up on this deployment.
