@@ -226,13 +226,18 @@ function readProject(body: unknown): ProjectInput | undefined {
     return { sources: clean, entry };
 }
 
-export async function POST(req: Request) {
-    // Metered before any work: this route spends real compute for
-    // anyone who asks, and nothing was counting how often.
-    const viewer = await getApiViewer();
-    const budget = await rateLimit(req, LIMITS.agent, viewer.userId);
-    if (!budget.ok) return tooManyRequests(budget, "agent requests");
+/**
+ * Actions that do not call a model.
+ *
+ * This route carries eight actions and they are not the same size: generating
+ * a contract is a model call, compiling one is a second of solc. Metering them
+ * together at the model's rate would have charged a Python user twenty
+ * compiles an hour, because the studio routes its second-stage compile through
+ * here -- a limit they would hit while a model was never touched.
+ */
+const CHEAP_ACTIONS = new Set(["compile", "deploy", "transfer"]);
 
+export async function POST(req: Request) {
     // Every AI path shares one wall-clock budget so the function returns JSON
     // rather than being killed mid-flight by the platform.
     const deadline = Date.now() + REQUEST_BUDGET_MS;
@@ -240,6 +245,17 @@ export async function POST(req: Request) {
     try {
         const body = await req.json();
         const { action, prompt, code, userAddress, network, toAddress, amount } = body;
+
+        // Metered before any work, at the rate the action actually costs.
+        const viewer = await getApiViewer();
+        const budget = await rateLimit(
+            req,
+            CHEAP_ACTIONS.has(action) ? LIMITS.compute : LIMITS.agent,
+            viewer.userId,
+        );
+        if (!budget.ok) {
+            return tooManyRequests(budget, CHEAP_ACTIONS.has(action) ? "requests" : "agent requests");
+        }
 
 
         // Only the LLM-backed actions need a model provider. compile/deploy/transfer

@@ -4,240 +4,18 @@
 import { NextResponse } from "next/server";
 import { keccak256, toHex } from "viem";
 
-// Monad Network Configuration
-const MONAD_CONFIG = {
-    testnet: {
-        rpc: "https://testnet-rpc.monad.xyz",
-        chainId: 10143,
-        explorer: "https://testnet.monadexplorer.com",
-        currency: "MON"
-    },
-    mainnet: {
-        /*
-          Monad mainnet is chain 143. This said 10143 behind a note about
-          updating it when mainnet launched, which is the testnet id, so
-          anything reading this config for mainnet was told about testnet --
-          the same class of mistake as deploying to the network you did not
-          pick. The ids and hosts here match lib/deploy.ts, which is what the
-          wallet actually switches to.
-        */
-        rpc: "https://rpc.monad.xyz",
-        chainId: 143,
-        explorer: "https://monadexplorer.com",
-        currency: "MON"
-    }
-};
+/*
+  The templates and the network config that used to sit here are gone.
 
-// Python Contract Templates
-const PYTHON_TEMPLATES = {
-    SimpleStorage: `from pymon_service.py_contracts import PySmartContract, public_function, view_function
+  Both were second copies. The four Python contracts were already in
+  app/studio/templates.ts, which is the one the studio actually loads, and the
+  chain table said mainnet was 10143 -- the testnet id -- behind a note about
+  updating it when mainnet launched. Nothing called either: the studio sends
+  this route "compile" and "audit" and nothing else. A duplicate nobody reads
+  is a duplicate that drifts, and a wrong chain id nobody reads is still a
+  wrong chain id waiting for its first reader.
+*/
 
-class SimpleStorage(PySmartContract):
-    """
-    Simple Storage Contract for Monad
-    Stores and retrieves a single value
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.stored_value = self.state_var("stored_value", 0, "uint256")
-        self.owner = self.state_var("owner", self.msg_sender(), "address")
-
-    @public_function
-    def store(self, value: int):
-        """Store a new value"""
-        self.set_state("stored_value", value)
-        self.event("ValueStored", value=value, sender=self.msg_sender())
-
-    @view_function
-    def retrieve(self) -> int:
-        """Retrieve the stored value"""
-        return self.get_state("stored_value")
-
-    @view_function
-    def get_owner(self) -> str:
-        """Get the contract owner"""
-        return self.get_state("owner")
-`,
-
-    Counter: `from pymon_service.py_contracts import PySmartContract, public_function, view_function
-
-class Counter(PySmartContract):
-    """
-    Counter Contract for Monad
-    Increment, decrement, and reset a counter
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.count = self.state_var("count", 0, "uint256")
-        self.owner = self.state_var("owner", self.msg_sender(), "address")
-
-    @public_function
-    def increment(self):
-        """Increment counter by 1"""
-        current = self.get_state("count")
-        self.set_state("count", current + 1)
-        self.event("CountChanged", new_value=current + 1, action="increment")
-
-    @public_function
-    def decrement(self):
-        """Decrement counter by 1"""
-        current = self.get_state("count")
-        self.require(current > 0, "Counter cannot go below zero")
-        self.set_state("count", current - 1)
-        self.event("CountChanged", new_value=current - 1, action="decrement")
-
-    @public_function
-    def reset(self):
-        """Reset counter to zero (owner only)"""
-        self.require(self.msg_sender() == self.get_state("owner"), "Only owner can reset")
-        self.set_state("count", 0)
-        self.event("CountReset", by=self.msg_sender())
-
-    @view_function
-    def get_count(self) -> int:
-        """Get current count"""
-        return self.get_state("count")
-`,
-
-    BasicToken: `from pymon_service.py_contracts import PySmartContract, public_function, view_function
-
-class BasicToken(PySmartContract):
-    """
-    Basic ERC20-like Token for Monad
-    Simple token with transfer and mint functionality
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.name = self.state_var("name", "My Monad Token", "string")
-        self.symbol = self.state_var("symbol", "MMT", "string")
-        self.decimals = self.state_var("decimals", 18, "uint8")
-        self.total_supply = self.state_var("total_supply", 0, "uint256")
-        self.balances = self.mapping("balances", "address", "uint256")
-        self.owner = self.state_var("owner", self.msg_sender(), "address")
-
-    @public_function
-    def initialize(self, initial_supply: int):
-        """Initialize token with initial supply"""
-        self.require(self.get_state("total_supply") == 0, "Already initialized")
-        supply = initial_supply * (10 ** 18)
-        self.set_state("total_supply", supply)
-        balances = self.get_state("balances")
-        balances[self.msg_sender()] = supply
-        self.event("Transfer", from_addr="0x0", to=self.msg_sender(), amount=supply)
-
-    @view_function
-    def balance_of(self, account: str) -> int:
-        """Get token balance of an account"""
-        balances = self.get_state("balances")
-        return balances.get(account, 0)
-
-    @public_function
-    def transfer(self, to: str, amount: int) -> bool:
-        """Transfer tokens to another address"""
-        balances = self.get_state("balances")
-        sender = self.msg_sender()
-
-        self.require(balances.get(sender, 0) >= amount, "Insufficient balance")
-        self.require(to != "0x0000000000000000000000000000000000000000", "Invalid recipient")
-
-        balances[sender] = balances.get(sender, 0) - amount
-        balances[to] = balances.get(to, 0) + amount
-
-        self.event("Transfer", from_addr=sender, to=to, amount=amount)
-        return True
-
-    @public_function
-    def mint(self, to: str, amount: int):
-        """Mint new tokens (owner only)"""
-        self.require(self.msg_sender() == self.get_state("owner"), "Only owner can mint")
-
-        balances = self.get_state("balances")
-        balances[to] = balances.get(to, 0) + amount
-        self.set_state("total_supply", self.get_state("total_supply") + amount)
-
-        self.event("Transfer", from_addr="0x0", to=to, amount=amount)
-
-    @view_function
-    def get_total_supply(self) -> int:
-        """Get total token supply"""
-        return self.get_state("total_supply")
-`,
-
-    NFTCollection: `from pymon_service.py_contracts import PySmartContract, public_function, view_function, payable_function
-
-class NFTCollection(PySmartContract):
-    """
-    Simple NFT Collection for Monad
-    Mint and transfer NFTs
-    """
-
-    def __init__(self):
-        super().__init__()
-        self.name = self.state_var("name", "Monad NFT", "string")
-        self.symbol = self.state_var("symbol", "MNFT", "string")
-        self.total_supply = self.state_var("total_supply", 0, "uint256")
-        self.max_supply = self.state_var("max_supply", 10000, "uint256")
-        self.mint_price = self.state_var("mint_price", 10000000000000000, "uint256")  # 0.01 MON
-        self.owners = self.mapping("owners", "uint256", "address")
-        self.balances = self.mapping("balances", "address", "uint256")
-        self.token_uris = self.mapping("token_uris", "uint256", "string")
-        self.owner = self.state_var("owner", self.msg_sender(), "address")
-
-    @payable_function
-    def mint(self, uri: str):
-        """Mint a new NFT"""
-        self.require(self.msg_value() >= self.get_state("mint_price"), "Insufficient payment")
-        self.require(self.get_state("total_supply") < self.get_state("max_supply"), "Max supply reached")
-
-        token_id = self.get_state("total_supply")
-        self.set_state("total_supply", token_id + 1)
-
-        owners = self.get_state("owners")
-        owners[token_id] = self.msg_sender()
-
-        balances = self.get_state("balances")
-        balances[self.msg_sender()] = balances.get(self.msg_sender(), 0) + 1
-
-        token_uris = self.get_state("token_uris")
-        token_uris[token_id] = uri
-
-        self.event("Transfer", from_addr="0x0", to=self.msg_sender(), token_id=token_id)
-
-    @public_function
-    def transfer(self, to: str, token_id: int):
-        """Transfer NFT to another address"""
-        owners = self.get_state("owners")
-        self.require(owners.get(token_id) == self.msg_sender(), "Not token owner")
-
-        balances = self.get_state("balances")
-        balances[self.msg_sender()] -= 1
-        balances[to] = balances.get(to, 0) + 1
-        owners[token_id] = to
-
-        self.event("Transfer", from_addr=self.msg_sender(), to=to, token_id=token_id)
-
-    @view_function
-    def owner_of(self, token_id: int) -> str:
-        """Get owner of a token"""
-        owners = self.get_state("owners")
-        return owners.get(token_id, "0x0000000000000000000000000000000000000000")
-
-    @view_function
-    def token_uri(self, token_id: int) -> str:
-        """Get token URI"""
-        token_uris = self.get_state("token_uris")
-        return token_uris.get(token_id, "")
-
-    @public_function
-    def withdraw(self):
-        """Withdraw contract balance (owner only)"""
-        self.require(self.msg_sender() == self.get_state("owner"), "Only owner")
-        self.transfer(self.msg_sender(), self.balance())
-`
-};
 
 // ============= INLINE PYTHON TRANSPILER =============
 // This is a TypeScript implementation of the Python transpiler for direct use
@@ -1016,10 +794,10 @@ function auditPythonContract(code: string): {
 export async function POST(req: Request) {
     try {
         const body = await req.json();
-        const { action, code, network = 'testnet' } = body;
+        const { action, code } = body;
 
 
-        if (!code && action !== 'templates' && action !== 'config') {
+        if (!code) {
             return NextResponse.json({
                 success: false,
                 error: 'Missing code in request'
@@ -1103,26 +881,6 @@ export async function POST(req: Request) {
                 });
             }
 
-            case 'templates': {
-                return NextResponse.json({
-                    success: true,
-                    templates: PYTHON_TEMPLATES
-                });
-            }
-
-            case 'config': {
-                return NextResponse.json({
-                    success: true,
-                    network: MONAD_CONFIG[network as keyof typeof MONAD_CONFIG] || MONAD_CONFIG.testnet,
-                    features: {
-                        compile: true,
-                        transpile: true,
-                        audit: true,
-                        deploy: true
-                    }
-                });
-            }
-
             default:
                 return NextResponse.json({
                     success: false,
@@ -1132,7 +890,7 @@ export async function POST(req: Request) {
 
     } catch (error) {
             const message = error instanceof Error ? error.message : "Unexpected server error";
-        console.error('❌ PyMon API Error:', error);
+        console.error(`[pymon] ${message}`);
         return NextResponse.json({
             success: false,
             error: message || 'Internal server error'
@@ -1140,30 +898,9 @@ export async function POST(req: Request) {
     }
 }
 
-export async function GET(req: Request) {
-    const { searchParams } = new URL(req.url);
-    const action = searchParams.get('action');
-
-    if (action === 'templates') {
-        return NextResponse.json({
-            success: true,
-            templates: PYTHON_TEMPLATES
-        });
-    }
-
-    if (action === 'config') {
-        return NextResponse.json({
-            success: true,
-            network: MONAD_CONFIG.testnet,
-            features: {
-                compile: true,
-                transpile: true,
-                audit: true,
-                deploy: true
-            }
-        });
-    }
-
+export async function GET() {
+    // What this route answers to, for anyone who finds it. The two actions it
+    // used to serve here were dropped with the data behind them.
     return NextResponse.json({
         success: true,
         service: 'PyMon API',
@@ -1173,8 +910,6 @@ export async function GET(req: Request) {
             'POST /transpile': 'Transpile Python to Solidity',
             'POST /validate': 'Validate Python contract',
             'POST /audit': 'Security audit',
-            'GET /templates': 'Get contract templates',
-            'GET /config': 'Get configuration'
         }
     });
 }
