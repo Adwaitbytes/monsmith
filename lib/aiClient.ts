@@ -57,7 +57,6 @@ async function callOpenAIAPI(
 ): Promise<string> {
     if (!OPENAI_API_KEY) throw new Error("OpenAI API key not configured");
 
-    console.log("🤖 Calling OpenAI API (GPT-4)...");
 
     const response = await fetch(OPENAI_API_URL, {
         method: "POST",
@@ -190,7 +189,6 @@ async function callOpenRouterAPI(
         }
 
         try {
-            console.log(`🤖 Calling OpenRouter (${model})...`);
             return await callOpenRouterModel(
                 model,
                 prompt,
@@ -200,7 +198,7 @@ async function callOpenRouterAPI(
             );
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error);
-            console.warn(`⚠️ OpenRouter model ${model} failed: ${reason}`);
+            console.warn(`[ai] OpenRouter model ${model} failed: ${reason}`);
             failures.push(`${model}: ${reason}`);
         }
     }
@@ -216,7 +214,6 @@ async function callGroqAPI(
 ): Promise<string> {
     if (!GROQ_API_KEY) throw new Error("Groq API key not configured");
 
-    console.log("🤖 Calling Groq API...");
 
     const response = await fetch(GROQ_API_URL, {
         method: "POST",
@@ -278,7 +275,7 @@ export async function callAI(
             return await callOpenAIAPI(prompt, systemRole, options);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            console.log(`⚠️ OpenAI failed: ${message}, trying fallback...`);
+            console.warn(`[ai] OpenAI failed, falling back: ${message}`);
         }
     }
 
@@ -288,7 +285,7 @@ export async function callAI(
             return await callOpenRouterAPI(prompt, systemRole, deadline, modelOffset, options);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            console.log(`⚠️ OpenRouter failed: ${message}, trying Groq...`);
+            console.warn(`[ai] OpenRouter failed, falling back: ${message}`);
         }
     }
 
@@ -298,7 +295,7 @@ export async function callAI(
             return await callGroqAPI(prompt, systemRole, options);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
-            console.log(`⚠️ Groq failed: ${message}, trying ChainGPT...`);
+            console.warn(`[ai] Groq failed, falling back: ${message}`);
         }
     }
 

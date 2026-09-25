@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { callAI, hasAIProvider, MISSING_PROVIDER_MESSAGE } from "@/lib/aiClient";
+import { getApiViewer } from "@/lib/auth/server";
+import { LIMITS, rateLimit, tooManyRequests } from "@/lib/rateLimit";
 
 /**
  * The assistant, answering about the contract actually on screen.
@@ -82,6 +84,12 @@ function readFindings(value: unknown): string {
 }
 
 export async function POST(req: Request) {
+    // Metered before any work: this route spends real compute for
+    // anyone who asks, and nothing was counting how often.
+    const viewer = await getApiViewer();
+    const budget = await rateLimit(req, LIMITS.assistant, viewer.userId);
+    if (!budget.ok) return tooManyRequests(budget, "assistant messages");
+
     if (!hasAIProvider()) {
         return NextResponse.json({ error: MISSING_PROVIDER_MESSAGE }, { status: 503 });
     }

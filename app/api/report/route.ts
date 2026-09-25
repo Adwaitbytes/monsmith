@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getApiViewer } from "@/lib/auth/server";
+import { LIMITS, rateLimit, tooManyRequests } from "@/lib/rateLimit";
 import { buildRepoReport } from "@/lib/report/build";
 import { redactReport } from "@/lib/report/redact";
 import { isUnlocked, saveReport, type ReportOwner } from "@/lib/report/store";
@@ -119,6 +120,17 @@ export async function POST(request: Request) {
     }
 
     const viewer = await getApiViewer();
+
+    /*
+      Metered after the body is read and before any work is started.
+
+      This is the most expensive thing here: minutes of compute and a dozen
+      model calls, open to anyone with no account. Reading identity first means
+      a signed-in caller is measured against their own, larger budget.
+    */
+    const budget = await rateLimit(request, LIMITS.report, viewer.userId);
+    if (!budget.ok) return tooManyRequests(budget, "full reports");
+
     const owner: ReportOwner = {
         userId: viewer.userId,
         // Same anonymous id the analytics beacon sends, so a signed-out visitor

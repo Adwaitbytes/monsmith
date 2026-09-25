@@ -34,7 +34,8 @@ Live product: https://monsmith.com
 - Dark and light theme support
 
 **Compilation Pipeline**
-- Hardhat-based compilation with OpenZeppelin contract resolution
+- solc-js compiled in-process, with OpenZeppelin imports resolved from a bundled source set
+- The compiler version is chosen from the pragma, so 0.5 and 0.8 sources both build
 - Solidity 0.8.24 with optimizer support (200 runs default)
 - Detailed error messages with contextual information
 - ABI and bytecode generation for deployment
@@ -70,10 +71,9 @@ Live product: https://monsmith.com
 - Debugging assistance for compilation errors
 
 **Python Transpiler** (Experimental)
-- PyMon service for writing contracts in Python syntax
-- Automatic transpilation to Solidity
-- Type inference and validation
-- Flask-based compilation API
+- PyMon: a constrained Python DSL for writing contracts, transpiled to Solidity
+- Start from a bundled Python template; it reads that shape, not arbitrary Python
+- The generated Solidity is shown before it is compiled, so it can be checked
 
 **Contract Templates**
 - Pre-built templates for common patterns (ERC20, ERC721, DAO, Staking, DEX)
@@ -81,9 +81,8 @@ Live product: https://monsmith.com
 - Customizable parameters
 
 **Analytics** (Optional)
-- Supabase integration for deployment tracking
-- Usage metrics and performance monitoring
-- Historical data visualization
+- First-party events in Neon Postgres, PostHog for product analytics
+- Stored reports, so a run can be reopened instead of paid for twice
 
 ## Installation
 
@@ -92,8 +91,8 @@ Live product: https://monsmith.com
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/yourusername/monad-ide.git
-cd monad-ide
+git clone https://github.com/Adwaitbytes/monad-studio.git
+cd monad-studio
 npm install
 ```
 
@@ -106,9 +105,10 @@ OPENAI_API_KEY=your_openai_api_key
 OPENROUTER_API_KEY=your_openrouter_api_key
 GROQ_API_KEY=your_groq_api_key
 
-# Optional: Analytics
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_key
+# Optional: stored reports, analytics and the request limiter.
+# Without it the studio still runs; reports live only in the tab that made them
+# and the limiter falls back to counting in memory.
+DATABASE_URL=your_neon_connection_string
 
 # Optional: Deployment
 PRIVATE_KEY=your_private_key
@@ -150,12 +150,13 @@ Add environment variables through your hosting platform's dashboard.
 - Create key at platform.openai.com
 - Add `OPENAI_API_KEY` to environment variables
 
-### Supabase (Optional)
+### Neon Postgres (Optional)
 
-For analytics and deployment tracking:
-1. Create project at supabase.com
-2. Execute SQL schema from `supabase/schema.sql`
-3. Copy project URL and anon key to environment variables
+For stored reports, analytics and durable rate limiting:
+1. Create a database at neon.tech
+2. Put its connection string in `DATABASE_URL`
+
+The tables create themselves on first use, so there is no migration step.
 
 ## Usage
 
@@ -263,34 +264,28 @@ To deploy a contract:
 - LocalStorage persistence
 
 **Blockchain Integration**
-- Viem for modern Web3 interactions
-- Ethers.js for wallet connectivity
-- Hardhat for compilation
-- OpenZeppelin contract libraries
+- Viem for chain reads, wallet calls and deployment
+- OpenZeppelin contract libraries, bundled for import resolution
 
 **Backend Services**
-- Next.js API routes
-- Hardhat compiler integration
-- Solc 0.8.31
+- Next.js API routes on the Node runtime
+- solc-js, bundled at 0.8.31 with older versions fetched on demand
+- Neon Postgres for stored reports and rate limits
 
 **AI Services** (Optional)
 - Groq API
 - OpenAI API
 
-**Python Transpiler**
-- Flask API server
-- Python AST parser
-- Solidity code generator
+**Python (PyMon)**
+- A constrained Python DSL transpiled to Solidity in `app/api/pymon`
+- Covers the shape the bundled templates use, not arbitrary Python
 
 **Testing**
-- Mocha test framework
-- Chai assertions
-- Hardhat network
-- 45 passing tests
+- `tests/` runs on the Node test runner: engines, report pipeline, workspace, rate limits
+- `test/` runs on Hardhat against the fixture contracts in `contracts/`
 
 **Analytics** (Optional)
-- Supabase PostgreSQL
-- Real-time subscriptions
+- Neon Postgres for first-party events, PostHog for product analytics
 
 ## Monad Network
 
@@ -322,7 +317,7 @@ Monad's architecture executes transactions in parallel rather than sequentially.
 ## Project Structure
 
 ```
-monad-ide/
+monad-studio/
 ├── app/
 │   ├── api/                      # API routes
 │   │   ├── agent/                # AI generation endpoint
@@ -341,16 +336,10 @@ monad-ide/
 │   ├── contractTemplates.ts      # Template definitions
 │   ├── dependencyGraph.ts        # Graph generation
 │   ├── openzeppelin-bundle.ts    # Bundled OZ contracts
-│   ├── parallelAnalyzer.ts       # Parallel analysis
+│   ├── parallelAnalyzer.ts       # Public entry point for lib/parallel
+│   ├── rateLimit.ts              # Per-caller ceiling on the expensive routes
 │   ├── securityAnalyzer.js       # Security scanner
-│   ├── store.ts                  # State management
-│   └── supabase.ts               # Analytics client
-├── pymon_service/                # Python transpiler
-│   ├── auditor.py
-│   ├── compiler.py
-│   ├── py_contracts.py
-│   ├── server.py
-│   └── transpiler.py
+│   └── store.ts                  # State management
 ├── scripts/                      # Deployment scripts
 ├── test/                         # Test suite
 ├── tutorials/                    # Tutorial content
@@ -363,20 +352,18 @@ monad-ide/
 Run the test suite:
 
 ```bash
-npm test                    # Contract test suite (Hardhat)
-npm run test:chainfit       # Gas model and EVM tracer
+npm run test:unit           # Node test runner: engines, report pipeline, workspace, limits
+npm test                    # Hardhat: the fixture contracts in contracts/
 npm run test:all            # Both
-npm run test:coverage       # With coverage report
+npm run test:coverage       # Hardhat with coverage
 ```
 
-Test coverage:
-- ERC20 token operations
-- NFT minting and transfers
-- DEX pool functionality
-- Gas optimization validation
-- Security pattern checks
+Two suites, because there are two kinds of thing to test. `tests/` covers the
+TypeScript that makes this product work: the gas model, the EVM tracer, the
+audit pipeline, the workspace store, the rate limiter. `test/` covers the
+Solidity fixtures in `contracts/`, which is what Hardhat is for.
 
-45/45 tests passing.
+243 passing: 198 in `tests/`, 45 in `test/`.
 
 ## Development Commands
 
@@ -437,10 +424,10 @@ Contributions welcome. To contribute:
 - Verify API key validity and credits
 - Try alternative provider (Groq or OpenAI)
 
-**Python transpiler**
-- Install dependencies: `pip install -r pymon_service/requirements.txt`
-- Start Flask server: `python pymon_service/server.py`
-- Service runs on port 5000
+**Python (PyMon)**
+- Needs no separate service: the transpiler runs in `app/api/pymon`
+- It reads the constrained DSL the bundled templates use, so start from one
+  rather than from arbitrary Python
 
 ## License
 
@@ -461,7 +448,7 @@ Built with:
 ## Support
 
 - Documentation: [DEPLOYMENT.md](DEPLOYMENT.md)
-- Issues: [GitHub Issues](https://github.com/yourusername/monad-ide/issues)
+- Issues: [GitHub Issues](https://github.com/Adwaitbytes/monad-studio/issues)
 - Monad: [docs.monad.xyz](https://docs.monad.xyz)
 - Check Solidity version compatibility (0.8.24)
 - Clear Hardhat cache: `npm run clean`
@@ -477,9 +464,8 @@ Built with:
 - Try alternative AI provider
 
 **PyMon Transpiler:**
-- Python service runs on separate port (5000)
-- Install Python dependencies: `pip install -r pymon_service/requirements.txt`
-- Start Flask server: `python pymon_service/server.py`
+- Runs inside the Next.js app; there is no separate Python process to start
+- It handles the `PySmartContract` DSL, not arbitrary Python
 
 ---
 

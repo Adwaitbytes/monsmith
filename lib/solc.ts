@@ -173,12 +173,7 @@ export function compileContract(
  */
 export async function compileSolidity(sourceCode: string): Promise<CompileResult> {
     try {
-        const { contractName, contract, warnings } = compileContract(sourceCode);
-
-        console.log(`📦 Compiled contract: ${contractName}`);
-        if (warnings.length > 0) {
-            console.log(`⚠️ ${warnings.length} compilation warnings`);
-        }
+        const { contract } = compileContract(sourceCode);
 
         const bytecode = contract?.evm?.bytecode?.object;
         if (!bytecode) {
@@ -187,12 +182,10 @@ export async function compileSolidity(sourceCode: string): Promise<CompileResult
             );
         }
 
-        console.log(`✅ Compilation successful! Bytecode size: ${bytecode.length / 2} bytes`);
-
         return { abi: contract.abi, bytecode };
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        console.error('❌ Compilation error:', message);
+        console.error(`[solc] compilation failed: ${message}`);
         throw new Error(`Compilation failed: ${message}`);
     }
 }

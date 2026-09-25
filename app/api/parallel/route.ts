@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { analyzeParallelPotential, quickAnalysis } from "@/lib/parallelAnalyzer";
 import { buildParallelGraph, optimizationPriorities } from "@/lib/parallel/graph";
+import { getApiViewer } from "@/lib/auth/server";
+import { LIMITS, rateLimit, tooManyRequests } from "@/lib/rateLimit";
 
 /**
  * Parallel execution analysis for Monad.
@@ -10,6 +12,12 @@ import { buildParallelGraph, optimizationPriorities } from "@/lib/parallel/graph
  */
 
 export async function POST(req: Request) {
+    // Metered before any work: this route spends real compute for
+    // anyone who asks, and nothing was counting how often.
+    const viewer = await getApiViewer();
+    const budget = await rateLimit(req, LIMITS.compute, viewer.userId);
+    if (!budget.ok) return tooManyRequests(budget, "parallel analyses");
+
     try {
         const { code, contract, mode = "full" } = await req.json();
 

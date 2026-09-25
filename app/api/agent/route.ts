@@ -7,6 +7,8 @@ import { privateKeyToAccount } from "viem/accounts";
 import { compileForDeploy, type ProjectInput } from "@/lib/solc/compile";
 import { CONTRACT_TEMPLATES, generateFromTemplate } from "../../../lib/contractTemplates";
 import { REQUEST_BUDGET_MS, callAI, hasAIProvider } from "../../../lib/aiClient";
+import { getApiViewer } from "@/lib/auth/server";
+import { LIMITS, rateLimit, tooManyRequests } from "@/lib/rateLimit";
 
 // --- CHAIN DEFINITIONS ---
 const monadTestnet = defineChain({
@@ -168,7 +170,7 @@ async function generateVerifiedContract(
             return { code, attempts: attempt, repaired: attempt > 1 };
         } catch (error) {
             lastError = (error instanceof Error ? error.message : String(error)).slice(0, 600);
-            console.warn(`⚠️ Generated contract failed to compile (attempt ${attempt}): ${lastError.slice(0, 140)}`);
+            console.warn(`[agent] generated contract failed to compile (attempt ${attempt}): ${lastError.slice(0, 140)}`);
         }
     }
 
@@ -176,7 +178,7 @@ async function generateVerifiedContract(
     // error would leave the user with nothing, so fall back to the hand-written
     // template closest to their request. These are known to compile.
     const fallbackId = pickTemplateFor(codePrompt);
-    console.warn(`⚠️ Falling back to template "${fallbackId}" after ${lastError.slice(0, 120)}`);
+    console.warn(`[agent] falling back to template "${fallbackId}" after ${lastError.slice(0, 120)}`);
 
     const templateCode = generateFromTemplate(fallbackId, CONTRACT_TEMPLATES[fallbackId].defaults);
     await compileForDeploy(templateCode);
@@ -225,6 +227,12 @@ function readProject(body: unknown): ProjectInput | undefined {
 }
 
 export async function POST(req: Request) {
+    // Metered before any work: this route spends real compute for
+    // anyone who asks, and nothing was counting how often.
+    const viewer = await getApiViewer();
+    const budget = await rateLimit(req, LIMITS.agent, viewer.userId);
+    if (!budget.ok) return tooManyRequests(budget, "agent requests");
+
     // Every AI path shares one wall-clock budget so the function returns JSON
     // rather than being killed mid-flight by the platform.
     const deadline = Date.now() + REQUEST_BUDGET_MS;
@@ -233,7 +241,6 @@ export async function POST(req: Request) {
         const body = await req.json();
         const { action, prompt, code, userAddress, network, toAddress, amount } = body;
 
-        console.log(`🔹 API Request: [${action}] from [${userAddress?.slice(0, 10)}...]`);
 
         // Only the LLM-backed actions need a model provider. compile/deploy/transfer
         // run entirely on solc and viem, so they must stay available without one.
@@ -349,7 +356,7 @@ export async function POST(req: Request) {
 
             try {
                 await settlePayment(payload);
-                console.log("✅ Q402: Payment Verified & Settled.");
+                console.info("[q402] payment verified and settled");
             } catch (e) {
                 // Settlement failing is a server-side configuration problem. Reporting
                 // it as a bad signature sends the user hunting the wrong thing.
@@ -364,7 +371,6 @@ export async function POST(req: Request) {
         // =========================================================
 
         if (action === "research") {
-            console.log(`🔍 Research query: ${prompt?.slice(0, 50)}...`);
             const result = await callAI(
                 prompt,
                 "You are a helpful Web3 and blockchain expert. Answer questions clearly and concisely.",
@@ -374,7 +380,6 @@ export async function POST(req: Request) {
         }
 
         if (action === "generate") {
-            console.log(`🧠 Generating code for: ${prompt?.slice(0, 50)}...`);
 
             const codePrompt = `You are a Senior Solidity Architect. Write a production-grade, error-free smart contract.
 
@@ -419,7 +424,6 @@ Generate the contract now:`;
         }
 
         if (action === "architect") {
-            console.log(`🏗️ Architect generating contract: ${body.contractType}`);
 
             const architectSystemRole = `You are a senior blockchain architect specializing in Solidity smart contract development for the Monad Network.
 
@@ -459,7 +463,6 @@ NO markdown code blocks, NO explanations, NO additional text.`;
                 deadline
             );
 
-            console.log(`✅ Architect generated ${architected.code.length} characters of verified code`);
 
             return NextResponse.json({
                 success: true,
@@ -474,7 +477,6 @@ NO markdown code blocks, NO explanations, NO additional text.`;
         }
 
         if (action === "audit") {
-            console.log("🛡️ Auditing contract...");
 
             const auditPrompt = `You are a smart contract security auditor. Analyze this Solidity code:
 
@@ -498,7 +500,6 @@ Provide a structured audit report with:
         }
 
         if (action === "compile") {
-            console.log("🔨 Compiling contract...");
 
             try {
                 const { abi, bytecode, contractName, linkReferences, libraries } =
@@ -526,7 +527,6 @@ Provide a structured audit report with:
         }
 
         if (action === "explain_error") {
-            console.log("🤖 Explaining error...");
 
             const { errors } = body;
             const errorMessages =
@@ -571,7 +571,6 @@ Format as JSON:
             const targetRpc = isMainnet ? RPC_MAINNET : RPC_TESTNET;
             const chain = isMainnet ? monadMainnet : monadTestnet;
 
-            console.log(`🚀 Deploying to ${chain.name}...`);
 
             const privateKey = process.env.PRIVATE_KEY;
             if (!privateKey) {
@@ -581,7 +580,6 @@ Format as JSON:
             try {
                 // The same project the studio compiled. Deploying from a
                 // single-source build would silently drop the user's imports.
-                console.log("📦 Compiling contract...");
                 const { abi, bytecode } = await compileForDeploy(code, readProject(body));
 
                 if (!bytecode || bytecode.length < 10) {
@@ -603,7 +601,6 @@ Format as JSON:
                 });
 
                 // Deploy
-                console.log("🚀 Sending deployment transaction...");
                 const formattedBytecode = bytecode.startsWith('0x') ? bytecode : `0x${bytecode}`;
 
                 const hash = await walletClient.deployContract({
@@ -612,13 +609,12 @@ Format as JSON:
                     args: [],
                 });
 
-                console.log(`📝 TX Hash: ${hash}`);
 
                 // Wait for receipt
                 const receipt = await publicClient.waitForTransactionReceipt({ hash });
                 const address = receipt.contractAddress;
 
-                console.log(`✅ Deployed to: ${address}`);
+                console.info(`[agent] deployed to ${address} on ${chain.name} (${hash})`);
 
                 return NextResponse.json({
                     success: true,
@@ -637,7 +633,7 @@ Format as JSON:
         }
 
         if (action === "transfer") {
-            console.log(`💸 Transfer: ${amount} to ${toAddress}`);
+            console.info(`[agent] transfer of ${amount} to ${toAddress}`);
             const isMainnet = network === "mainnet";
             const targetRpc = isMainnet ? RPC_MAINNET : RPC_TESTNET;
             const chain = isMainnet ? monadMainnet : monadTestnet;

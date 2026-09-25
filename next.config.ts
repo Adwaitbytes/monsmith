@@ -7,10 +7,6 @@ const nextConfig: NextConfig = {
   // runtime. Bundling it is both pointless and slow.
   serverExternalPackages: ["solc"],
 
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-
   async redirects() {
     return [
       {

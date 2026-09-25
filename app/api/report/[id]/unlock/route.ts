@@ -323,7 +323,7 @@ async function attemptUnlock(
 
 function logSettled(reportId: string, owner: ReportOwner, txHash: string): void {
     const who = owner.userId ?? owner.visitorId ?? "anonymous";
-    console.log(`Report unlock ${reportId}: settled ${REPORT_PRICE_WEI} wei for ${who} (${txHash})`);
+    console.info(`[unlock] report ${reportId}: settled ${REPORT_PRICE_WEI} wei for ${who} (${txHash})`);
 }
 
 // ============= THE ROUTE =============

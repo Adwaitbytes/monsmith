@@ -6,6 +6,8 @@ import {
     NETWORKS,
     type NetworkType,
 } from "@/lib/contractSources";
+import { getApiViewer } from "@/lib/auth/server";
+import { LIMITS, rateLimit, tooManyRequests } from "@/lib/rateLimit";
 
 /**
  * A deployed contract, as files you can audit.
@@ -49,6 +51,12 @@ function toFiles(name: string, source: string): Record<string, string> {
 }
 
 export async function POST(req: Request) {
+    // Metered before any work: this route spends real compute for
+    // anyone who asks, and nothing was counting how often.
+    const viewer = await getApiViewer();
+    const budget = await rateLimit(req, LIMITS.compute, viewer.userId);
+    if (!budget.ok) return tooManyRequests(budget, "source lookups");
+
     let body: Body;
     try {
         body = (await req.json()) as Body;

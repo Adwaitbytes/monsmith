@@ -111,8 +111,7 @@ export async function verifyPayment(
   expected: Q402ExpectedTerms
 ): Promise<boolean> {
   try {
-    console.log("🔍 Q402: Verifying Witness Signature...");
-    const { witnessSignature, paymentDetails } = payload;
+      const { witnessSignature, paymentDetails } = payload;
     const { witness } = paymentDetails ?? {};
 
     if (!witness?.message || !witnessSignature) {
@@ -167,7 +166,7 @@ export async function verifyPayment(
 
     spentPaymentIds.add(message.paymentId);
 
-    console.log(`✅ Q402: Signature Verified for ${message.owner}`);
+    console.info(`[q402] signature verified for ${message.owner}`);
     return true;
 
   } catch (error) {
@@ -184,7 +183,6 @@ export async function verifyPayment(
  * so a misconfigured key fails loudly rather than mid-deployment.
  */
 export async function settlePayment(payload: Q402Payload): Promise<Q402Settlement> {
-  console.log("💼 Q402: Initiating Settlement via Facilitator...");
 
   if (!SPONSOR_KEY) {
     throw new Error("Facilitator wallet not configured: set PRIVATE_KEY");
@@ -203,7 +201,7 @@ export async function settlePayment(payload: Q402Payload): Promise<Q402Settlemen
     throw new Error("Settlement amount exceeds Policy limit");
   }
 
-  console.log(`✅ Q402: Facilitator ${account.address} sponsoring execution on ${chain.name}...`);
+  console.info(`[q402] facilitator ${account.address} settling on ${chain.name}`);
 
   return {
     success: true,

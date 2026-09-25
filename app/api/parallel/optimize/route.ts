@@ -6,6 +6,8 @@ import { analyzeParallelPotential } from "@/lib/parallelAnalyzer";
 import { checkCompatibility, describeIncompatibility } from "@/lib/parallel/compatibility";
 import { parseSolidity } from "@/lib/parallel/parser";
 import type { Hotspot, ParallelAnalysisResult } from "@/lib/parallelAnalyzer";
+import { getApiViewer } from "@/lib/auth/server";
+import { LIMITS, rateLimit, tooManyRequests } from "@/lib/rateLimit";
 
 /**
  * AI-assisted parallel optimisation.
@@ -36,6 +38,12 @@ export interface RewriteChange {
 }
 
 export async function POST(req: Request) {
+    // Metered before any work: this route spends real compute for
+    // anyone who asks, and nothing was counting how often.
+    const viewer = await getApiViewer();
+    const budget = await rateLimit(req, LIMITS.optimize, viewer.userId);
+    if (!budget.ok) return tooManyRequests(budget, "optimisation passes");
+
     const deadline = Date.now() + OPTIMIZE_BUDGET_MS;
 
     try {

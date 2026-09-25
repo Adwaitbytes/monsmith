@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { isChainId, type ChainId } from "@/lib/chainfit/chains";
 import { buildChainFitReport } from "@/lib/chainfit/report";
 import { fetchVerified, reproduceBuild, NotVerifiedError } from "@/lib/chainfit/sourcify";
+import { getApiViewer } from "@/lib/auth/server";
+import { LIMITS, rateLimit, tooManyRequests } from "@/lib/rateLimit";
 
 /**
  * Chain Fit API
@@ -16,6 +18,12 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
+    // Metered before any work: this route spends real compute for
+    // anyone who asks, and nothing was counting how often.
+    const viewer = await getApiViewer();
+    const budget = await rateLimit(req, LIMITS.compute, viewer.userId);
+    if (!budget.ok) return tooManyRequests(budget, "chain fit runs");
+
     try {
         const body = (await req.json()) as {
             code?: string;

@@ -5,6 +5,15 @@
 
 export type Severity = "critical" | "high" | "medium" | "low" | "info";
 
+/**
+ * The assistant's one-click actions.
+ *
+ * Lived in a Supabase analytics module that recorded which of them people
+ * pressed, against a project that had been deleted. The recording is gone; the
+ * four actions are still on screen, so the type outlived its file.
+ */
+export type QuickActionType = "explain" | "optimize" | "secure" | "debug";
+
 export interface SecurityIssue {
   severity: Severity;
   title: string;

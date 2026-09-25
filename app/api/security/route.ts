@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getApiViewer } from "@/lib/auth/server";
+import { LIMITS, rateLimit, tooManyRequests } from "@/lib/rateLimit";
 
 interface SecurityIssue {
   severity: "critical" | "high" | "medium" | "low" | "info";
@@ -13,6 +15,12 @@ interface SecurityIssue {
  * Performs automated security checks before deployment
  */
 export async function POST(req: Request) {
+    // Metered before any work: this route spends real compute for
+    // anyone who asks, and nothing was counting how often.
+    const viewer = await getApiViewer();
+    const budget = await rateLimit(req, LIMITS.compute, viewer.userId);
+    if (!budget.ok) return tooManyRequests(budget, "security scans");
+
   try {
     const { code } = await req.json();
     

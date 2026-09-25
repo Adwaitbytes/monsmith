@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { compileVersioned } from "@/lib/solc/compile";
 import { buildGasProfile } from "@/lib/gasProfiler";
+import { getApiViewer } from "@/lib/auth/server";
+import { LIMITS, rateLimit, tooManyRequests } from "@/lib/rateLimit";
 
 /**
  * Per-function gas profiler.
@@ -11,6 +13,12 @@ import { buildGasProfile } from "@/lib/gasProfiler";
  * developer wants before deploying.
  */
 export async function POST(req: Request) {
+    // Metered before any work: this route spends real compute for
+    // anyone who asks, and nothing was counting how often.
+    const viewer = await getApiViewer();
+    const budget = await rateLimit(req, LIMITS.compute, viewer.userId);
+    if (!budget.ok) return tooManyRequests(budget, "gas profiles");
+
     let code: unknown;
 
     try {

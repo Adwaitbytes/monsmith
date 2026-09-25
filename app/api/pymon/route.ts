@@ -13,8 +13,16 @@ const MONAD_CONFIG = {
         currency: "MON"
     },
     mainnet: {
-        rpc: "https://mainnet-rpc.monad.xyz",
-        chainId: 10143, // Update when mainnet launches
+        /*
+          Monad mainnet is chain 143. This said 10143 behind a note about
+          updating it when mainnet launched, which is the testnet id, so
+          anything reading this config for mainnet was told about testnet --
+          the same class of mistake as deploying to the network you did not
+          pick. The ids and hosts here match lib/deploy.ts, which is what the
+          wallet actually switches to.
+        */
+        rpc: "https://rpc.monad.xyz",
+        chainId: 143,
         explorer: "https://monadexplorer.com",
         currency: "MON"
     }
@@ -1010,7 +1018,6 @@ export async function POST(req: Request) {
         const body = await req.json();
         const { action, code, network = 'testnet' } = body;
 
-        console.log(`🐍 PyMon API Request: [${action}]`);
 
         if (!code && action !== 'templates' && action !== 'config') {
             return NextResponse.json({

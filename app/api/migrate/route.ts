@@ -14,12 +14,20 @@ import {
   isNetworkType,
   MigrationResult,
 } from '@/lib/migrationTool';
+import { getApiViewer } from "@/lib/auth/server";
+import { LIMITS, rateLimit, tooManyRequests } from "@/lib/rateLimit";
 
 // Rate limiting: simple in-memory cache
 const requestCache = new Map<string, { result: MigrationResult; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 export async function POST(req: Request) {
+    // Metered before any work: this route spends real compute for
+    // anyone who asks, and nothing was counting how often.
+    const viewer = await getApiViewer();
+    const budget = await rateLimit(req, LIMITS.compute, viewer.userId);
+    if (!budget.ok) return tooManyRequests(budget, "migrations");
+
   const startTime = Date.now();
 
   try {

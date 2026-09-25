@@ -21,9 +21,21 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/*
+  The two lines, overridable without a deploy.
+
+  They were literals in this file, so moving a desk or replacing the host meant
+  shipping a build to change a phone number. The values stay as the default
+  because they are the ones in service today and an unset variable must not
+  leave the button pointing at nothing.
+*/
 const AGENTS = {
-    india: "https://salesagent-yhc9.onrender.com/call/36c922fee9f6",
-    international: "https://salesagent-yhc9.onrender.com/call/664ac87d0463",
+    india:
+        process.env.VOICE_AGENT_INDIA_URL ??
+        "https://salesagent-yhc9.onrender.com/call/36c922fee9f6",
+    international:
+        process.env.VOICE_AGENT_INTERNATIONAL_URL ??
+        "https://salesagent-yhc9.onrender.com/call/664ac87d0463",
 } as const;
 
 export type AgentRegion = keyof typeof AGENTS;
