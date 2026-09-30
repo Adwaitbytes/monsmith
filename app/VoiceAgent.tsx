@@ -56,8 +56,10 @@ function readSize(): Size {
 
 export function VoiceAgent() {
     // Read from the store rather than a prop: this renders in the root layout,
-    // above every page, and only one of those pages has an assistant to avoid.
-    const assistantOpen = useIDEStore((state) => state.assistantOpen);
+    // above every page, and on the one page with Aria's chat the chat owns the
+    // corner and starts calls from inside itself.
+    const assistantMounted = useIDEStore((state) => state.assistantMounted);
+    const callRequests = useIDEStore((state) => state.ariaCallRequests);
 
     const [open, setOpen] = useState(false);
     const [url, setUrl] = useState<string | null>(null);
@@ -96,6 +98,13 @@ export function VoiceAgent() {
             setConnecting(false);
         }
     }, [connecting]);
+
+    const handledRequests = useRef(callRequests);
+    useEffect(() => {
+        if (callRequests === handledRequests.current) return;
+        handledRequests.current = callRequests;
+        void call();
+    }, [callRequests, call]);
 
     /*
       Resizing from the top-left corner, because the panel is anchored bottom
@@ -155,7 +164,7 @@ export function VoiceAgent() {
     return (
         <>
             <AnimatePresence>
-                {!open && (
+                {!open && !assistantMounted && (
                     <motion.button
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
@@ -164,9 +173,7 @@ export function VoiceAgent() {
                         onClick={() => void call()}
                         disabled={connecting}
                         aria-label="Talk to Aria"
-                        className={`group fixed right-5 z-40 flex items-center gap-2 rounded-full border border-border-subtle bg-surface-raised py-2.5 pl-3.5 pr-4 shadow-[var(--shadow-panel)] outline-none ring-accent-line transition-[transform,bottom] hover:-translate-y-0.5 focus-visible:ring-2 disabled:cursor-wait motion-reduce:transition-none motion-reduce:hover:translate-y-0 ${
-                            assistantOpen ? 'bottom-[calc(min(34rem,70vh)+3.25rem)]' : 'bottom-[5.25rem]'
-                        }`}
+                        className="group fixed bottom-9 right-5 z-40 flex items-center gap-2 rounded-full border border-border-subtle bg-surface-raised py-2.5 pl-3.5 pr-4 shadow-[var(--shadow-panel)] outline-none ring-accent-line transition-transform hover:-translate-y-0.5 focus-visible:ring-2 disabled:cursor-wait motion-reduce:transition-none motion-reduce:hover:translate-y-0"
                     >
                         {connecting ? (
                             <Loader2

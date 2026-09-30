@@ -2,9 +2,10 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { ArrowUp, Loader2, MessageSquare, Sparkles, X } from 'lucide-react';
+import { ArrowUp, Loader2, MessageSquare, Phone, Sparkles, X } from 'lucide-react';
 
 import type { Finding } from '@/lib/report/types';
+import { useIDEStore } from '@/lib/store';
 import { Markdown } from './Markdown';
 
 /**
@@ -16,6 +17,10 @@ import { Markdown } from './Markdown';
  * answers about line 41 of your contract instead of about reentrancy in
  * general, and it argues from the same findings the report showed you rather
  * than a second opinion that contradicts it.
+ *
+ * It is Aria, the same assistant as the voice call, so there is one entry point
+ * rather than two pills that look like two products. Typing is the default and
+ * the call is one button away in the header.
  *
  * Floating rather than docked because it is not a mode. You reach for it in the
  * middle of reading something, get an answer, and go back to what you were
@@ -39,8 +44,6 @@ export interface AssistantProps {
     findings?: readonly Finding[];
     /** Markdown rendering still keys off the theme rather than tokens. */
     isDark?: boolean;
-    /** Reported so neighbouring floating controls can move out of the way. */
-    onOpenChange?: (open: boolean) => void;
 }
 
 function suggestionsFor(code: string, findings: readonly Finding[]): string[] {
@@ -67,19 +70,17 @@ export function Assistant({
     fileName,
     findings = [],
     isDark = false,
-    onOpenChange,
 }: AssistantProps) {
     const [open, setOpen] = useState(false);
+    const setAssistantMounted = useIDEStore((state) => state.setAssistantMounted);
+    const requestAriaCall = useIDEStore((state) => state.requestAriaCall);
 
-    // Kept as one call site so the panel and whatever sits beside it cannot
-    // disagree about whether it is showing.
-    const setPanelOpen = useCallback(
-        (next: boolean) => {
-            setOpen(next);
-            onOpenChange?.(next);
-        },
-        [onOpenChange],
-    );
+    // While this is on the page it is the only Aria button; the root layout's
+    // call pill steps aside and takes its calls from here instead.
+    useEffect(() => {
+        setAssistantMounted(true);
+        return () => setAssistantMounted(false);
+    }, [setAssistantMounted]);
     const [turns, setTurns] = useState<Turn[]>([]);
     const [input, setInput] = useState('');
     const [busy, setBusy] = useState(false);
@@ -157,12 +158,12 @@ export function Assistant({
                         animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.9 }}
                         transition={{ duration: reduce ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }}
-                        onClick={() => setPanelOpen(true)}
-                        aria-label="Ask the assistant"
+                        onClick={() => setOpen(true)}
+                        aria-label="Ask Aria"
                         className="group fixed bottom-9 right-5 z-40 flex items-center gap-2 rounded-full border border-border-subtle bg-surface-raised py-2.5 pl-3.5 pr-4 shadow-[var(--shadow-panel)] outline-none ring-accent-line transition-transform hover:-translate-y-0.5 focus-visible:ring-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
                     >
                         <Sparkles size={15} className="text-accent" />
-                        <span className="text-[12.5px] font-medium text-text-primary">Ask</span>
+                        <span className="text-[12.5px] font-medium text-text-primary">Ask Aria</span>
                     </motion.button>
                 )}
             </AnimatePresence>
@@ -171,7 +172,7 @@ export function Assistant({
                 {open && (
                     <motion.aside
                         role="dialog"
-                        aria-label="Assistant"
+                        aria-label="Aria"
                         initial={{ opacity: 0, y: 12, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 12, scale: 0.98 }}
@@ -181,14 +182,25 @@ export function Assistant({
                         <header className="flex items-center gap-2 border-b border-border-subtle px-4 py-3">
                             <Sparkles size={14} className="text-accent" />
                             <h2 className="flex-1 font-display text-[13.5px] font-semibold text-text-primary">
-                                Assistant
+                                Aria
                             </h2>
                             <span className="truncate font-mono text-[10.5px] text-text-muted">
                                 {fileName}
                             </span>
                             <button
-                                onClick={() => setPanelOpen(false)}
-                                aria-label="Close the assistant"
+                                onClick={() => {
+                                    setOpen(false);
+                                    requestAriaCall();
+                                }}
+                                aria-label="Call Aria"
+                                title="Call Aria"
+                                className="rounded-md p-1 text-text-muted outline-none ring-accent-line transition-colors hover:text-accent focus-visible:ring-2"
+                            >
+                                <Phone size={13} />
+                            </button>
+                            <button
+                                onClick={() => setOpen(false)}
+                                aria-label="Close Aria"
                                 className="rounded-md p-1 text-text-muted outline-none ring-accent-line transition-colors hover:text-text-primary focus-visible:ring-2"
                             >
                                 <X size={14} />
@@ -261,8 +273,8 @@ export function Assistant({
                                         }
                                     }}
                                     rows={1}
-                                    placeholder="Ask about this contract"
-                                    aria-label="Ask the assistant"
+                                    placeholder="Ask Aria about this contract"
+                                    aria-label="Ask Aria"
                                     className="max-h-24 min-h-[20px] flex-1 resize-none bg-transparent text-[12.5px] text-text-primary outline-none placeholder:text-text-muted"
                                 />
                                 <button

@@ -240,7 +240,6 @@ export default function StudioPage() {
   const narrow = useNarrowViewport();
   const balance = useBalance(walletAddress, network);
   const [railForced, setRailForced] = useState(false);
-  const setAssistantOpen = useIDEStore((state) => state.setAssistantOpen);
   const [unlocking, setUnlocking] = useState(false);
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [repoOrigin, setRepoOrigin] = useState<ReportOrigin>({ kind: "workspace" });
@@ -2693,7 +2692,6 @@ Be concise but thorough. Format your response with markdown for readability.`;
         facts the report does rather than offering a second opinion.
       */}
       <Assistant
-        onOpenChange={setAssistantOpen}
         code={code}
         fileName={currentFileName === "" ? "your contract" : currentFileName}
         isDark={isDark}

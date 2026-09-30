@@ -126,14 +126,18 @@ interface CompileResult {
 
 interface IDEState {
   /**
-   * Whether the studio's assistant panel is showing.
+   * Whether the page has the typed assistant, which also carries the call.
    *
-   * Lives here rather than in the studio because the call button sits in the
-   * root layout, where it is available on every page, and the two share a
-   * corner. Without this they would overlap on the one page that has both.
+   * The call lives in the root layout so every page has it, but the studio
+   * already has Aria's chat in the same corner. Two pills for one assistant read
+   * as two products, so on that page the chat is the one entry point and the
+   * call is started from inside it.
    */
-  assistantOpen: boolean;
-  setAssistantOpen: (open: boolean) => void;
+  assistantMounted: boolean;
+  setAssistantMounted: (mounted: boolean) => void;
+  /** Bumped to ask the call panel to start a call; a counter so repeats fire. */
+  ariaCallRequests: number;
+  requestAriaCall: () => void;
   isCompiling: boolean;
   isDeploying: boolean;
   compileResult: CompileResult | null;
@@ -152,8 +156,10 @@ interface IDEState {
 }
 
 export const useIDEStore = create<IDEState>((set, get) => ({
-  assistantOpen: false,
-  setAssistantOpen: (assistantOpen) => set({ assistantOpen }),
+  assistantMounted: false,
+  setAssistantMounted: (assistantMounted) => set({ assistantMounted }),
+  ariaCallRequests: 0,
+  requestAriaCall: () => set((state) => ({ ariaCallRequests: state.ariaCallRequests + 1 })),
   isCompiling: false,
   isDeploying: false,
   compileResult: null,
