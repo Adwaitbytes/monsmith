@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Loader2, ShieldAlert } from 'lucide-react';
 
 import { useReportUnlock } from '@/lib/billing/useReportUnlock';
@@ -31,6 +32,8 @@ export interface CheckoutReturn {
 export interface ReportViewProps {
     report: RepoReport;
     checkout?: CheckoutReturn | null;
+    /** Opened from Download, PDF in the studio: print as soon as the report is drawn. */
+    autoPrint?: boolean;
     /** Preformatted on the server. See the note in the page component. */
     createdAtLabel: string;
 }
@@ -168,15 +171,24 @@ function ReturnBanner({ status, onDismiss }: { status: Return; onDismiss: () => 
     );
 }
 
-export function ReportView({ report: initial, createdAtLabel, checkout = null }: ReportViewProps) {
+export function ReportView({ report: initial, createdAtLabel, checkout = null, autoPrint = false }: ReportViewProps) {
     // Held in state so an unlock, by payment or by signing in, opens the
     // report in place instead of sending the reader through a reload.
     const [report, setReport] = useState(initial);
     const [returned, dismissReturn] = useCheckoutReturn(initial.reportId, checkout, setReport);
     const unlock = useReportUnlock({ report, onReplace: setReport });
+    const router = useRouter();
 
     const subject = originLabel(report);
     const contracts = report.contracts.length;
+
+    useEffect(() => {
+        if (!autoPrint) return;
+        window.history.replaceState(null, '', window.location.pathname);
+        // Long enough for the dependency map and fonts to lay out first.
+        const timer = setTimeout(() => window.print(), 1200);
+        return () => clearTimeout(timer);
+    }, [autoPrint]);
 
     return (
         <main className="mx-auto max-w-3xl px-6 py-12">
@@ -190,7 +202,7 @@ export function ReportView({ report: initial, createdAtLabel, checkout = null }:
                 */}
                 <Link
                     href="/studio"
-                    className="group mb-6 inline-flex items-center gap-1.5 text-[12.5px] text-text-muted outline-none ring-accent-line transition-colors hover:text-text-secondary focus-visible:ring-2"
+                    className="group mb-6 inline-flex items-center gap-1.5 text-[12.5px] text-text-muted outline-none ring-accent-line transition-colors hover:text-text-secondary focus-visible:ring-2 print:hidden"
                 >
                     <ArrowLeft
                         size={13}
@@ -223,6 +235,12 @@ export function ReportView({ report: initial, createdAtLabel, checkout = null }:
                         state={{ status: 'ready', report }}
                         entitled={!report.redacted}
                         onUnlock={unlock.unlock}
+                        onDownloadPdf={() => window.print()}
+                        optimize={{
+                            onOptimize: () => router.push(`/studio?optimize=${report.reportId}`),
+                            busy: false,
+                            badge: null,
+                        }}
                         offer={unlock.offer}
                         unlocking={unlock.busy || returned.kind === 'confirming'}
                         unlockError={unlock.error}
@@ -248,7 +266,7 @@ export function ReportView({ report: initial, createdAtLabel, checkout = null }:
 
                 <Link
                     href="/studio"
-                    className="group mt-5 inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+                    className="group mt-5 inline-flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 print:hidden"
                 >
                     Audit your own contract
                     <ArrowRight

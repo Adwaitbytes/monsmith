@@ -173,7 +173,7 @@ export function VoiceAgent() {
                         onClick={() => void call()}
                         disabled={connecting}
                         aria-label="Talk to Aria"
-                        className="group fixed bottom-9 right-5 z-40 flex items-center gap-2 rounded-full border border-border-subtle bg-surface-raised py-2.5 pl-3.5 pr-4 shadow-[var(--shadow-panel)] outline-none ring-accent-line transition-transform hover:-translate-y-0.5 focus-visible:ring-2 disabled:cursor-wait motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+                        className="group fixed bottom-9 right-5 z-40 flex items-center gap-2 print:hidden rounded-full border border-border-subtle bg-surface-raised py-2.5 pl-3.5 pr-4 shadow-[var(--shadow-panel)] outline-none ring-accent-line transition-transform hover:-translate-y-0.5 focus-visible:ring-2 disabled:cursor-wait motion-reduce:transition-none motion-reduce:hover:translate-y-0"
                     >
                         {connecting ? (
                             <Loader2
@@ -200,7 +200,7 @@ export function VoiceAgent() {
                         exit={{ opacity: 0, y: 12, scale: 0.98 }}
                         transition={{ duration: reduce ? 0 : 0.2, ease: [0.16, 1, 0.3, 1] }}
                         style={frameStyle}
-                        className="fixed bottom-9 right-5 z-50 flex flex-col overflow-hidden rounded-2xl border border-border-subtle bg-surface-raised shadow-[var(--shadow-panel)]"
+                        className="fixed bottom-9 right-5 z-50 flex flex-col overflow-hidden print:hidden rounded-2xl border border-border-subtle bg-surface-raised shadow-[var(--shadow-panel)]"
                     >
                         {/* The grip, on the corner away from the page edges. */}
                         {!expanded && (

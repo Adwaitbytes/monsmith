@@ -96,7 +96,8 @@ function formatRunTime(iso: string): string {
 
 export default async function ReportPage({ params, searchParams }: PageProps) {
     const { id } = await params;
-    const checkout = checkoutReturnFrom(await searchParams);
+    const query = await searchParams;
+    const checkout = checkoutReturnFrom(query);
 
     const stored = await loadReport(id).catch(() => null);
     if (stored === null) notFound();
@@ -111,9 +112,13 @@ export default async function ReportPage({ params, searchParams }: PageProps) {
 
     return (
         <div className="min-h-screen bg-background text-text-primary">
-            <SiteNav />
-            <ReportView report={report} createdAtLabel={formatRunTime(stored.createdAt)} checkout={checkout} />
-            <SiteFooter />
+            <div className="print:hidden">
+                <SiteNav />
+            </div>
+            <ReportView report={report} createdAtLabel={formatRunTime(stored.createdAt)} checkout={checkout} autoPrint={query.print === "1"} />
+            <div className="print:hidden">
+                <SiteFooter />
+            </div>
         </div>
     );
 }

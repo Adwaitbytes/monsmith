@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -79,7 +79,7 @@ import { AccountMenu } from "./components/AccountMenu";
 import { CommandPalette } from "./components/CommandPalette";
 import type { OmniboxIntent } from "./components/Omnibox";
 import { StartScreen } from "./components/StartScreen";
-import { SAMPLE_PATH, SAMPLE_SOURCE } from "./sampleContract";
+import { loadReferenceContract, workspacePath, type ReferenceContract } from "./referenceContracts";
 import { usePlan } from "@/lib/billing/usePlan";
 import { useReportUnlock } from "@/lib/billing/useReportUnlock";
 import { RepoPicker } from "./components/RepoPicker";
@@ -92,7 +92,12 @@ import { buildCommands, modifierLabel } from "./commands";
 import { useShortcuts } from "./useShortcuts";
 import { useReportStream } from "@/lib/report/useReportStream";
 import { useGitHub, importFailed } from "@/lib/github/useGitHub";
-import type { ReportOrigin } from "@/lib/report/types";
+import type { ContractReport, ReportOrigin, RepoReport } from "@/lib/report/types";
+import { useClerk } from "@clerk/nextjs";
+import { OptimizeDialog } from "./components/optimize/OptimizeDialog";
+import { useOptimize } from "@/lib/optimize/useOptimize";
+import { useOptimizeAllowance } from "@/lib/optimize/useOptimizeAllowance";
+import { snapshotOf, type OptimizeResult } from "@/lib/optimize/types";
 import type { RepoSummary } from "@/lib/github/source";
 import {
     ARCHITECT_CONTRACT_TYPES,
@@ -1501,24 +1506,39 @@ Be concise but thorough. Format your response with markdown for readability.`;
   }, [activePath, runReport, addConsoleOutput]);
 
   /**
-   * The one-click path from the start screen: load The DAO, whose bug every
-   * Solidity developer knows, and audit it at once, so a first visit ends in a report rather than in an
-   * editor wondering what to do next. The files are passed straight to the run
-   * because the workspace update has not reached `files` in this render yet.
+   * The one-click path from the start screen: load a contract every developer
+   * knows and audit it at once, so a first visit ends in a report rather than in
+   * an editor wondering what to do next. The files are passed straight to the
+   * run because the workspace update has not reached `files` in this render.
    */
-  const runSample = useCallback(() => {
-    addFiles({ [SAMPLE_PATH]: SAMPLE_SOURCE }, SAMPLE_PATH);
-    setLanguage("solidity");
-    const origin: ReportOrigin = { kind: "workspace" };
-    setRepoOrigin(origin);
-    setShowStart(false);
-    setUnlockError(null);
-    setRailOpen(true);
-    setRailForced(true);
-    void report.run({ files: { [SAMPLE_PATH]: SAMPLE_SOURCE }, origin });
-    addConsoleOutput("Checking The DAO contract.");
-    track("audit", { walletAddress, detail: { surface: "sample", origin: origin.kind } });
-  }, [addFiles, report, walletAddress, addConsoleOutput]);
+  const [loadingReference, setLoadingReference] = useState<string | null>(null);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
+  const runReference = useCallback(
+    async (reference: ReferenceContract) => {
+      setLoadingReference(reference.id);
+      setReferenceError(null);
+      try {
+        const referenceFiles = await loadReferenceContract(reference);
+        const main = workspacePath(reference, reference.main);
+        addFiles(referenceFiles, main);
+        setLanguage("solidity");
+        const origin: ReportOrigin = { kind: "workspace" };
+        setRepoOrigin(origin);
+        setShowStart(false);
+        setUnlockError(null);
+        setRailOpen(true);
+        setRailForced(true);
+        void report.run({ files: referenceFiles, origin, only: [main] });
+        addConsoleOutput(`Checking ${reference.name}.`);
+        track("audit", { walletAddress, detail: { surface: "reference", origin: reference.id } });
+      } catch (error) {
+        setReferenceError(`${reference.name} could not be loaded. ${errorMessage(error)}`);
+      } finally {
+        setLoadingReference(null);
+      }
+    },
+    [addFiles, report, walletAddress, addConsoleOutput],
+  );
 
   const handlePrimary = () => {
     if (primaryAction === "deploy") handleDeploy();
@@ -1737,6 +1757,105 @@ Be concise but thorough. Format your response with markdown for readability.`;
     onReplace: report.replace,
     payMon: () => void unlockReport(),
   });
+
+  /*
+    Optimizing, from the report.
+
+    The target is the contract with the lowest score, since that is where a fix
+    moves the number most and it is almost always the one the reader is looking
+    at. The whole workspace goes up so the optimized file compiles against the
+    same imports the report used.
+  */
+  const clerk = useClerk();
+  const optimizer = useOptimize();
+  const [optimizeAllowance, refreshOptimizeAllowance] = useOptimizeAllowance();
+  const [optimizeTarget, setOptimizeTarget] = useState<ContractReport | null>(null);
+
+  const startOptimize = useCallback(
+    (source: RepoReport, target?: ContractReport) => {
+      const contract =
+        target ??
+        [...source.contracts].sort((a, b) => (a.health?.score ?? 101) - (b.health?.score ?? 101))[0];
+      if (contract === undefined) return;
+      setOptimizeTarget(contract);
+      // Read at call time: this is also reached from a mount effect, before
+      // the rendered `files` has caught up with the stored workspace.
+      const workspace = solidityFiles(useWorkspace.getState().files);
+      void optimizer.start({ reportId: source.reportId, path: contract.path, files: workspace });
+    },
+    [optimizer],
+  );
+
+  /*
+    Arriving from a shared report's Optimize button. The report page has no
+    code, so it sends the reader here, where the workspace that produced the
+    report lives in this browser. If the files are not here, the report still
+    opens and the reader is told why optimizing needs them.
+  */
+  const optimizeParamHandled = useRef(false);
+  useEffect(() => {
+    if (optimizeParamHandled.current) return;
+    optimizeParamHandled.current = true;
+    const id = new URLSearchParams(window.location.search).get("optimize");
+    if (id === null) return;
+    window.history.replaceState(null, "", "/studio");
+    void (async () => {
+      try {
+        const response = await fetch(`/api/report/${encodeURIComponent(id)}`, { headers: { "x-visitor-id": visitorId() } });
+        const data = (await response.json()) as { report?: RepoReport; error?: string };
+        if (!response.ok || data.report === undefined) {
+          addConsoleOutput(data.error ?? "That report could not be opened.");
+          return;
+        }
+        const opened = data.report;
+        report.replace(opened);
+        setShowStart(false);
+        setRailOpen(true);
+        setRailForced(true);
+        const workspace = useWorkspace.getState().files;
+        if (opened.contracts.some((contract) => workspace[contract.path] !== undefined)) {
+          startOptimize(opened);
+        } else {
+          addConsoleOutput("This report's files are not in this browser's workspace. Import the same code, run the report, then optimize.");
+        }
+      } catch (error) {
+        addConsoleOutput(`Could not open the report to optimize: ${errorMessage(error)}`);
+      }
+    })();
+  }, [report, startOptimize, addConsoleOutput]);
+
+  const closeOptimize = useCallback(() => {
+    optimizer.reset();
+    setOptimizeTarget(null);
+  }, [optimizer]);
+
+  const applyOptimization = useCallback(
+    async (result: OptimizeResult) => {
+      addFiles({ [result.path]: result.optimized }, result.path);
+      closeOptimize();
+      refreshOptimizeAllowance();
+      addConsoleOutput(
+        `Applied the optimized ${basenameOf(result.path)}. Score ${result.before.score ?? "?"} to ${result.after.score ?? "?"}.`,
+      );
+      try {
+        const response = await fetch(`/api/report/${result.reportId}`, { headers: { "x-visitor-id": visitorId() } });
+        const data = (await response.json()) as { report?: RepoReport };
+        if (response.ok && data.report !== undefined) report.replace(data.report);
+      } catch (error) {
+        addConsoleOutput(`The new report is saved, but could not be shown here: ${errorMessage(error)}`);
+      }
+    },
+    [addFiles, closeOptimize, refreshOptimizeAllowance, addConsoleOutput, report],
+  );
+
+  const optimizeBadge =
+    optimizeAllowance === null || !optimizeAllowance.paywall
+      ? null
+      : optimizeAllowance.freeLeft === null
+        ? `${optimizeAllowance.freeAllowance} free`
+        : optimizeAllowance.freeLeft > 0
+          ? `${optimizeAllowance.freeLeft} free left`
+          : null;
 
   const railState: RailState =
     report.state.status === "idle"
@@ -2222,8 +2341,9 @@ Be concise but thorough. Format your response with markdown for readability.`;
           */}
           {showStart && (
             <StartScreen
-              onRunSample={runSample}
-              sampleBusy={report.state.status === "running"}
+              onPickReference={(reference) => void runReference(reference)}
+              loadingReference={loadingReference}
+              referenceError={referenceError}
               onSubmit={handleOmnibox}
               importing={github.importing}
               onPickRepo={openRepoPicker}
@@ -2520,6 +2640,17 @@ Be concise but thorough. Format your response with markdown for readability.`;
               setRailOpen(false);
               setRailForced(false);
             }}
+            onDownloadPdf={() => {
+              if (report.state.status !== "ready") return;
+              window.open(`/report/${report.state.report.reportId}?print=1`, "_blank", "noopener");
+            }}
+            optimize={{
+              onOptimize: () => {
+                if (report.state.status === "ready") startOptimize(report.state.report);
+              },
+              busy: optimizer.state.status === "running",
+              badge: optimizeBadge,
+            }}
             onShare={() => {
               if (report.state.status !== "ready") return;
               void navigator.clipboard.writeText(
@@ -2733,6 +2864,25 @@ Be concise but thorough. Format your response with markdown for readability.`;
             ? report.state.report.contracts.flatMap((contract) => contract.findings)
             : []
         }
+      />
+
+      <OptimizeDialog
+        open={optimizer.state.status !== "idle"}
+        contractName={optimizeTarget?.name ?? "the contract"}
+        before={optimizeTarget === null ? null : snapshotOf(optimizeTarget)}
+        state={optimizer.state}
+        isDark={isDark}
+        onClose={closeOptimize}
+        onRetry={() => {
+          if (report.state.status === "ready" && optimizeTarget !== null) startOptimize(report.state.report, optimizeTarget);
+        }}
+        onApply={(result) => void applyOptimization(result)}
+        onSignIn={() => clerk.openSignIn()}
+        onUnlock={() => {
+          closeOptimize();
+          reportUnlock.unlock();
+        }}
+        freeLeft={optimizeAllowance?.freeLeft ?? null}
       />
 
       <CommandPalette commands={commands} open={paletteOpen} onOpenChange={setPaletteOpen} />

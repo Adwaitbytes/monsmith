@@ -28,23 +28,23 @@ test("the free allowance reads as words", () => {
 
 test("with a paywall and a price, the offer names both", () => {
     assert.equal(
-        offerHeadline({ paywall: true, freeReports: 2, price: { amount: 1099, currency: "USD" } }),
-        "Two full reports free with an account. Then $10.99 per report.",
+        offerHeadline({ paywall: true, freeReports: 2, freeOptimizations: 2, price: { amount: 1099, currency: "USD" } }),
+        "Two full reports and two optimizations free with an account. Then $10.99 per report, optimization included.",
     );
 });
 
 test("without a known price, no number is invented", () => {
     assert.equal(
-        offerHeadline({ paywall: true, freeReports: 2, price: null }),
-        "Two full reports free with an account.",
+        offerHeadline({ paywall: true, freeReports: 2, freeOptimizations: 2, price: null }),
+        "Two full reports and two optimizations free with an account.",
     );
 });
 
 test("with the paywall off, nobody is told they will pay", () => {
-    const line = offerHeadline({ paywall: false, freeReports: 2, price: { amount: 1099, currency: "USD" } });
+    const line = offerHeadline({ paywall: false, freeReports: 2, freeOptimizations: 2, price: { amount: 1099, currency: "USD" } });
     assert.ok(line !== null && !line.includes("$"));
 });
 
 test("no free allowance and no price means nothing to say", () => {
-    assert.equal(offerHeadline({ paywall: true, freeReports: 0, price: null }), null);
+    assert.equal(offerHeadline({ paywall: true, freeReports: 0, freeOptimizations: 0, price: null }), null);
 });

@@ -220,7 +220,7 @@ export function UnlockPanel({ report, summary, offer = null, onUnlock, onPayMon,
                     {signIn
                         ? 'No card needed. After your free reports, each one is a single payment, no subscription.'
                         : card !== null
-                          ? 'One payment for this report, no subscription. Secure checkout by Dodo Payments.'
+                          ? 'One payment for this report, optimization included. No subscription. Secure checkout by Dodo Payments.'
                           : 'Payment settles in MON on Monad with one signature in your wallet.'}
                 </p>
             </div>

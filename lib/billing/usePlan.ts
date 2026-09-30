@@ -7,7 +7,7 @@ import type { Plan } from './offer';
 function isPlan(value: unknown): value is Plan {
     if (typeof value !== 'object' || value === null) return false;
     const plan = value as Record<string, unknown>;
-    return typeof plan.paywall === 'boolean' && typeof plan.freeReports === 'number';
+    return typeof plan.paywall === 'boolean' && typeof plan.freeReports === 'number' && typeof plan.freeOptimizations === 'number';
 }
 
 /**

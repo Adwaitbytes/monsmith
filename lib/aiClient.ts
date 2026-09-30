@@ -260,6 +260,37 @@ async function callChainGPTAPI(model: string, question: string, userAddress?: st
 }
 
 // --- UNIFIED AI CALL (OpenAI Primary -> Groq -> ChainGPT) ---
+/**
+ * Named models first, then the usual chain.
+ *
+ * The default chain is tuned for speed and cost, which suits chat and triage.
+ * Some work, like rewriting a contract that people will deploy, is worth a
+ * stronger model, so the caller names the models it wants tried first and only
+ * falls back to the default chain if all of them fail.
+ */
+export async function callPreferredAI(
+    preferred: readonly string[],
+    prompt: string,
+    systemRole: string,
+    deadline: number,
+    overrides: AIOptions = {}
+): Promise<string> {
+    const options: Required<AIOptions> = { ...DEFAULT_OPTIONS, ...overrides };
+    if (OPENROUTER_API_KEY) {
+        for (const model of preferred) {
+            const remaining = deadline - Date.now();
+            if (remaining < 3_000) break;
+            try {
+                return await callOpenRouterModel(model, prompt, systemRole, Math.min(options.modelTimeoutMs, remaining), options);
+            } catch (error) {
+                const reason = error instanceof Error ? error.message : String(error);
+                console.warn(`[ai] Preferred model ${model} failed, falling back: ${reason}`);
+            }
+        }
+    }
+    return callAI(prompt, systemRole, undefined, deadline, 0, overrides);
+}
+
 export async function callAI(
     prompt: string,
     systemRole: string,

@@ -816,6 +816,154 @@ export async function deepAudit(
     };
 }
 
+// ============= FIX REVIEW =============
+
+export interface FixReviewInput {
+    /** The AI findings of the report being improved on. */
+    prior: readonly Finding[];
+    /** 1-indexed lines of the new source that were written or changed. */
+    changedLines: readonly number[];
+}
+
+interface Recheck {
+    results?: Array<{ id?: unknown; status?: unknown; line?: unknown }>;
+}
+
+/** How far from a changed line a new finding may sit and still be about the change. */
+const CHANGE_REACH = 2;
+
+/**
+ * Re-auditing after a fix, the way an audit firm does a fix review.
+ *
+ * A second open-ended audit of the same code does not return the same list: a
+ * model that found a high on Monday may find a different one on Tuesday in a
+ * line nobody touched. Scoring an optimization that way measures the dice, not
+ * the fix. So the earlier findings are carried forward and checked one by one
+ * against the new code, and the fresh hunt only counts what it finds in lines
+ * that actually changed, since that is the only place a new problem can have
+ * come from.
+ *
+ * When the re-check cannot run, every earlier finding is kept. Claiming a fix
+ * without evidence is the one mistake this must not make.
+ */
+export async function fixReview(
+    source: string,
+    input: FixReviewInput,
+    options: DeepAuditOptions = {},
+): Promise<DeepAudit> {
+    const deadline = Date.now() + (options.budgetMs ?? 90_000);
+    const prior = input.prior.map((finding, index) => ({ label: `P${index + 1}`, finding }));
+    const notes: string[] = [];
+
+    const carried = (kept: ReadonlyArray<{ finding: Finding; line: number | null }>): AuditFinding[] =>
+        kept.map(({ finding, line }) => ({
+            title: finding.title,
+            severity: finding.severity,
+            confidence: 1,
+            line,
+            evidence: finding.evidence ?? "",
+            attack: "",
+            impact: finding.description ?? "",
+            fix: finding.fix ?? "",
+        }));
+
+    if (!hasAIProvider()) {
+        return {
+            description: null,
+            threats: [],
+            findings: carried(prior.map(({ finding }) => ({ finding, line: finding.line ?? null }))),
+            rejected: [],
+            complete: false,
+            notes: ["The fix review could not run, so earlier findings are carried forward unchecked."],
+        };
+    }
+
+    let stillPresent = prior.map(({ finding }) => ({ finding, line: finding.line ?? null }));
+    const resolved: Array<{ title: string; reason: string }> = [];
+
+    if (prior.length > 0) {
+        const recheck = await ask<Recheck>(
+            "You re-check smart contract audit findings after a fix, the way an audit firm does a fix review. You judge each finding by the specific attack it describes: if that exact path no longer works in the new code, the finding is resolved, even if the same area could have some other weakness, which would be a different finding. If the described attack still works by any route, it is present.",
+            `These findings were reported against an earlier version of this contract. For each one, decide whether it is still present in the code below.
+
+FINDINGS:
+${prior
+    .map(
+        ({ label, finding }) =>
+            `${label}. [${finding.severity}] ${finding.title}${finding.line === undefined ? "" : ` (was line ${finding.line})`}\n${(finding.description ?? "").slice(0, 1500)}${finding.evidence === undefined ? "" : `\nCode it rested on: ${finding.evidence.slice(0, 400)}`}`,
+    )
+    .join("\n\n")}
+
+THE CODE NOW:
+${numbered(source)}
+
+Reply with JSON only: {"results":[{"id":"P1","status":"present" or "resolved","line":<line number where it is now, or null>}]}`,
+            deadline,
+        );
+
+        if (recheck !== null && Array.isArray(recheck.results)) {
+            const verdicts = new Map(
+                recheck.results
+                    .filter((result) => typeof result.id === "string")
+                    .map((result) => [String(result.id).toUpperCase(), result] as const),
+            );
+            stillPresent = [];
+            for (const { label, finding } of prior) {
+                const verdict = verdicts.get(label);
+                // No verdict is not a resolution: an entry the model skipped stays.
+                if (verdict?.status === "resolved") {
+                    resolved.push({ title: finding.title, reason: "resolved by the fix" });
+                    continue;
+                }
+                const line = typeof verdict?.line === "number" && Number.isInteger(verdict.line) ? verdict.line : finding.line ?? null;
+                stillPresent.push({ finding, line });
+            }
+        } else {
+            notes.push("The earlier findings could not be re-checked, so they are all carried forward.");
+        }
+    }
+
+    // The fresh hunt, kept only where the code changed.
+    let introduced: AuditFinding[] = [];
+    let description: ContractDescription | null = null;
+    let threats: Threat[] = [];
+    if (input.changedLines.length > 0 && deadline - Date.now() > 20_000) {
+        description = await describe(source, deadline);
+        if (description !== null) {
+            threats = await deriveThreats(description, source, deadline);
+            const changed = new Set(input.changedLines);
+            const nearChange = (line: number | null): boolean => {
+                if (line === null) return false;
+                for (let offset = -CHANGE_REACH; offset <= CHANGE_REACH; offset++) {
+                    if (changed.has(line + offset)) return true;
+                }
+                return false;
+            };
+            const candidates = dedupe(await findVulnerabilities(description, threats, source, deadline)).filter((finding) =>
+                nearChange(finding.line),
+            );
+            const { kept } = await review(candidates, source, deadline, options.confirmed ?? []);
+            introduced = kept.filter((finding) => finding.confidence >= CONFIDENCE_FLOOR);
+        }
+    }
+
+    if (resolved.length > 0) {
+        notes.push(`${resolved.length} earlier finding${resolved.length === 1 ? " was" : "s were"} confirmed fixed.`);
+    }
+    if (introduced.length > 0) {
+        notes.push(`${introduced.length} new finding${introduced.length === 1 ? "" : "s"} in the changed code.`);
+    }
+
+    return {
+        description,
+        threats,
+        findings: [...carried(stillPresent), ...introduced],
+        rejected: resolved,
+        complete: true,
+        notes,
+    };
+}
+
 /**
  * Exposed for tests only.
  *
@@ -840,8 +988,8 @@ export function toFindings(audit: DeepAudit, contractId: string): Finding[] {
             finding.preconditions !== undefined
                 ? `\nWhat has to be true first: ${finding.preconditions}`
                 : "",
-            "\nHow it is exploited:",
-            finding.attack,
+            // Carried-forward findings have no attack steps of their own.
+            finding.attack.length > 0 ? `\nHow it is exploited:\n${finding.attack}` : "",
         ]
             .filter((part) => part.length > 0)
             .join("\n"),

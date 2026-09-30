@@ -212,7 +212,7 @@ export function buildParallelGraph(analysis: ParallelAnalysisResult): ParallelGr
                 target: slotId(variable),
                 sourceHandle: 'out',
                 targetHandle: 'in',
-                type: 'bezier',
+                type: 'default',
                 data: { flow: 'write' },
                 label: alsoReads ? 'read + write' : 'write',
             });
@@ -227,7 +227,7 @@ export function buildParallelGraph(analysis: ParallelAnalysisResult): ParallelGr
                 target: slotId(variable),
                 sourceHandle: 'out',
                 targetHandle: 'in',
-                type: 'bezier',
+                type: 'default',
                 data: { flow: 'read' },
                 label: 'read',
             });

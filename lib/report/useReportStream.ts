@@ -12,6 +12,7 @@ import {
     type SectionKind,
     type Section,
 } from './types';
+import { parseServerEvents } from '../sse';
 
 /**
  * Consuming a report as it is produced.
@@ -79,42 +80,6 @@ function applyContract(partial: RepoReport, contract: ContractReport): RepoRepor
     };
 }
 
-/**
- * Splits a byte stream into server-sent events.
- *
- * Chunk boundaries fall wherever the network puts them, which is routinely in
- * the middle of a JSON payload. Holding the remainder between chunks is the
- * whole job; without it a large report drops exactly the events that matter
- * most, since those are the biggest ones.
- */
-function* parseEvents(buffer: string): Generator<{ event: ReportEvent | null; rest: string }> {
-    let rest = buffer;
-    let index = rest.indexOf('\n\n');
-
-    while (index !== -1) {
-        const frame = rest.slice(0, index);
-        rest = rest.slice(index + 2);
-
-        const payload = frame
-            .split('\n')
-            .filter((line) => line.startsWith('data:'))
-            .map((line) => line.slice(5).trim())
-            .join('');
-
-        if (payload.length > 0) {
-            try {
-                yield { event: JSON.parse(payload) as ReportEvent, rest };
-            } catch {
-                // A frame we cannot parse is one lost section, not a lost
-                // report. Dropping it beats tearing down a four minute run.
-                yield { event: null, rest };
-            }
-        }
-        index = rest.indexOf('\n\n');
-    }
-
-    yield { event: null, rest };
-}
 
 export function useReportStream() {
     const [state, setState] = useState<ReportStreamState>({ status: 'idle' });
@@ -171,7 +136,7 @@ export function useReportStream() {
 
                 buffer += decoder.decode(value, { stream: true });
 
-                for (const parsed of parseEvents(buffer)) {
+                for (const parsed of parseServerEvents<ReportEvent>(buffer)) {
                     buffer = parsed.rest;
                     const event = parsed.event;
                     if (event === null) continue;

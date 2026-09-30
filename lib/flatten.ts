@@ -293,3 +293,39 @@ export function flattenSources(
         discardedLicenses: [...discarded],
     };
 }
+
+/**
+ * One contract and everything it imports, as a single compilable document.
+ *
+ * The report measures one contract at a time and the compiler is handed one
+ * source, so a contract that imports its siblings used to fail gas and chain fit
+ * with "imports files that are not here" even when every one of those files was
+ * in the workspace. Uniswap V2's pair is the everyday example. Walking the
+ * import graph from the contract and flattening only what it reaches gives the
+ * compiler the whole unit without dragging in unrelated files that might not
+ * compile together. Null when the contract imports nothing it can find, so the
+ * caller keeps the source it already had.
+ */
+export function flattenImportClosure(primaryPath: string, files: Readonly<Record<string, string>>): string | null {
+    const reached = importClosure(primaryPath, files);
+    if (reached.size <= 1) return null;
+    return flattenSources(reached, primaryPath).source;
+}
+
+/** The primary file and every file it reaches through imports, primary first. */
+export function importClosure(primaryPath: string, files: Readonly<Record<string, string>>): Map<string, string> {
+    const all = new Map(Object.entries(files));
+    const reached = new Map<string, string>();
+    const visit = (path: string): void => {
+        if (reached.has(path)) return;
+        const content = all.get(path);
+        if (content === undefined) return;
+        reached.set(path, content);
+        for (const match of content.matchAll(IMPORT_PATH)) {
+            const key = matchKey(all, resolveImport(path, match[1]));
+            if (key !== null) visit(key);
+        }
+    };
+    visit(primaryPath);
+    return reached;
+}

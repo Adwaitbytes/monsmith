@@ -25,7 +25,7 @@
  * could not measure is worse than no report.
  */
 
-import { deepAudit, toFindings } from './audit';
+import { deepAudit, fixReview, toFindings, type FixReviewInput } from './audit';
 import { isChainId, type ChainId } from '../chainfit/chains';
 import type { ChainFinding } from '../chainfit/findings';
 import { buildChainFitReport, type ChainFitReport } from '../chainfit/report';
@@ -37,6 +37,7 @@ import {
     type OptimizationSuggestion,
     type ParallelAnalysisResult,
 } from '../parallel/analyzer';
+import { flattenImportClosure } from '../flatten';
 import { compileVersioned } from '../solc/compile';
 import {
     CONTRACT_BUDGET_MS,
@@ -79,6 +80,15 @@ export interface BuildInput {
     cap: number;
     /** Chain ids for the chain fit comparison. Unknown ids are dropped. */
     chains?: string[];
+    /**
+     * Re-audit one contract as a fix review rather than from scratch.
+     *
+     * Set by the optimizer: the earlier AI findings are re-checked against the
+     * new code, and fresh findings only count in the lines that changed, so the
+     * score moves because of the fix and not because a second open-ended pass
+     * happened to see something different in code nobody touched.
+     */
+    fixReview?: { path: string } & FixReviewInput;
 }
 
 // ============= SECURITY =============
@@ -853,13 +863,18 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
         }
         yield { type: 'section', contractId: id, section: 'parallel', result: sections.parallel };
 
+        // Gas and chain fit compile the contract, and a contract that imports
+        // its siblings only compiles with them, so those two get the contract
+        // flattened together with everything it imports.
+        const unit = flattenImportClosure(path, input.files) ?? source;
+
         sections.gas = await runSection(async () => {
             // deployedBytecode is requested for the EIP-170 size figure; bytecode
             // is what makes solc emit creation estimates at all.
-            const compiled = await compileVersioned(source, {
+            const compiled = await compileVersioned(unit, {
                 outputs: ['abi', 'evm.bytecode', 'evm.deployedBytecode', 'evm.gasEstimates'],
             });
-            return buildGasProfile(source, compiled);
+            return buildGasProfile(unit, compiled);
         });
         if (isOk(sections.gas)) {
             findings.push(...withIds(id, 'gas', gasFindings(path, sections.gas.data)));
@@ -867,7 +882,7 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
         yield { type: 'section', contractId: id, section: 'gas', result: sections.gas };
 
         sections.chainfit = await runSection(() =>
-            buildChainFitReport({ source, ...(chains === undefined ? {} : { chains }) }),
+            buildChainFitReport({ source: unit, ...(chains === undefined ? {} : { chains }) }),
         );
         if (isOk(sections.chainfit)) {
             findings.push(...withIds(id, 'chainfit', chainFitFindings(path, sections.chainfit.data)));
@@ -890,7 +905,7 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
           says so rather than letting a shallow pass look like a deep one.
         */
         try {
-            const audit = await deepAudit(source, {
+            const auditOptions = {
                 budgetMs: auditBudgetMs,
                 // What the parser already proved, so the reviewer cannot talk
                 // itself out of a vulnerability the static pass confirmed.
@@ -900,7 +915,12 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
                         title: finding.title,
                         ...(finding.line !== undefined ? { line: finding.line } : {}),
                     })),
-            });
+            };
+            const review = input.fixReview;
+            const audit =
+                review !== undefined && review.path === path
+                    ? await fixReview(source, review, auditOptions)
+                    : await deepAudit(source, auditOptions);
             findings.push(...toFindings(audit, id));
             for (const note of audit.notes) auditNotes.add(note);
             if (audit.description !== null) descriptions.set(id, audit.description.purpose);

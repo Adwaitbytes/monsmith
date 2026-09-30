@@ -5,16 +5,18 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { SignInButton, useAuth } from '@clerk/nextjs';
 import { ArrowRight, Boxes, Check, FilePlus2, Github, Loader2, Play } from 'lucide-react';
 
-import { formatPrice, freeReportsPhrase, type Plan } from '@/lib/billing/offer';
+import { formatPrice, freeBundlePhrase, type Plan } from '@/lib/billing/offer';
+import { REFERENCE_CONTRACTS, type ReferenceContract } from '../referenceContracts';
 import { Omnibox, type OmniboxIntent } from './Omnibox';
 
 /**
  * What the studio shows before there is anything to look at.
  *
  * The feedback that shaped this was blunt: too many options, no one-button path
- * with a sample, and no idea what to do. So the screen has one focal point, a
- * button that loads The DAO and runs the report on it, and
- * everything else is subordinate to it. Your own code goes in the box under it;
+ * with a sample, and no idea what to do. So the screen leads with contracts
+ * every developer already knows, Uniswap first, each one click from a full
+ * report, and everything else is subordinate to that. Your own code goes in the
+ * box under them;
  * the other ways in are text links, because they are answers to questions a
  * first visitor does not have yet.
  *
@@ -24,8 +26,10 @@ import { Omnibox, type OmniboxIntent } from './Omnibox';
  */
 
 export interface StartScreenProps {
-    onRunSample: () => void;
-    sampleBusy: boolean;
+    onPickReference: (reference: ReferenceContract) => void;
+    /** The reference contract being fetched, while it is. */
+    loadingReference: string | null;
+    referenceError: string | null;
     onSubmit: (intent: OmniboxIntent) => void;
     importing: boolean;
     onPickRepo: () => void;
@@ -48,6 +52,7 @@ const INCLUDED = [
     'How well it runs in parallel on Monad',
     'What the same calls cost on other chains',
     'Patches you can apply in one click',
+    'One-click optimization that fixes the findings and proves it with a new score',
 ] as const;
 
 const EASE = [0.16, 1, 0.3, 1] as const;
@@ -59,11 +64,12 @@ function Offer({ plan }: { plan: Plan }) {
     const { isSignedIn } = useAuth();
     const price = plan.price === null ? null : formatPrice(plan.price);
     const free = plan.freeReports;
+    const bundle = freeBundlePhrase(plan);
 
     const heading = !plan.paywall
         ? 'Every report is free while Monsmith is in beta'
-        : free > 0
-          ? `Your first ${freeReportsPhrase(free)} are free`
+        : bundle !== null
+          ? `Your first ${bundle} are free`
           : 'Pay only for the reports you want';
 
     return (
@@ -72,14 +78,28 @@ function Offer({ plan }: { plan: Plan }) {
             className="overflow-hidden rounded-2xl border border-border-subtle bg-surface-raised shadow-[var(--shadow-panel)]"
         >
             <div className="grid gap-6 p-6 sm:grid-cols-[auto_1fr] sm:gap-8">
-                {plan.paywall && free > 0 && (
-                    <div className="flex items-baseline gap-2 sm:flex-col sm:items-start sm:gap-0">
-                        <span className="font-display text-[56px] font-semibold leading-none tracking-[-0.04em] text-accent">
-                            {free}
-                        </span>
-                        <span className="text-[12px] font-medium uppercase tracking-[0.12em] text-text-muted">
-                            free {free === 1 ? 'report' : 'reports'}
-                        </span>
+                {plan.paywall && (free > 0 || plan.freeOptimizations > 0) && (
+                    <div className="flex gap-6 sm:flex-col sm:gap-4">
+                        {free > 0 && (
+                            <div>
+                                <span className="block font-display text-[48px] font-semibold leading-none tracking-[-0.04em] text-accent">
+                                    {free}
+                                </span>
+                                <span className="text-[11.5px] font-medium uppercase tracking-[0.12em] text-text-muted">
+                                    free {free === 1 ? 'report' : 'reports'}
+                                </span>
+                            </div>
+                        )}
+                        {plan.freeOptimizations > 0 && (
+                            <div>
+                                <span className="block font-display text-[48px] font-semibold leading-none tracking-[-0.04em] text-accent">
+                                    {plan.freeOptimizations}
+                                </span>
+                                <span className="text-[11.5px] font-medium uppercase tracking-[0.12em] text-text-muted">
+                                    free {plan.freeOptimizations === 1 ? 'optimization' : 'optimizations'}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -118,8 +138,8 @@ function Offer({ plan }: { plan: Plan }) {
                         {free > 0 && !isSignedIn && 'Sign in to use them. '}
                         {price !== null && (
                             <>
-                                After that, <span className="font-medium text-text-primary">{price} per report</span>, by
-                                card or in MON.{' '}
+                                After that, <span className="font-medium text-text-primary">{price} per report</span>,
+                                optimization included, by card or in MON.{' '}
                             </>
                         )}
                         Every report shows its score, severity counts and finding titles for free.
@@ -146,6 +166,9 @@ function OfferLine({ plan }: { plan: Plan }) {
     if (!plan.paywall) points.push('Free while in beta');
     else {
         if (plan.freeReports > 0) points.push(`${plan.freeReports} full ${plan.freeReports === 1 ? 'report' : 'reports'} free`);
+        if (plan.freeOptimizations > 0) {
+            points.push(`${plan.freeOptimizations} ${plan.freeOptimizations === 1 ? 'optimization' : 'optimizations'} free`);
+        }
         if (plan.price !== null) points.push(`then ${formatPrice(plan.price)} per report`);
         points.push('no subscription');
     }
@@ -161,9 +184,100 @@ function OfferLine({ plan }: { plan: Plan }) {
     );
 }
 
+const TILE_CLASS =
+    'group flex h-full flex-col items-start rounded-xl border border-border-subtle bg-surface-raised p-3.5 text-left outline-none ring-accent-line transition-[transform,border-color,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 hover:border-border-strong hover:shadow-[var(--shadow-panel)] focus-visible:ring-2 disabled:cursor-wait disabled:opacity-60 motion-reduce:transition-none motion-reduce:hover:translate-y-0';
+
+/**
+ * The famous contracts, with the first one as the focal button.
+ *
+ * One of them leads so the screen still has a single obvious action; the rest
+ * sit under it as equals for the visitor who would rather see a contract they
+ * know better. Everything is disabled while one loads, since two runs at once
+ * would race for the report rail.
+ */
+function ReferencePicker({
+    onPick,
+    loading,
+}: {
+    onPick: (reference: ReferenceContract) => void;
+    loading: string | null;
+}) {
+    const [featured, ...rest] = REFERENCE_CONTRACTS;
+    const busy = loading !== null;
+
+    return (
+        <div className="space-y-2.5">
+            <button
+                type="button"
+                onClick={() => onPick(featured)}
+                disabled={busy}
+                className="group flex w-full items-center gap-4 rounded-2xl bg-accent px-5 py-4 text-left text-white shadow-[0_1px_0_rgba(255,255,255,0.15)_inset,0_10px_28px_-10px_rgba(109,40,217,0.55)] outline-none ring-accent-line ring-offset-2 ring-offset-background transition-[transform,opacity] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 focus-visible:ring-2 active:translate-y-0 disabled:cursor-wait disabled:opacity-80 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+            >
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/15">
+                    {loading === featured.id ? (
+                        <Loader2 size={18} className="animate-spin motion-reduce:animate-none" aria-hidden />
+                    ) : (
+                        <Play size={18} fill="currentColor" aria-hidden />
+                    )}
+                </span>
+                <span className="min-w-0 flex-1">
+                    <span className="block text-[15px] font-semibold">
+                        {loading === featured.id ? `Loading ${featured.name}` : `Check ${featured.name}`}
+                    </span>
+                    <span className="mt-0.5 block text-[12.5px] text-white/75">{featured.blurb}</span>
+                </span>
+                <ArrowRight
+                    size={18}
+                    aria-hidden
+                    className="shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none"
+                />
+            </button>
+
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                {rest.map((reference) => (
+                    <button
+                        key={reference.id}
+                        type="button"
+                        onClick={() => onPick(reference)}
+                        disabled={busy}
+                        title={reference.blurb}
+                        className={TILE_CLASS}
+                    >
+                        <span className="flex w-full items-center justify-between gap-2">
+                            <span className="text-[13px] font-semibold leading-tight text-text-primary">
+                                {reference.name}
+                            </span>
+                            {loading === reference.id ? (
+                                <Loader2
+                                    size={13}
+                                    aria-hidden
+                                    className="shrink-0 animate-spin text-accent motion-reduce:animate-none"
+                                />
+                            ) : (
+                                <ArrowRight
+                                    size={13}
+                                    aria-hidden
+                                    className="shrink-0 text-text-muted transition-[transform,color] duration-200 group-hover:translate-x-0.5 group-hover:text-accent motion-reduce:transition-none"
+                                />
+                            )}
+                        </span>
+                        <span className="mt-1 font-mono text-[10.5px] text-text-muted">
+                            {reference.year} · solc {reference.compiler}
+                        </span>
+                        <span className="mt-2 text-[11.5px] leading-snug text-text-secondary">
+                            {reference.blurb}
+                        </span>
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+}
+
 export function StartScreen({
-    onRunSample,
-    sampleBusy,
+    onPickReference,
+    loadingReference,
+    referenceError,
     onSubmit,
     importing,
     onPickRepo,
@@ -210,33 +324,18 @@ export function StartScreen({
                 </motion.p>
 
                 <motion.div {...rise(0.12)} className="mt-8">
-                    <button
-                        type="button"
-                        onClick={onRunSample}
-                        disabled={sampleBusy}
-                        className="group flex w-full items-center gap-4 rounded-2xl bg-accent px-5 py-4 text-left text-white shadow-[0_1px_0_rgba(255,255,255,0.15)_inset,0_10px_28px_-10px_rgba(109,40,217,0.55)] outline-none ring-accent-line ring-offset-2 ring-offset-background transition-[transform,opacity] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-0.5 focus-visible:ring-2 active:translate-y-0 disabled:cursor-wait disabled:opacity-80 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
-                    >
-                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/15">
-                            {sampleBusy ? (
-                                <Loader2 size={18} className="animate-spin motion-reduce:animate-none" aria-hidden />
-                            ) : (
-                                <Play size={18} fill="currentColor" aria-hidden />
-                            )}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                            <span className="block text-[15px] font-semibold">
-                                {sampleBusy ? 'Checking The DAO' : 'Check The DAO contract'}
-                            </span>
-                            <span className="mt-0.5 block text-[12.5px] text-white/75">
-                                The 2016 hack that drained 3.6M ETH and split Ethereum. See if we catch it.
-                            </span>
-                        </span>
-                        <ArrowRight
-                            size={18}
-                            aria-hidden
-                            className="shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none"
-                        />
-                    </button>
+                    <p className="mb-2.5 text-[12px] font-medium text-text-muted">
+                        Try it on a contract every developer knows
+                    </p>
+                    <ReferencePicker
+                        onPick={onPickReference}
+                        loading={loadingReference}
+                    />
+                    {referenceError !== null && (
+                        <p role="alert" className="mt-2.5 text-[12.5px] text-red-600 dark:text-red-400">
+                            {referenceError}
+                        </p>
+                    )}
                     {plan !== null && <OfferLine plan={plan} />}
                 </motion.div>
 

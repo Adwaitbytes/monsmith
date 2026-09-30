@@ -5,6 +5,8 @@ import { Check, ChevronRight, Copy, Lock, Wand2 } from 'lucide-react';
 
 import type { Finding, Severity } from '@/lib/report/types';
 
+import { usePrinting } from '@/lib/report/printMode';
+
 /**
  * One finding, in both halves of the product.
  *
@@ -227,6 +229,9 @@ export function FindingCard({ finding, locked, onReveal, onApplyPatch }: Finding
     // long list stays scannable, which is the whole reason the rail is one
     // document rather than six panels.
     const [open, setOpen] = useState(finding.severity === 'critical' || finding.severity === 'high');
+    // Printing opens every card: a PDF of folded findings is a PDF of titles.
+    const printing = usePrinting();
+    const shown = open || printing;
 
     return (
         <article className="group relative overflow-hidden rounded-xl border border-border-subtle bg-surface-raised transition-colors duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-border-strong motion-reduce:transition-none">
@@ -262,7 +267,7 @@ export function FindingCard({ finding, locked, onReveal, onApplyPatch }: Finding
                 </button>
             </h4>
 
-            <div id={bodyId} hidden={!open} className="space-y-3 px-4 pb-3.5 pl-4">
+            <div id={bodyId} hidden={!shown} className="space-y-3 px-4 pb-3.5 pl-4">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     {location !== null && <CopyableLocation location={location} />}
                     <span className="text-[10.5px] uppercase tracking-wider text-text-muted">

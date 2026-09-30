@@ -6,7 +6,11 @@ import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Loader2, MinusC
 
 import type { ChainFitReport } from '@/lib/chainfit/report';
 import type { GasProfile } from '@/lib/gasProfiler';
+import dynamic from 'next/dynamic';
+
 import type { ParallelAnalysisResult } from '@/lib/parallel/analyzer';
+import { buildParallelGraph, optimizationPriorities, type ParallelGraph as GraphModel } from '@/lib/parallel/graph';
+import { PrintModeProvider, usePrinting } from '@/lib/report/printMode';
 import { summariseLocked } from '@/lib/report/redact';
 import type {
     ContractReport,
@@ -28,6 +32,7 @@ import {
     asList,
     compactGas,
     rollupStatus,
+    type OptimizeCta,
 } from './ScoreStrip';
 import type { ReportOffer } from '@/lib/billing/useReportUnlock';
 import { UnlockPanel } from './UnlockPanel';
@@ -77,6 +82,10 @@ export interface ReportRailProps {
     onOpenContract?: (contract: ContractReport) => void;
     /** Offered only on a finished report, from inside the report itself. */
     onShare?: () => void;
+    /** Offered only on a finished report: makes a PDF of it. */
+    onDownloadPdf?: () => void;
+    /** Offered only on a finished report: the optimizer's entry point. */
+    optimize?: OptimizeCta;
     /**
      * Closes the dock.
      *
@@ -257,11 +266,41 @@ function SecurityMeasurements({ data }: { data: SecurityAnalysis }) {
     );
 }
 
+/*
+  The dependency map, loaded on the client only: React Flow measures the DOM,
+  and the report page renders on the server first.
+*/
+const ParallelGraphView = dynamic(() => import('../ParallelGraph').then((module) => module.ParallelGraph), {
+    ssr: false,
+    loading: () => <div className="h-full animate-pulse rounded-xl bg-surface-sunken motion-reduce:animate-none" />,
+});
+
+/** The map needs the full analysis, which a stored report may predate. */
+function graphFor(data: ParallelAnalysisResult): GraphModel | null {
+    try {
+        const graph = buildParallelGraph(data);
+        return graph.nodes.length > 0 ? graph : null;
+    } catch (error) {
+        console.error('Could not draw the parallel map for this report:', error);
+        return null;
+    }
+}
+
+function prioritiesFor(data: ParallelAnalysisResult): string[] {
+    try {
+        return optimizationPriorities(data);
+    } catch {
+        return [];
+    }
+}
+
 function ParallelMeasurements({ data }: { data: ParallelAnalysisResult }) {
     const score = asFinite(data.score);
     const total = asFinite(data.totalFunctions) ?? 0;
     const parallelizable = asFinite(data.parallelizableFunctions) ?? 0;
     const hotspots = asList(data.hotspots);
+    const graph = graphFor(data);
+    const priorities = prioritiesFor(data);
 
     return (
         <div className="space-y-3">
@@ -287,6 +326,36 @@ function ParallelMeasurements({ data }: { data: ParallelAnalysisResult }) {
                             {hotspot.variable}
                         </span>
                     ))}
+                </div>
+            )}
+
+            {graph !== null && (
+                <figure className="print:break-inside-avoid">
+                    <figcaption className="mb-2 flex items-baseline justify-between gap-3">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+                            Dependency map
+                        </span>
+                        <span className="text-[11px] text-text-muted">Which function touches which slot</span>
+                    </figcaption>
+                    <div className="flex h-[380px] flex-col">
+                        <ParallelGraphView graph={graph} analysisKey={`${data.contract}:${total}:${hotspots.length}`} />
+                    </div>
+                </figure>
+            )}
+
+            {priorities.length > 0 && (
+                <div>
+                    <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+                        Fix first
+                    </p>
+                    <ol className="space-y-1.5">
+                        {priorities.map((priority, index) => (
+                            <li key={priority} className="flex gap-2 text-[12px] leading-relaxed text-text-secondary">
+                                <span className="font-mono text-[11px] tabular-nums text-text-muted">{index + 1}.</span>
+                                <span>{priority.replace(/ — /g, ': ')}</span>
+                            </li>
+                        ))}
+                    </ol>
                 </div>
             )}
         </div>
@@ -328,17 +397,57 @@ function GasMeasurements({ data }: { data: GasProfile }) {
                 </div>
             )}
 
-            {functions.length > 0 && (
-                <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle">
-                    {functions.slice(0, 5).map((fn) => (
-                        <li key={fn.signature} className="flex items-baseline justify-between gap-3 px-3 py-2">
-                            <span className="truncate font-mono text-[11.5px] text-text-primary">{fn.name}</span>
+            {functions.length > 0 && <GasTable functions={functions} />}
+        </div>
+    );
+}
+
+const GAS_ROWS_FOLDED = 8;
+
+/** Every function's cost, heaviest first, with a bar against the heaviest. */
+function GasTable({ functions }: { functions: readonly GasProfile['functions'][number][] }) {
+    const [expanded, setExpanded] = useState(false);
+    const printing = usePrinting();
+    const sorted = useMemo(
+        () => [...functions].sort((a, b) => (b.gas ?? Number.POSITIVE_INFINITY) - (a.gas ?? Number.POSITIVE_INFINITY)),
+        [functions],
+    );
+    const heaviest = sorted.reduce((max, fn) => (fn.gas !== null && fn.gas > max ? fn.gas : max), 0);
+    const shown = expanded || printing ? sorted : sorted.slice(0, GAS_ROWS_FOLDED);
+
+    return (
+        <div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-text-muted">
+                Gas per function
+            </p>
+            <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle">
+                {shown.map((fn) => (
+                    <li key={fn.signature} className="px-3 py-2">
+                        <div className="flex items-baseline justify-between gap-3">
+                            <span className="truncate font-mono text-[11.5px] text-text-primary" title={fn.signature}>
+                                {fn.name}
+                            </span>
                             <span className="shrink-0 font-mono text-[11.5px] tabular-nums text-text-secondary">
                                 {fn.gas === null ? 'unbounded' : compactGas(fn.gas)}
                             </span>
-                        </li>
-                    ))}
-                </ul>
+                        </div>
+                        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-border-subtle">
+                            <div
+                                className={`h-full rounded-full ${fn.gas === null ? 'bg-red-500' : 'bg-accent/70'}`}
+                                style={{ width: fn.gas === null ? '100%' : `${heaviest > 0 ? Math.max(2, (fn.gas / heaviest) * 100) : 0}%` }}
+                            />
+                        </div>
+                    </li>
+                ))}
+            </ul>
+            {sorted.length > GAS_ROWS_FOLDED && (
+                <button
+                    type="button"
+                    onClick={() => setExpanded((open) => !open)}
+                    className="mt-2 rounded text-[11.5px] font-medium text-accent outline-none ring-accent-line hover:underline focus-visible:ring-2 print:hidden"
+                >
+                    {expanded ? 'Show fewer' : `Show all ${sorted.length} functions`}
+                </button>
             )}
         </div>
     );
@@ -515,6 +624,7 @@ function ContractDisclosure({
 }) {
     const bodyId = useId();
     const [open, setOpen] = useState(group.findings.length > 0 || group.status === 'failed');
+    const printing = usePrinting();
 
     return (
         <div className="overflow-hidden rounded-xl border border-border-subtle">
@@ -555,7 +665,7 @@ function ContractDisclosure({
                 )}
             </div>
 
-            <div id={bodyId} hidden={!open} className="border-t border-border-subtle p-3">
+            <div id={bodyId} hidden={!(open || printing)} className="border-t border-border-subtle p-3">
                 <GroupBody
                     group={group}
                     kind={kind}
@@ -661,6 +771,7 @@ function AnalysisSection({
  * wants it and pure noise above the findings for someone who does not.
  */
 function ThreatModel({ report }: { report: RepoReport }) {
+    const printing = usePrinting();
     const withThreats = asList(report.contracts).filter(
         (contract) => asList(contract.threats).length > 0,
     );
@@ -673,7 +784,7 @@ function ThreatModel({ report }: { report: RepoReport }) {
 
     return (
         <section className="border-b border-border-subtle px-5 py-4">
-            <details className="group">
+            <details className="group" open={printing ? true : undefined}>
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-2 outline-none ring-accent-line focus-visible:ring-2">
                     <span className="text-[11px] font-medium uppercase tracking-wider text-text-muted">
                         Threat model
@@ -924,6 +1035,8 @@ function ReportDocument({
     onOpenContract,
     scrollRef,
     onShare,
+    onDownloadPdf,
+    optimize,
 }: {
     report: RepoReport;
     entitled: boolean;
@@ -936,6 +1049,8 @@ function ReportDocument({
     onOpenContract?: (contract: ContractReport) => void;
     scrollRef: RefObject<HTMLDivElement | null>;
     onShare?: () => void;
+    onDownloadPdf?: () => void;
+    optimize?: OptimizeCta;
 }) {
     const [activeSection, setActiveSection] = useState<SectionKind | null>(null);
     const sectionRefs = useRef<Partial<Record<SectionKind, HTMLElement>>>({});
@@ -998,6 +1113,8 @@ function ReportDocument({
                 activeSection={activeSection}
                 onJump={jump}
                 {...(onShare !== undefined ? { onShare } : {})}
+                {...(onDownloadPdf !== undefined ? { onDownloadPdf } : {})}
+                {...(optimize !== undefined ? { optimize } : {})}
             />
 
             <HealthSection report={report} onOpenContract={onOpenContract} />
@@ -1049,52 +1166,58 @@ export function ReportRail({
     onRerun,
     onOpenContract,
     onShare,
+    onDownloadPdf,
+    optimize,
     onClose,
 }: ReportRailProps) {
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const report = state.status === 'ready' ? state.report : state.status === 'running' ? state.partial : null;
 
     return (
-        <aside aria-label="Contract report" className="relative flex h-full flex-col panel-surface">
-            {onClose !== undefined && (
-                <button
-                    onClick={onClose}
-                    aria-label="Close the report"
-                    title="Close the report"
-                    className="absolute right-2.5 top-2.5 z-30 grid h-6 w-6 place-items-center rounded-md text-text-muted outline-none ring-accent-line transition-colors hover:bg-border-subtle hover:text-text-primary focus-visible:ring-2"
-                >
-                    <X size={14} />
-                </button>
-            )}
-
-            {state.status === 'running' && (
-                <RunProgress done={state.done} total={state.total} label={state.label} />
-            )}
-
-            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
-                {state.status === 'empty' && <EmptyRail onRerun={onRerun} />}
-                {state.status === 'error' && <ErrorRail message={state.message} onRerun={onRerun} />}
-                {state.status === 'running' && report === null && <StartingRail />}
-
-                {report !== null && (
-                    <ReportDocument
-                        report={report}
-                        entitled={entitled}
-                        onUnlock={onUnlock}
-                        offer={offer ?? null}
-                        {...(onPayMon !== undefined ? { onPayMon } : {})}
-                        unlocking={unlocking}
-                        unlockError={unlockError}
-                        onApplyPatch={onApplyPatch}
-                        onOpenContract={onOpenContract}
-                        scrollRef={scrollRef}
-                        {...(state.status === 'ready' && onShare !== undefined
-                            ? { onShare }
-                            : {})}
-                    />
+        <PrintModeProvider>
+            <aside aria-label="Contract report" className="relative flex h-full flex-col panel-surface">
+                {onClose !== undefined && (
+                    <button
+                        onClick={onClose}
+                        aria-label="Close the report"
+                        title="Close the report"
+                        className="absolute right-2.5 top-2.5 z-30 grid h-6 w-6 place-items-center rounded-md text-text-muted outline-none ring-accent-line transition-colors hover:bg-border-subtle hover:text-text-primary focus-visible:ring-2"
+                    >
+                        <X size={14} />
+                    </button>
                 )}
-            </div>
-        </aside>
+
+                {state.status === 'running' && (
+                    <RunProgress done={state.done} total={state.total} label={state.label} />
+                )}
+
+                <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+                    {state.status === 'empty' && <EmptyRail onRerun={onRerun} />}
+                    {state.status === 'error' && <ErrorRail message={state.message} onRerun={onRerun} />}
+                    {state.status === 'running' && report === null && <StartingRail />}
+
+                    {report !== null && (
+                        <ReportDocument
+                            report={report}
+                            entitled={entitled}
+                            onUnlock={onUnlock}
+                            offer={offer ?? null}
+                            {...(onPayMon !== undefined ? { onPayMon } : {})}
+                            unlocking={unlocking}
+                            unlockError={unlockError}
+                            onApplyPatch={onApplyPatch}
+                            onOpenContract={onOpenContract}
+                            scrollRef={scrollRef}
+                            {...(state.status === 'ready' && onShare !== undefined
+                                ? { onShare }
+                                : {})}
+                            {...(state.status === 'ready' && onDownloadPdf !== undefined ? { onDownloadPdf } : {})}
+                            {...(state.status === 'ready' && optimize !== undefined ? { optimize } : {})}
+                        />
+                    )}
+                </div>
+            </aside>
+        </PrintModeProvider>
     );
 }
 

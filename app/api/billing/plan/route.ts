@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { dodoConfig, reportPrice } from "@/lib/billing/dodo";
 import type { Plan } from "@/lib/billing/offer";
+import { FREE_OPTIMIZATIONS } from "@/lib/optimize/allowance";
 import { paywallEnabled } from "@/lib/report/entitlement";
 import { FREE_REPORTS } from "@/lib/report/freeReports";
 
@@ -22,6 +23,7 @@ export async function GET() {
     const plan: Plan = {
         paywall,
         freeReports: FREE_REPORTS,
+        freeOptimizations: FREE_OPTIMIZATIONS,
         price: config === null ? null : await reportPrice(config),
     };
     return NextResponse.json(plan, {

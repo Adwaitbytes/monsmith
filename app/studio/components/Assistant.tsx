@@ -160,7 +160,7 @@ export function Assistant({
                         transition={{ duration: reduce ? 0 : 0.18, ease: [0.16, 1, 0.3, 1] }}
                         onClick={() => setOpen(true)}
                         aria-label="Ask Aria"
-                        className="group fixed bottom-9 right-5 z-40 flex items-center gap-2 rounded-full border border-border-subtle bg-surface-raised py-2.5 pl-3.5 pr-4 shadow-[var(--shadow-panel)] outline-none ring-accent-line transition-transform hover:-translate-y-0.5 focus-visible:ring-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
+                        className="group fixed bottom-9 right-5 z-40 flex items-center gap-2 print:hidden rounded-full border border-border-subtle bg-surface-raised py-2.5 pl-3.5 pr-4 shadow-[var(--shadow-panel)] outline-none ring-accent-line transition-transform hover:-translate-y-0.5 focus-visible:ring-2 motion-reduce:transition-none motion-reduce:hover:translate-y-0"
                     >
                         <Sparkles size={15} className="text-accent" />
                         <span className="text-[12.5px] font-medium text-text-primary">Ask Aria</span>
@@ -177,7 +177,7 @@ export function Assistant({
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 12, scale: 0.98 }}
                         transition={{ duration: reduce ? 0 : 0.2, ease: [0.16, 1, 0.3, 1] }}
-                        className="fixed bottom-9 right-5 z-40 flex h-[min(34rem,70vh)] w-[min(24rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-border-subtle bg-surface-raised shadow-[var(--shadow-panel)]"
+                        className="fixed bottom-9 right-5 z-40 flex h-[min(34rem,70vh)] print:hidden w-[min(24rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-border-subtle bg-surface-raised shadow-[var(--shadow-panel)]"
                     >
                         <header className="flex items-center gap-2 border-b border-border-subtle px-4 py-3">
                             <Sparkles size={14} className="text-accent" />

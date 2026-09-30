@@ -89,6 +89,24 @@ async function ensureSchema(): Promise<void> {
         )
     `;
     await sql`CREATE INDEX IF NOT EXISTS reports_owner ON reports (user_id, created_at DESC)`;
+    // An optimized contract's report points back at the report it improved on.
+    // It is the owner's by right, not one of their free reports, so the
+    // allowance count skips anything with this set.
+    await sql`ALTER TABLE reports ADD COLUMN IF NOT EXISTS derived_from TEXT`;
+    await sql`
+        CREATE TABLE IF NOT EXISTS optimizations (
+            optimization_id     TEXT PRIMARY KEY,
+            report_id           TEXT        NOT NULL,
+            optimized_report_id TEXT        NOT NULL,
+            user_id             TEXT,
+            visitor_id          TEXT,
+            free                BOOLEAN     NOT NULL,
+            before_score        INTEGER,
+            after_score         INTEGER,
+            created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS optimizations_user ON optimizations (user_id) WHERE free`;
     await sql`
         CREATE INDEX IF NOT EXISTS github_installations_user
             ON github_installations (user_id)
@@ -102,20 +120,21 @@ export interface ReportOwner {
     visitorId: string | null;
 }
 
-export async function saveReport(report: RepoReport, owner: ReportOwner): Promise<void> {
+export async function saveReport(report: RepoReport, owner: ReportOwner, derivedFrom: string | null = null): Promise<void> {
     const sql = client();
     if (sql === null) return;
     await ensureSchema();
 
     await sql`
-        INSERT INTO reports (report_id, user_id, visitor_id, origin, payload, health_score)
+        INSERT INTO reports (report_id, user_id, visitor_id, origin, payload, health_score, derived_from)
         VALUES (
             ${report.reportId},
             ${owner.userId},
             ${owner.visitorId},
             ${JSON.stringify(report.origin)},
             ${JSON.stringify(report)},
-            ${report.health?.score ?? null}
+            ${report.health?.score ?? null},
+            ${derivedFrom}
         )
         ON CONFLICT (report_id) DO UPDATE
             SET payload      = EXCLUDED.payload,
@@ -284,7 +303,9 @@ async function isWithinFreeAllowance(reportId: string, owner: ReportOwner): Prom
     if (owner.visitorId !== null) await adoptVisitorReports(owner.userId, owner.visitorId);
 
     const rows = (await sql`
-        SELECT report_id FROM reports WHERE user_id = ${owner.userId} ORDER BY created_at ASC LIMIT ${allowance}
+        SELECT report_id FROM reports
+        WHERE user_id = ${owner.userId} AND derived_from IS NULL
+        ORDER BY created_at ASC LIMIT ${allowance}
     `) as Array<{ report_id: string }>;
 
     return isFreeReport(reportId, rows.map((row) => row.report_id), allowance);
@@ -442,4 +463,78 @@ export async function removeInstallation(installationId: number): Promise<void> 
     if (sql === null) return;
     await ensureSchema();
     await sql`DELETE FROM github_installations WHERE installation_id = ${installationId}`;
+}
+
+// ============= OPTIMIZATIONS =============
+
+/** Free optimizations this account has used. Zero without a database, which means no paywall either. */
+export async function freeOptimizationsUsed(userId: string): Promise<number> {
+    const sql = client();
+    if (sql === null) return 0;
+    await ensureSchema();
+    const rows = (await sql`
+        SELECT COUNT(*)::int AS used FROM optimizations WHERE user_id = ${userId} AND free
+    `) as Array<{ used: number }>;
+    return rows[0]?.used ?? 0;
+}
+
+/**
+ * Whether someone paid for this report, by card or MON.
+ *
+ * Unlocks granted by an optimization do not count: they are the product of a
+ * free optimization, and letting them unlock further optimizations would make
+ * the free allowance unlimited.
+ */
+export async function reportWasPaidFor(reportId: string): Promise<boolean> {
+    const sql = client();
+    if (sql === null) return false;
+    await ensureSchema();
+    const rows = (await sql`
+        SELECT 1 FROM report_unlocks
+        WHERE report_id = ${reportId} AND provider IS DISTINCT FROM 'optimization'
+    `) as unknown[];
+    return rows.length > 0;
+}
+
+export interface OptimizationRecord {
+    reportId: string;
+    optimizedReport: RepoReport;
+    owner: ReportOwner;
+    free: boolean;
+    beforeScore: number | null;
+    afterScore: number | null;
+}
+
+/**
+ * Stores the optimized contract's report and the optimization itself.
+ *
+ * The new report is saved already unlocked: the owner paid for it, in money or
+ * in one of their free optimizations, and a result they cannot read is not a
+ * result.
+ */
+export async function recordOptimization(record: OptimizationRecord): Promise<void> {
+    const sql = client();
+    if (sql === null) return;
+    await ensureSchema();
+
+    await saveReport(record.optimizedReport, record.owner, record.reportId);
+    await sql`
+        INSERT INTO report_unlocks (report_id, user_id, visitor_id, provider)
+        VALUES (${record.optimizedReport.reportId}, ${record.owner.userId}, ${record.owner.visitorId}, 'optimization')
+        ON CONFLICT (report_id) DO NOTHING
+    `;
+    await sql`
+        INSERT INTO optimizations
+            (optimization_id, report_id, optimized_report_id, user_id, visitor_id, free, before_score, after_score)
+        VALUES (
+            ${crypto.randomUUID()},
+            ${record.reportId},
+            ${record.optimizedReport.reportId},
+            ${record.owner.userId},
+            ${record.owner.visitorId},
+            ${record.free},
+            ${record.beforeScore},
+            ${record.afterScore}
+        )
+    `;
 }

@@ -19,6 +19,8 @@ export interface Plan {
     paywall: boolean;
     /** Full reports a signed-in account gets before paying. */
     freeReports: number;
+    /** Optimizations a signed-in account gets before paying. */
+    freeOptimizations: number;
     /** What one report costs by card, when it is known. */
     price: Price | null;
 }
@@ -45,15 +47,29 @@ export function freeReportsPhrase(count: number): string {
     return `${word} full ${count === 1 ? "report" : "reports"}`;
 }
 
+/** "two optimizations", "one optimization". */
+export function freeOptimizationsPhrase(count: number): string {
+    const word = count < NUMBER_WORDS.length ? NUMBER_WORDS[count] : String(count);
+    return `${word} ${count === 1 ? "optimization" : "optimizations"}`;
+}
+
+/** What an account gets free, in words: "two full reports and two optimizations". */
+export function freeBundlePhrase(plan: Plan): string | null {
+    const parts: string[] = [];
+    if (plan.freeReports > 0) parts.push(freeReportsPhrase(plan.freeReports));
+    if (plan.freeOptimizations > 0) parts.push(freeOptimizationsPhrase(plan.freeOptimizations));
+    return parts.length === 0 ? null : parts.join(" and ");
+}
+
 /** The one-line offer, or null when there is nothing to say. */
 export function offerHeadline(plan: Plan): string | null {
     if (!plan.paywall) return "Every report is free while Monsmith is in beta.";
-    if (plan.freeReports === 0) {
+    const bundle = freeBundlePhrase(plan);
+    if (bundle === null) {
         return plan.price === null ? null : `${formatPrice(plan.price)} per report.`;
     }
-    const free = freeReportsPhrase(plan.freeReports);
-    const capitalised = free.charAt(0).toUpperCase() + free.slice(1);
+    const capitalised = bundle.charAt(0).toUpperCase() + bundle.slice(1);
     return plan.price === null
         ? `${capitalised} free with an account.`
-        : `${capitalised} free with an account. Then ${formatPrice(plan.price)} per report.`;
+        : `${capitalised} free with an account. Then ${formatPrice(plan.price)} per report, optimization included.`;
 }

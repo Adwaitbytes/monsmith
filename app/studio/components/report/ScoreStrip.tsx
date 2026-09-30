@@ -1,6 +1,8 @@
 'use client';
 
-import { Share2 } from 'lucide-react';
+import { ArrowRight, Loader2, Share2, Sparkles } from 'lucide-react';
+
+import { ReportDownload } from './ReportDownload';
 
 import type { Finding, Grade, RepoReport, SectionKind, Severity } from '@/lib/report/types';
 import { SECTION_KINDS, SECTION_LABELS, SEVERITIES } from '@/lib/report/types';
@@ -285,15 +287,64 @@ export interface ScoreStripProps {
      * rather than as chrome.
      */
     onShare?: () => void;
+    /** Produces a PDF of the report; the Download menu appears when this is given. */
+    onDownloadPdf?: () => void;
+    /** The optimizer's entry point, on a finished report that has something to fix. */
+    optimize?: OptimizeCta;
 }
 
-export function ScoreStrip({ report, activeSection, onJump, onShare }: ScoreStripProps) {
+export interface OptimizeCta {
+    onOptimize: () => void;
+    busy: boolean;
+    /** Short note on the right, such as "2 free". */
+    badge: string | null;
+}
+
+/**
+ * The next step after reading a report, so it sits under the score it improves.
+ * A report tells you what is wrong; this is the button that does something
+ * about it, which is why it is the one saturated element in the header.
+ */
+function OptimizeButton({ cta }: { cta: OptimizeCta }) {
+    return (
+        <button
+            type="button"
+            onClick={cta.onOptimize}
+            disabled={cta.busy}
+            className="group mt-3.5 flex w-full items-center gap-3 rounded-xl bg-gradient-to-r from-accent to-violet-500 px-3.5 py-2.5 text-left text-white shadow-[0_1px_0_rgba(255,255,255,0.15)_inset,0_8px_20px_-10px_rgba(109,40,217,0.6)] outline-none ring-accent-line ring-offset-2 ring-offset-surface-raised transition-[transform,opacity] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-px focus-visible:ring-2 disabled:cursor-wait disabled:opacity-80 motion-reduce:transition-none motion-reduce:hover:translate-y-0 print:hidden"
+        >
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white/15">
+                {cta.busy ? (
+                    <Loader2 size={15} className="animate-spin motion-reduce:animate-none" aria-hidden />
+                ) : (
+                    <Sparkles size={15} aria-hidden />
+                )}
+            </span>
+            <span className="min-w-0 flex-1">
+                <span className="block text-[13.5px] font-semibold">{cta.busy ? 'Optimizing' : 'Optimize this contract'}</span>
+                <span className="block truncate text-[11.5px] text-white/80">
+                    Fixes the findings, cuts gas, then re-runs this report to prove it
+                </span>
+            </span>
+            {cta.badge !== null && (
+                <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[11px] font-semibold">{cta.badge}</span>
+            )}
+            <ArrowRight
+                size={15}
+                aria-hidden
+                className="shrink-0 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none"
+            />
+        </button>
+    );
+}
+
+export function ScoreStrip({ report, activeSection, onJump, onShare, onDownloadPdf, optimize }: ScoreStripProps) {
     const health = report.health;
     const score = asFinite(health?.score);
     const grade = health?.grade;
 
     return (
-        <header className="sticky top-0 z-20 border-b border-border-subtle bg-surface-raised/95 px-5 pb-3.5 pt-4 backdrop-blur-xl">
+        <header className="sticky top-0 z-20 border-b border-border-subtle bg-surface-raised/95 px-5 pb-3.5 pt-4 backdrop-blur-xl print:static">
             <div className="flex items-start gap-4">
                 <div className="flex shrink-0 items-baseline gap-2">
                     <span className="font-display text-[44px] font-semibold leading-none tracking-tight tabular-nums text-text-primary">
@@ -313,15 +364,18 @@ export function ScoreStrip({ report, activeSection, onJump, onShare }: ScoreStri
                         <h2 className="text-[11px] font-medium uppercase tracking-wider text-text-muted">
                             Contract report
                         </h2>
-                        {onShare !== undefined && (
-                            <button
-                                onClick={onShare}
-                                className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border-subtle px-2.5 py-1 text-[11.5px] font-medium text-text-secondary outline-none ring-accent-line transition-colors hover:border-border-strong hover:text-text-primary focus-visible:ring-2"
-                            >
-                                <Share2 size={12} />
-                                Share
-                            </button>
-                        )}
+                        <div className="flex shrink-0 items-center gap-1.5 print:hidden">
+                            {onShare !== undefined && (
+                                <button
+                                    onClick={onShare}
+                                    className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border-subtle px-2.5 py-1 text-[11.5px] font-medium text-text-secondary outline-none ring-accent-line transition-colors hover:border-border-strong hover:text-text-primary focus-visible:ring-2"
+                                >
+                                    <Share2 size={12} />
+                                    Share
+                                </button>
+                            )}
+                            {onDownloadPdf !== undefined && <ReportDownload report={report} onPdf={onDownloadPdf} />}
+                        </div>
                     </div>
                     <p className="mt-1 text-[12.5px] leading-relaxed text-text-secondary">
                         {health?.headline ?? 'Scores appear as each contract finishes.'}
@@ -330,6 +384,8 @@ export function ScoreStrip({ report, activeSection, onJump, onShare }: ScoreStri
             </div>
 
             <SeverityBar report={report} />
+
+            {optimize !== undefined && <OptimizeButton cta={optimize} />}
 
             {/*
               Wrapping rather than scrolling. The rail is narrow and there are
