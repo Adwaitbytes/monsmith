@@ -65,6 +65,8 @@ export interface StudioBarProps {
      * Labelled, distinct and few is the shape that was actually being asked for.
      */
     actions?: readonly BarAction[];
+    /** The start screen: identity and account only, so its one button is the only one. */
+    minimal?: boolean;
 }
 
 const PRIMARY_COPY: Record<PrimaryAction, { label: string; busy: string; icon: typeof Rocket }> = {
@@ -84,6 +86,7 @@ export function StudioBar({
     onOpenPalette,
     account,
     actions = [],
+    minimal = false,
 }: StudioBarProps) {
     const copy = PRIMARY_COPY[primary];
     const Icon = copy.icon;
@@ -110,63 +113,69 @@ export function StudioBar({
             </div>
 
             {/* The one hint that the rest of the product exists */}
-            <button
-                onClick={onOpenPalette}
-                className="group hidden min-w-[260px] items-center gap-2 rounded-lg border border-border-subtle bg-surface-sunken px-3 py-1.5 text-[12.5px] text-text-muted outline-none ring-accent-line transition-colors hover:border-border-strong hover:text-text-secondary focus-visible:ring-2 md:flex"
-            >
-                <span className="flex-1 text-left">Search commands, files and actions</span>
-                <kbd className="rounded border border-border-subtle bg-surface-raised px-1.5 py-0.5 font-mono text-[10px] text-text-muted">
-                    {modifierLabel()}K
-                </kbd>
-            </button>
+            {!minimal && (
+                <button
+                    onClick={onOpenPalette}
+                    className="group hidden min-w-[260px] items-center gap-2 rounded-lg border border-border-subtle bg-surface-sunken px-3 py-1.5 text-[12.5px] text-text-muted outline-none ring-accent-line transition-colors hover:border-border-strong hover:text-text-secondary focus-visible:ring-2 md:flex"
+                >
+                    <span className="flex-1 text-left">Search commands, files and actions</span>
+                    <kbd className="rounded border border-border-subtle bg-surface-raised px-1.5 py-0.5 font-mono text-[10px] text-text-muted">
+                        {modifierLabel()}K
+                    </kbd>
+                </button>
+            )}
 
             {/* One action, and the settings that were pretending to be actions */}
             <div className="flex shrink-0 items-center gap-1.5">
-                {actions.map((action) => {
-                    const blocked = action.blockedReason !== undefined;
-                    return (
-                        <button
-                            key={action.label}
-                            onClick={action.onClick}
-                            disabled={blocked || action.busy === true}
-                            title={action.blockedReason}
-                            className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[12.5px] font-medium outline-none ring-accent-line transition-colors focus-visible:ring-2 ${
-                                blocked || action.busy === true
-                                    ? 'cursor-not-allowed border-border-subtle text-text-muted'
-                                    : 'border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary'
-                            }`}
-                        >
-                            {action.busy === true ? (
-                                <Loader2
-                                    size={14}
-                                    className="animate-spin motion-reduce:animate-none"
-                                />
-                            ) : (
-                                action.icon
-                            )}
-                            {action.label}
-                        </button>
-                    );
-                })}
+                {!minimal && (
+                    <>
+                    {actions.map((action) => {
+                        const blocked = action.blockedReason !== undefined;
+                        return (
+                            <button
+                                key={action.label}
+                                onClick={action.onClick}
+                                disabled={blocked || action.busy === true}
+                                title={action.blockedReason}
+                                className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-[12.5px] font-medium outline-none ring-accent-line transition-colors focus-visible:ring-2 ${
+                                    blocked || action.busy === true
+                                        ? 'cursor-not-allowed border-border-subtle text-text-muted'
+                                        : 'border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary'
+                                }`}
+                            >
+                                {action.busy === true ? (
+                                    <Loader2
+                                        size={14}
+                                        className="animate-spin motion-reduce:animate-none"
+                                    />
+                                ) : (
+                                    action.icon
+                                )}
+                                {action.label}
+                            </button>
+                        );
+                    })}
 
-                <motion.button
-                    onClick={onPrimary}
-                    disabled={busy || blocked}
-                    title={primaryBlockedReason}
-                    whileTap={blocked || busy ? undefined : { scale: 0.98 }}
-                    className={`flex items-center gap-2 rounded-lg px-4 py-2 text-[12.5px] font-semibold outline-none ring-accent-line transition-opacity focus-visible:ring-2 ${
-                        busy || blocked
-                            ? 'cursor-not-allowed bg-surface-overlay text-text-muted'
-                            : 'bg-accent text-white hover:opacity-90'
-                    }`}
-                >
-                    {busy ? (
-                        <Loader2 size={14} className="animate-spin motion-reduce:animate-none" />
-                    ) : (
-                        <Icon size={14} />
-                    )}
-                    {busy ? copy.busy : copy.label}
-                </motion.button>
+                    <motion.button
+                        onClick={onPrimary}
+                        disabled={busy || blocked}
+                        title={primaryBlockedReason}
+                        whileTap={blocked || busy ? undefined : { scale: 0.98 }}
+                        className={`flex items-center gap-2 rounded-lg px-4 py-2 text-[12.5px] font-semibold outline-none ring-accent-line transition-opacity focus-visible:ring-2 ${
+                            busy || blocked
+                                ? 'cursor-not-allowed bg-surface-overlay text-text-muted'
+                                : 'bg-accent text-white hover:opacity-90'
+                        }`}
+                    >
+                        {busy ? (
+                            <Loader2 size={14} className="animate-spin motion-reduce:animate-none" />
+                        ) : (
+                            <Icon size={14} />
+                        )}
+                        {busy ? copy.busy : copy.label}
+                    </motion.button>
+                    </>
+                )}
 
                 {account}
             </div>

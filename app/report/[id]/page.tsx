@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
@@ -5,7 +6,7 @@ import { SiteFooter, SiteNav } from "../../SiteChrome";
 import { loadReport } from "@/lib/report/store";
 import { redactReport } from "@/lib/report/redact";
 import { entitlementFor } from "@/lib/report/entitlement";
-import { ReportView } from "./ReportView";
+import { ReportView, type CheckoutReturn } from "./ReportView";
 
 /**
  * A report at its own address.
@@ -27,6 +28,16 @@ export const dynamic = "force-dynamic";
 
 interface PageProps {
     params: Promise<{ id: string }>;
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+/** Dodo returns the customer with `checkout` set by us and `payment_id` added by Dodo. */
+function checkoutReturnFrom(query: Record<string, string | string[] | undefined>): CheckoutReturn | null {
+    const checkout = query.checkout;
+    if (checkout !== "return" && checkout !== "cancelled") return null;
+    const payment = query.payment_id;
+    const paymentId = checkout === "return" && typeof payment === "string" && payment.length > 0 ? payment : null;
+    return { paymentId };
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -83,8 +94,9 @@ function formatRunTime(iso: string): string {
     })} UTC`;
 }
 
-export default async function ReportPage({ params }: PageProps) {
+export default async function ReportPage({ params, searchParams }: PageProps) {
     const { id } = await params;
+    const checkout = checkoutReturnFrom(await searchParams);
 
     const stored = await loadReport(id).catch(() => null);
     if (stored === null) notFound();
@@ -92,13 +104,15 @@ export default async function ReportPage({ params }: PageProps) {
     // Redaction runs here for the same reason it runs in the API: the paid half
     // must not reach the browser, and a shared link is the easiest place to
     // forget that.
-    const { entitled } = await entitlementFor(id, new Request("https://monsmith.com"));
+    // The real request headers, so a visitor cookie is seen as well as the
+    // signed-in account; the entitlement check reads both.
+    const { entitled } = await entitlementFor(id, new Request("https://monsmith.com", { headers: await headers() }));
     const report = redactReport(stored.report, entitled);
 
     return (
         <div className="min-h-screen bg-background text-text-primary">
             <SiteNav />
-            <ReportView report={report} createdAtLabel={formatRunTime(stored.createdAt)} />
+            <ReportView report={report} createdAtLabel={formatRunTime(stored.createdAt)} checkout={checkout} />
             <SiteFooter />
         </div>
     );

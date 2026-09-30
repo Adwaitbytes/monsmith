@@ -29,6 +29,7 @@ import {
     compactGas,
     rollupStatus,
 } from './ScoreStrip';
+import type { ReportOffer } from '@/lib/billing/useReportUnlock';
 import { UnlockPanel } from './UnlockPanel';
 
 /**
@@ -65,6 +66,10 @@ export interface ReportRailProps {
     /** True when this viewer has paid for, or is otherwise owed, the full report. */
     entitled: boolean;
     onUnlock: () => void;
+    /** What this viewer is offered for the locked half, once known. */
+    offer?: ReportOffer | null;
+    /** MON as the alternative to a card, where the page has a wallet to use. */
+    onPayMon?: () => void;
     unlocking: boolean;
     unlockError?: string | null;
     onApplyPatch?: (finding: Finding) => void;
@@ -911,6 +916,8 @@ function ReportDocument({
     report,
     entitled,
     onUnlock,
+    offer,
+    onPayMon,
     unlocking,
     unlockError,
     onApplyPatch,
@@ -921,6 +928,8 @@ function ReportDocument({
     report: RepoReport;
     entitled: boolean;
     onUnlock: () => void;
+    offer?: ReportOffer | null;
+    onPayMon?: () => void;
     unlocking: boolean;
     unlockError?: string | null;
     onApplyPatch?: (finding: Finding) => void;
@@ -1009,11 +1018,14 @@ function ReportDocument({
             ))}
 
             {showUnlock && (
-                <div className="border-t border-border-subtle px-5 py-5">
+                // Bottom room for the floating Aria button, which sits over this corner.
+                <div className="border-t border-border-subtle px-5 pb-20 pt-5">
                     <UnlockPanel
                         report={report}
                         summary={summary}
                         onUnlock={onUnlock}
+                        offer={offer ?? null}
+                        {...(onPayMon !== undefined ? { onPayMon } : {})}
                         unlocking={unlocking}
                         error={unlockError}
                     />
@@ -1029,6 +1041,8 @@ export function ReportRail({
     state,
     entitled,
     onUnlock,
+    offer,
+    onPayMon,
     unlocking,
     unlockError,
     onApplyPatch,
@@ -1067,6 +1081,8 @@ export function ReportRail({
                         report={report}
                         entitled={entitled}
                         onUnlock={onUnlock}
+                        offer={offer ?? null}
+                        {...(onPayMon !== undefined ? { onPayMon } : {})}
                         unlocking={unlocking}
                         unlockError={unlockError}
                         onApplyPatch={onApplyPatch}

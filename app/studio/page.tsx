@@ -77,8 +77,11 @@ const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
 import { StudioBar, type PrimaryAction } from "./components/StudioBar";
 import { AccountMenu } from "./components/AccountMenu";
 import { CommandPalette } from "./components/CommandPalette";
-import { Omnibox, type OmniboxIntent } from "./components/Omnibox";
-import { StartCards } from "./components/StartCards";
+import type { OmniboxIntent } from "./components/Omnibox";
+import { StartScreen } from "./components/StartScreen";
+import { SAMPLE_PATH, SAMPLE_SOURCE } from "./sampleContract";
+import { usePlan } from "@/lib/billing/usePlan";
+import { useReportUnlock } from "@/lib/billing/useReportUnlock";
 import { RepoPicker } from "./components/RepoPicker";
 import { WelcomeTour } from "./components/WelcomeTour";
 import { ActivityBar, type ActivityItem } from "./components/ActivityBar";
@@ -211,6 +214,7 @@ export default function StudioPage() {
   const [repoPickerOpen, setRepoPickerOpen] = useState(false);
   const [showStart, setShowStart] = useState(false);
   const [tourOpen, setTourOpen] = useState(false);
+  const plan = usePlan();
   /*
     Two independent regions, because they are two independent questions.
 
@@ -1496,6 +1500,26 @@ Be concise but thorough. Format your response with markdown for readability.`;
     runReport([activePath]);
   }, [activePath, runReport, addConsoleOutput]);
 
+  /**
+   * The one-click path from the start screen: load a contract with real bugs in
+   * it and audit it at once, so a first visit ends in a report rather than in an
+   * editor wondering what to do next. The files are passed straight to the run
+   * because the workspace update has not reached `files` in this render yet.
+   */
+  const runSample = useCallback(() => {
+    addFiles({ [SAMPLE_PATH]: SAMPLE_SOURCE }, SAMPLE_PATH);
+    setLanguage("solidity");
+    const origin: ReportOrigin = { kind: "workspace" };
+    setRepoOrigin(origin);
+    setShowStart(false);
+    setUnlockError(null);
+    setRailOpen(true);
+    setRailForced(true);
+    void report.run({ files: { [SAMPLE_PATH]: SAMPLE_SOURCE }, origin });
+    addConsoleOutput("Checking the sample contract.");
+    track("audit", { walletAddress, detail: { surface: "sample", origin: origin.kind } });
+  }, [addFiles, report, walletAddress, addConsoleOutput]);
+
   const handlePrimary = () => {
     if (primaryAction === "deploy") handleDeploy();
     else runReport();
@@ -1707,6 +1731,12 @@ Be concise but thorough. Format your response with markdown for readability.`;
       setUnlocking(false);
     }
   }, [report, walletAddress, network, connectWallet, addConsoleOutput]);
+
+  const reportUnlock = useReportUnlock({
+    report: report.state.status === "ready" ? report.state.report : null,
+    onReplace: report.replace,
+    payMon: () => void unlockReport(),
+  });
 
   const railState: RailState =
     report.state.status === "idle"
@@ -2016,13 +2046,14 @@ Be concise but thorough. Format your response with markdown for readability.`;
     <div className="h-screen flex flex-col bg-background text-text-primary">
       {/* Top bar, at four controls. See StudioBar for why. */}
       <StudioBar
-        title={workspaceTitle}
-        subtitle={workspaceSubtitle}
+        title={showStart ? "Monsmith" : workspaceTitle}
+        {...(showStart ? {} : { subtitle: workspaceSubtitle })}
         primary={primaryAction}
         busy={primaryBusy}
         primaryBlockedReason={primaryBlockedReason}
         onPrimary={handlePrimary}
         onOpenPalette={() => setPaletteOpen(true)}
+        minimal={showStart}
         /*
           Deploy appears once, wherever it currently belongs.
 
@@ -2080,25 +2111,27 @@ Be concise but thorough. Format your response with markdown for readability.`;
           a row was never to delete them, it was to give each one a distinct
           shape and a predictable home.
         */}
-        <ActivityBar
-          items={activityItems}
-          active={activeView ?? sideBarView}
-          onSelect={selectView}
-          footer={
-            <button
-              onClick={toggleTerminal}
-              aria-label="Toggle the console"
-              className={`grid h-10 w-10 place-items-center rounded-lg outline-none ring-accent-line transition-colors focus-visible:ring-2 ${
-                terminalOpen ? "text-text-primary" : "text-text-muted hover:text-text-secondary"
-              }`}
-            >
-              <Terminal size={18} />
-            </button>
-          }
-        />
+        {!showStart && (
+          <ActivityBar
+            items={activityItems}
+            active={activeView ?? sideBarView}
+            onSelect={selectView}
+            footer={
+              <button
+                onClick={toggleTerminal}
+                aria-label="Toggle the console"
+                className={`grid h-10 w-10 place-items-center rounded-lg outline-none ring-accent-line transition-colors focus-visible:ring-2 ${
+                  terminalOpen ? "text-text-primary" : "text-text-muted hover:text-text-secondary"
+                }`}
+              >
+                <Terminal size={18} />
+              </button>
+            }
+          />
+        )}
         {/* Sidebar */}
         <AnimatePresence>
-          {sideBarView === "explorer" && (
+          {sideBarView === "explorer" && !showStart && (
             <motion.div
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: sidebarResize.size, opacity: 1 }}
@@ -2169,7 +2202,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
           )}
         </AnimatePresence>
 
-        {sidebarOpen && (
+        {sidebarOpen && !showStart && (
           <ResizeHandle
             edge="right"
             label="Resize explorer"
@@ -2188,26 +2221,24 @@ Be concise but thorough. Format your response with markdown for readability.`;
             the work rather than describing it.
           */}
           {showStart && (
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-10">
-              <div className="mx-auto max-w-2xl">
-                <Omnibox onSubmit={handleOmnibox} busy={github.importing} autoFocus />
-                <div className="mt-10">
-                  <StartCards
-                    onPickRepo={openRepoPicker}
-                    onPickAddress={() => {
-                      setShowStart(false);
-                      openSidePanel("migration");
-                    }}
-                    onPickTemplate={() => setPaletteOpen(true)}
-                    onShowTour={() => setTourOpen(true)}
-                    githubConnected={github.status?.connected === true}
-                    {...(github.status?.installUrl != null
-                      ? { connectUrl: github.status.installUrl }
-                      : {})}
-                  />
-                </div>
-              </div>
-            </div>
+            <StartScreen
+              onRunSample={runSample}
+              sampleBusy={report.state.status === "running"}
+              onSubmit={handleOmnibox}
+              importing={github.importing}
+              onPickRepo={openRepoPicker}
+              onPickAddress={() => {
+                setShowStart(false);
+                openSidePanel("migration");
+              }}
+              onPickTemplate={() => setPaletteOpen(true)}
+              onShowTour={() => setTourOpen(true)}
+              githubConnected={github.status?.connected === true}
+              {...(github.status?.installUrl != null
+                ? { connectUrl: github.status.installUrl }
+                : {})}
+              plan={plan}
+            />
           )}
 
           {!showStart && (
@@ -2244,7 +2275,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
           </div>
 
           {/* Terminal */}
-          {terminalOpen && (
+          {terminalOpen && !showStart && (
             <div
               style={{ height: terminalResize.size }}
               className="flex-shrink-0 border-t border-border-subtle terminal-surface relative"
@@ -2461,7 +2492,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
           reason, and a tool that measures the open file is not useful beside a
           summary of the same measurement anyway.
         */}
-        {railOpen && !dockTaken && (!narrow || railForced) && (
+        {railOpen && !showStart && !dockTaken && (!narrow || railForced) && (
           <>
         <ResizeHandle
           edge="left"
@@ -2479,9 +2510,11 @@ Be concise but thorough. Format your response with markdown for readability.`;
             // A report the server did not redact needs no unlock panel, which
             // is also what makes the dormant paywall invisible here.
             entitled={railState.status !== "ready" || !railState.report.redacted}
-            onUnlock={() => void unlockReport()}
-            unlocking={unlocking}
-            unlockError={unlockError}
+            onUnlock={reportUnlock.unlock}
+            offer={reportUnlock.offer}
+            onPayMon={() => void unlockReport()}
+            unlocking={unlocking || reportUnlock.busy}
+            unlockError={unlockError ?? reportUnlock.error}
             onRerun={() => runReport()}
             onClose={() => {
               setRailOpen(false);
