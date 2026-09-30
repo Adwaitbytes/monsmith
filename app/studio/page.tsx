@@ -1501,8 +1501,8 @@ Be concise but thorough. Format your response with markdown for readability.`;
   }, [activePath, runReport, addConsoleOutput]);
 
   /**
-   * The one-click path from the start screen: load a contract with real bugs in
-   * it and audit it at once, so a first visit ends in a report rather than in an
+   * The one-click path from the start screen: load The DAO, whose bug every
+   * Solidity developer knows, and audit it at once, so a first visit ends in a report rather than in an
    * editor wondering what to do next. The files are passed straight to the run
    * because the workspace update has not reached `files` in this render yet.
    */
@@ -1516,7 +1516,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
     setRailOpen(true);
     setRailForced(true);
     void report.run({ files: { [SAMPLE_PATH]: SAMPLE_SOURCE }, origin });
-    addConsoleOutput("Checking the sample contract.");
+    addConsoleOutput("Checking The DAO contract.");
     track("audit", { walletAddress, detail: { surface: "sample", origin: origin.kind } });
   }, [addFiles, report, walletAddress, addConsoleOutput]);
 

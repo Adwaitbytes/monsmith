@@ -13,7 +13,7 @@ import { Omnibox, type OmniboxIntent } from './Omnibox';
  *
  * The feedback that shaped this was blunt: too many options, no one-button path
  * with a sample, and no idea what to do. So the screen has one focal point, a
- * button that loads a contract with real bugs in it and runs the report, and
+ * button that loads The DAO and runs the report on it, and
  * everything else is subordinate to it. Your own code goes in the box under it;
  * the other ways in are text links, because they are answers to questions a
  * first visitor does not have yet.
@@ -225,10 +225,10 @@ export function StartScreen({
                         </span>
                         <span className="min-w-0 flex-1">
                             <span className="block text-[15px] font-semibold">
-                                {sampleBusy ? 'Checking the sample contract' : 'Check a sample contract'}
+                                {sampleBusy ? 'Checking The DAO' : 'Check The DAO contract'}
                             </span>
                             <span className="mt-0.5 block text-[12.5px] text-white/75">
-                                One click. A small vault with real bugs in it, so you can see a full report.
+                                The 2016 hack that drained 3.6M ETH and split Ethereum. See if we catch it.
                             </span>
                         </span>
                         <ArrowRight

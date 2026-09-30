@@ -1,65 +1,100 @@
 /**
- * The contract behind "Check a sample contract".
+ * The contract behind the start screen's one button: The DAO.
  *
  * A first visitor has no code to hand and should not need any to see what the
- * product does, so this is one click from the start screen and the report runs
- * on it straight away. It is small enough to read in the editor while the
- * report fills in, and it carries real, well-known mistakes (an external call
- * before the balance update, a tx.origin check, an unbounded loop over a
- * growing array) so the report has something true to say rather than a clean
- * bill of health that proves nothing.
+ * product does. An anonymous toy contract proves little, whereas every Solidity
+ * developer knows how The DAO ended: in June 2016 a reentrancy bug in its split
+ * function drained about 3.6 million ETH, and undoing it took the hard fork that
+ * split Ethereum from Ethereum Classic. Watching the report find that bug is a
+ * test the reader can grade themselves.
+ *
+ * The original is Solidity 0.3 and no longer compiles, so this rebuilds its
+ * vulnerable core in current Solidity and keeps its names (`splitDAO`,
+ * `withdrawRewardFor`, `payOut`) so it reads as the contract people remember.
+ * The flaw is the original's: ether leaves in an external call before the
+ * caller's balance is zeroed, so the recipient can call back in and split again.
  */
 
-export const SAMPLE_PATH = "contracts/SampleVault.sol";
+export const SAMPLE_PATH = "contracts/TheDAO.sol";
 
 export const SAMPLE_SOURCE = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/// A small savings vault. It compiles, it works, and it has bugs in it.
-contract SampleVault {
-    address public owner;
-    mapping(address => uint256) public balances;
-    address[] public depositors;
-    uint256 public feeBps = 50;
+/// The DAO (2016), its vulnerable core rebuilt in modern Solidity.
+/// The original lost about 3.6M ETH to the bug in splitDAO below.
+contract TheDAO {
+    string public constant name = "The DAO";
 
-    event Deposited(address indexed who, uint256 amount);
-    event Withdrawn(address indexed who, uint256 amount);
+    mapping(address => uint256) public balances;
+    mapping(address => uint256) public paidOut;
+    uint256 public totalSupply;
+    uint256 public totalRewards;
+    address public curator;
+
+    event Transfer(address indexed from, address indexed to, uint256 amount);
+    event Split(address indexed member, uint256 amount);
 
     constructor() {
-        owner = msg.sender;
+        curator = msg.sender;
     }
 
-    function deposit() external payable {
-        require(msg.value > 0, "nothing sent");
-        if (balances[msg.sender] == 0) depositors.push(msg.sender);
-        balances[msg.sender] += msg.value;
-        emit Deposited(msg.sender, msg.value);
+    /// Buy DAO tokens one to one with ether during the creation phase.
+    function createTokenProxy(address tokenHolder) external payable returns (bool) {
+        require(msg.value > 0, "no ether sent");
+        balances[tokenHolder] += msg.value;
+        totalSupply += msg.value;
+        emit Transfer(address(0), tokenHolder, msg.value);
+        return true;
     }
 
-    function withdraw(uint256 amount) external {
-        require(balances[msg.sender] >= amount, "not enough");
-        uint256 fee = (amount * feeBps) / 10_000;
-        (bool ok, ) = msg.sender.call{value: amount - fee}("");
-        require(ok, "transfer failed");
+    function transfer(address to, uint256 amount) external returns (bool) {
+        require(balances[msg.sender] >= amount, "balance too low");
         balances[msg.sender] -= amount;
-        balances[owner] += fee;
-        emit Withdrawn(msg.sender, amount);
+        balances[to] += amount;
+        emit Transfer(msg.sender, to, amount);
+        return true;
     }
 
-    function setFee(uint256 newFeeBps) external {
-        require(tx.origin == owner, "not owner");
-        feeBps = newFeeBps;
+    /// Profit paid into the DAO, shared across token holders.
+    function receiveReward() external payable {
+        totalRewards += msg.value;
     }
 
-    function totalDeposits() external view returns (uint256 total) {
-        for (uint256 i = 0; i < depositors.length; i++) {
-            total += balances[depositors[i]];
-        }
+    /// Leave the DAO and take your share of the ether with you.
+    function splitDAO() external returns (bool) {
+        uint256 share = balances[msg.sender];
+        require(share > 0, "nothing to split");
+
+        // Pay out rewards and the member's ether first...
+        withdrawRewardFor(msg.sender);
+        require(payOut(msg.sender, share), "payout failed");
+        emit Split(msg.sender, share);
+
+        // ...and only then burn their tokens. A recipient contract that calls
+        // splitDAO again from its fallback is paid again, every time.
+        totalSupply -= balances[msg.sender];
+        balances[msg.sender] = 0;
+        return true;
     }
 
-    function sweep(address payable to) external {
-        require(msg.sender == owner, "not owner");
-        to.transfer(address(this).balance);
+    function withdrawRewardFor(address account) internal {
+        if (totalSupply == 0) return;
+        uint256 owed = (balances[account] * totalRewards) / totalSupply;
+        if (owed <= paidOut[account]) return;
+        uint256 reward = owed - paidOut[account];
+        require(payOut(account, reward), "reward payout failed");
+        paidOut[account] += reward;
+    }
+
+    function payOut(address recipient, uint256 amount) internal returns (bool) {
+        (bool ok, ) = recipient.call{value: amount}("");
+        return ok;
+    }
+
+    /// The curator could change who controlled the DAO, checked by tx.origin.
+    function changeCurator(address newCurator) external {
+        require(tx.origin == curator, "only the curator");
+        curator = newCurator;
     }
 }
 `;
