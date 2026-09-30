@@ -104,3 +104,25 @@ test("the diff names exactly the new file's changed lines, 1-indexed", () => {
     assert.deepEqual(diffLines("a\nb\nc", "a\nc").changed, []);
     assert.deepEqual(diffLines("same", "same").changed, []);
 });
+
+test("a quote with the wrong indentation still lands on its one matching place", () => {
+    const edit = { title: "x", fixes: [], why: "", find: "(bool ok, ) = msg.sender.call{value: amount}(\"\");\nrequire(ok);", replace: "        _send(amount);" };
+    const result = applyEdits(SOURCE, [edit]);
+    assert.equal(result.rejected.length, 0);
+    assert.ok(result.source.includes("        _send(amount);\n        balances[msg.sender] -= amount;"));
+    assert.ok(!result.source.includes("require(ok);"));
+});
+
+test("line-number prefixes copied from the listing are ignored", () => {
+    const edit = { title: "x", fixes: [], why: "", find: "   6 |         require(ok);", replace: "   6 |         require(ok, \"send failed\");" };
+    const result = applyEdits(SOURCE, [edit]);
+    assert.equal(result.rejected.length, 0);
+    assert.ok(result.source.includes('        require(ok, "send failed");'));
+});
+
+test("tolerant matching still refuses a quote that fits two places", () => {
+    const twice = "a {\n    x = 1;\n}\nb {\n    x = 1;\n}\n";
+    const result = applyEdits(twice, [{ title: "x", fixes: [], why: "", find: "x = 1;", replace: "x = 2;" }]);
+    assert.equal(result.source, twice);
+    assert.match(result.rejected[0].reason, /ambiguous/);
+});

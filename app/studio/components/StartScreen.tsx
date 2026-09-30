@@ -14,7 +14,7 @@ import { Omnibox, type OmniboxIntent } from './Omnibox';
  *
  * The feedback that shaped this was blunt: too many options, no one-button path
  * with a sample, and no idea what to do. So the screen leads with contracts
- * every developer already knows, Uniswap first, each one click from a full
+ * every developer already knows, The DAO first, each one click from a full
  * report, and everything else is subordinate to that. Your own code goes in the
  * box under them;
  * the other ways in are text links, because they are answers to questions a
@@ -224,7 +224,7 @@ function ReferencePicker({
                     <span className="block text-[15px] font-semibold">
                         {loading === featured.id ? `Loading ${featured.name}` : `Check ${featured.name}`}
                     </span>
-                    <span className="mt-0.5 block text-[12.5px] text-white/75">{featured.blurb}</span>
+                    <span className="mt-0.5 block text-[12.5px] text-white/75">{featured.pitch ?? featured.blurb}</span>
                 </span>
                 <ArrowRight
                     size={18}

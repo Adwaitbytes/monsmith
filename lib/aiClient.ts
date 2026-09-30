@@ -36,9 +36,17 @@ export interface AIOptions {
     maxTokens?: number;
     temperature?: number;
     modelTimeoutMs?: number;
+    /**
+     * How hard a reasoning model thinks before answering, where the provider
+     * supports it. Left unset, some models spend the whole token budget
+     * thinking on a long prompt and return an empty answer.
+     */
+    reasoningEffort?: "low" | "medium" | "high";
 }
 
-const DEFAULT_OPTIONS: Required<AIOptions> = {
+type ResolvedOptions = Required<Omit<AIOptions, "reasoningEffort">> & Pick<AIOptions, "reasoningEffort">;
+
+const DEFAULT_OPTIONS: ResolvedOptions = {
     maxTokens: 4096,
     temperature: 0.3,
     modelTimeoutMs: 20_000,
@@ -53,7 +61,7 @@ function addressToUUID(address: string) {
 async function callOpenAIAPI(
     prompt: string,
     systemRole: string = "You are a helpful AI assistant.",
-    options: Required<AIOptions> = DEFAULT_OPTIONS
+    options: ResolvedOptions = DEFAULT_OPTIONS
 ): Promise<string> {
     if (!OPENAI_API_KEY) throw new Error("OpenAI API key not configured");
 
@@ -125,7 +133,7 @@ async function callOpenRouterModel(
     prompt: string,
     systemRole: string,
     timeoutMs: number,
-    options: Required<AIOptions>
+    options: ResolvedOptions
 ): Promise<string> {
     // Without an abort, one hung provider consumes the entire request budget and
     // the platform kills the function before any fallback is reached.
@@ -150,7 +158,8 @@ async function callOpenRouterModel(
                     { role: "user", content: prompt }
                 ],
                 temperature: options.temperature,
-                max_tokens: options.maxTokens
+                max_tokens: options.maxTokens,
+                ...(options.reasoningEffort === undefined ? {} : { reasoning: { effort: options.reasoningEffort } })
             })
         });
 
@@ -173,7 +182,7 @@ async function callOpenRouterAPI(
     systemRole: string = "You are a helpful AI assistant.",
     deadline: number = Date.now() + REQUEST_BUDGET_MS,
     modelOffset = 0,
-    options: Required<AIOptions> = DEFAULT_OPTIONS
+    options: ResolvedOptions = DEFAULT_OPTIONS
 ): Promise<string> {
     if (!OPENROUTER_API_KEY) throw new Error("OpenRouter API key not configured");
 
@@ -210,7 +219,7 @@ async function callOpenRouterAPI(
 async function callGroqAPI(
     prompt: string,
     systemRole: string = "You are a helpful AI assistant.",
-    options: Required<AIOptions> = DEFAULT_OPTIONS
+    options: ResolvedOptions = DEFAULT_OPTIONS
 ): Promise<string> {
     if (!GROQ_API_KEY) throw new Error("Groq API key not configured");
 
@@ -275,7 +284,7 @@ export async function callPreferredAI(
     deadline: number,
     overrides: AIOptions = {}
 ): Promise<string> {
-    const options: Required<AIOptions> = { ...DEFAULT_OPTIONS, ...overrides };
+    const options: ResolvedOptions = { ...DEFAULT_OPTIONS, ...overrides };
     if (OPENROUTER_API_KEY) {
         for (const model of preferred) {
             const remaining = deadline - Date.now();
@@ -299,7 +308,7 @@ export async function callAI(
     modelOffset = 0,
     overrides: AIOptions = {}
 ): Promise<string> {
-    const options: Required<AIOptions> = { ...DEFAULT_OPTIONS, ...overrides };
+    const options: ResolvedOptions = { ...DEFAULT_OPTIONS, ...overrides };
     // Try OpenAI first (most powerful)
     if (OPENAI_API_KEY) {
         try {

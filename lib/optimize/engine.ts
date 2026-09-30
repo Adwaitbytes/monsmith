@@ -192,6 +192,63 @@ export interface ApplyResult {
     rejected: Array<{ edit: Edit; reason: string }>;
 }
 
+/** Drops the "  64 | " prefixes a model copies from the numbered listing, when every line has one. */
+function withoutLineNumbers(text: string): string {
+    const lines = text.split('\n');
+    const prefixed = /^\s*\d+ \| ?/;
+    const content = lines.filter((line) => line.trim().length > 0);
+    if (content.length === 0 || !content.every((line) => prefixed.test(line))) return text;
+    return lines.map((line) => line.replace(prefixed, '')).join('\n');
+}
+
+type Located = { start: number; end: number } | { failure: string };
+
+/**
+ * Where an edit's quoted text sits in the file, as a character span.
+ *
+ * Exact first. Failing that, line by line with indentation and trailing space
+ * ignored, which is the usual way a model misquotes code it has read correctly.
+ * Either way the match must be unique: tolerance about whitespace, never about
+ * which lines are meant.
+ */
+function locate(current: string, find: string): Located {
+    const count = occurrences(current, find);
+    if (count === 1) {
+        const start = current.indexOf(find);
+        return { start, end: start + find.length };
+    }
+    if (count > 1) return { failure: `its <find> text occurs ${count} times, so it is ambiguous` };
+
+    const wanted = withoutLineNumbers(find)
+        .split('\n')
+        .map((line) => line.trim());
+    while (wanted.length > 0 && wanted[0] === '') wanted.shift();
+    while (wanted.length > 0 && wanted[wanted.length - 1] === '') wanted.pop();
+    if (wanted.length === 0) return { failure: 'its <find> text is empty' };
+
+    const lines = current.split('\n');
+    const trimmed = lines.map((line) => line.trim());
+    const matches: number[] = [];
+    for (let index = 0; index + wanted.length <= lines.length; index++) {
+        let same = true;
+        for (let offset = 0; offset < wanted.length; offset++) {
+            if (trimmed[index + offset] !== wanted[offset]) {
+                same = false;
+                break;
+            }
+        }
+        if (same) matches.push(index);
+    }
+    if (matches.length === 0) return { failure: 'its <find> text does not occur in the file' };
+    if (matches.length > 1) return { failure: `its <find> text occurs ${matches.length} times, so it is ambiguous` };
+
+    // Whole lines, so the replacement's own indentation stands.
+    const first = matches[0];
+    const start = lines.slice(0, first).reduce((sum, line) => sum + line.length + 1, 0);
+    const end = start + lines.slice(first, first + wanted.length).join('\n').length;
+    return { start, end };
+}
+
 /**
  * Applies edits in order. An edit whose text is missing or ambiguous is
  * rejected rather than guessed at: replacing the wrong occurrence of a line is
@@ -203,17 +260,13 @@ export function applyEdits(source: string, edits: readonly Edit[]): ApplyResult 
     const rejected: ApplyResult['rejected'] = [];
 
     for (const edit of edits) {
-        const count = occurrences(current, edit.find);
-        if (count === 0) {
-            rejected.push({ edit, reason: 'its <find> text does not occur in the file' });
-            continue;
-        }
-        if (count > 1) {
-            rejected.push({ edit, reason: `its <find> text occurs ${count} times, so it is ambiguous` });
-            continue;
-        }
         if (edit.find === edit.replace) continue;
-        current = current.replace(edit.find, () => edit.replace);
+        const span = locate(current, edit.find);
+        if ('failure' in span) {
+            rejected.push({ edit, reason: span.failure });
+            continue;
+        }
+        current = current.slice(0, span.start) + withoutLineNumbers(edit.replace) + current.slice(span.end);
         applied.push(edit);
     }
 

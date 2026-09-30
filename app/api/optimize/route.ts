@@ -55,11 +55,13 @@ const MAX_ATTEMPTS = 3;
 const MAX_FILE_CHARS = 120_000;
 
 /*
-  The default chain is tuned for fast chat. Rewriting a contract someone will
-  deploy is worth the strongest model available, so it is named here and the
-  default chain is only the fallback.
+  Cheap, capable code models first, named here so the optimizer does not fall
+  into the default chat chain. At these prices a run costs a fraction of a
+  cent, and quality is held up by the gates rather than by the model: an edit
+  set that does not compile, drops a function or fails to raise the measured
+  score is never shown as a win. OPTIMIZER_MODEL overrides the list.
 */
-const OPTIMIZER_MODELS = (process.env.OPTIMIZER_MODEL ?? "anthropic/claude-sonnet-5.5")
+const OPTIMIZER_MODELS = (process.env.OPTIMIZER_MODEL ?? "deepseek/deepseek-v4.1-flash,qwen/qwen3-coder-next")
     .split(",")
     .map((model) => model.trim())
     .filter((model) => model.length > 0);
@@ -193,81 +195,94 @@ export async function POST(req: Request) {
                 }
             };
 
-            /** One rewrite, gated on compiling and on the interface staying whole. */
+            /**
+             * One model's rewrite, gated on compiling and on the interface
+             * staying whole.
+             *
+             * Edits that land are kept. Ones whose quote did not match are sent
+             * back once, against the file as it now stands, rather than
+             * throwing away the good edits and starting over: cheaper models
+             * get most edits right and misquote one or two.
+             */
             const rewrite = async (
+                model: string,
                 source: string,
                 findings: readonly Finding[],
-                stage: "rewriting" | "refining",
             ): Promise<{ source: string; changes: OptimizeChange[] } | null> => {
                 const targets = labelled(findings);
                 const baseline = await compiles(compilationUnit(path, { ...files, [path]: source }));
                 let feedback: string | undefined;
 
-                for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-                    if (Date.now() > deadline - 60_000 || !open) return null;
-                    send({
-                        type: "stage",
-                        stage,
-                        label:
-                            attempt === 1
-                                ? `Working through ${findings.length} ${findings.length === 1 ? "finding" : "findings"}`
-                                : `The last draft did not pass, so correcting it (attempt ${attempt})`,
-                    });
-
+                const draft = async (current: string, note: string | undefined): Promise<Edit[] | null> => {
                     const prompt = buildOptimizePrompt({
                         path,
                         contractName: contract.name,
-                        source,
-                        pragma: pragmaOf(source),
+                        source: current,
+                        pragma: pragmaOf(current),
                         findings: targets,
                         contendedSlots: hotspots.filter((hotspot) => hotspot.scope === "global").map((hotspot) => hotspot.variable),
                         expensiveFunctions: gasFunctions,
                         imports,
-                        ...(feedback === undefined ? {} : { feedback }),
+                        ...(note === undefined ? {} : { feedback: note }),
                     });
-
-                    let raw: string;
                     try {
-                        raw = await callPreferredAI(OPTIMIZER_MODELS, prompt, OPTIMIZER_SYSTEM_ROLE, deadline - 60_000, {
-                            maxTokens: 16_000,
+                        const raw = await callPreferredAI([model], prompt, OPTIMIZER_SYSTEM_ROLE, deadline - 60_000, {
+                            // Room to think and still answer: the reasoning
+                            // counts against this budget.
+                            maxTokens: 32_000,
                             temperature: 0.1,
                             modelTimeoutMs: REWRITE_TIMEOUT_MS,
+                            reasoningEffort: "medium",
                         });
+                        return parseEdits(raw);
                     } catch (error) {
-                        console.error("Optimize: the model call failed:", error);
+                        console.error(`Optimize: ${model} failed:`, error);
                         return null;
                     }
+                };
 
-                    const edits = parseEdits(raw);
+                for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+                    if (Date.now() > deadline - 60_000 || !open) return null;
+
+                    const edits = await draft(source, feedback);
+                    if (edits === null) return null;
                     if (edits.length === 0) {
                         feedback = "Your reply contained no <edit> blocks. Reply only with edits in the required shape.";
                         continue;
                     }
-                    const applied = applyEdits(source, edits);
-                    if (applied.applied.length === 0) {
-                        feedback = `None of your edits could be applied:\n${describeRejections(applied.rejected)}\nQuote the file exactly.`;
-                        continue;
-                    }
-                    // Some edits missing on the last attempt is better than none.
-                    if (applied.rejected.length > 0 && attempt < MAX_ATTEMPTS) {
-                        feedback = `Some edits could not be applied:\n${describeRejections(applied.rejected)}\nSend the complete set of edits again, quoting the original file exactly.`;
+                    const first = applyEdits(source, edits);
+                    if (first.applied.length === 0) {
+                        feedback = `None of your edits could be applied:\n${describeRejections(first.rejected)}\nQuote the file exactly.`;
                         continue;
                     }
 
-                    send({ type: "stage", stage: "compiling", label: "Compiling and checking the interface" });
-                    const compatibility = checkCompatibility(source, applied.source, contract.name);
+                    let candidate = first.source;
+                    let applied = first.applied;
+                    if (first.rejected.length > 0 && Date.now() < deadline - 90_000) {
+                        const repairs = await draft(
+                            candidate,
+                            `Your other edits are already applied in the file below. These did not apply:\n${describeRejections(first.rejected)}\nSend only corrected versions of these edits, quoting the file below exactly.`,
+                        );
+                        if (repairs !== null && repairs.length > 0) {
+                            const second = applyEdits(candidate, repairs);
+                            candidate = second.source;
+                            applied = [...applied, ...second.applied];
+                        }
+                    }
+
+                    const compatibility = checkCompatibility(source, candidate, contract.name);
                     if (!compatibility.compatible) {
                         feedback = describeIncompatibility(compatibility);
                         continue;
                     }
                     if (baseline.ok) {
-                        const built = await compiles(compilationUnit(path, { ...files, [path]: applied.source }));
+                        const built = await compiles(compilationUnit(path, { ...files, [path]: candidate }));
                         if (!built.ok) {
                             feedback = `The edited file does not compile. The compiler said:\n${built.error.slice(0, 1500)}`;
                             continue;
                         }
                     }
-                    return { source: applied.source, changes: changesFrom(applied.applied, targets) };
+                    return { source: candidate, changes: changesFrom(applied, targets) };
                 }
                 return null;
             };
@@ -303,20 +318,51 @@ export async function POST(req: Request) {
 
             const scoreOf = (report: RepoReport | null): number => report?.contracts[0]?.health?.score ?? -1;
 
+            type Measured = { source: string; changes: OptimizeChange[]; report: RepoReport };
+
+            /*
+              One pass: every model drafts in parallel, every draft that passes
+              the gates is measured in parallel, and the highest score wins.
+              Two cheap models disagree often enough that picking the better
+              of two measured results beats trusting either one.
+            */
+            const pass = async (
+                stage: "rewriting" | "refining",
+                from: { source: string; findings: readonly Finding[] },
+                targets: readonly Finding[],
+            ): Promise<Measured | null> => {
+                send({
+                    type: "stage",
+                    stage,
+                    label:
+                        OPTIMIZER_MODELS.length > 1
+                            ? `${OPTIMIZER_MODELS.length} models drafting fixes for ${targets.length} ${targets.length === 1 ? "finding" : "findings"}`
+                            : `Drafting fixes for ${targets.length} ${targets.length === 1 ? "finding" : "findings"}`,
+                });
+                const drafts = await Promise.all(OPTIMIZER_MODELS.map((model) => rewrite(model, from.source, targets)));
+                const valid = drafts.filter((draft): draft is { source: string; changes: OptimizeChange[] } => draft !== null);
+                const unique = valid.filter((draft, index) => valid.findIndex((other) => other.source === draft.source) === index);
+                if (unique.length === 0) return null;
+
+                send({ type: "stage", stage: "compiling", label: `${unique.length} ${unique.length === 1 ? "version compiles" : "versions compile"} with every public function intact` });
+                const measured = await Promise.all(
+                    unique.map(async (draft) => {
+                        const report = await measure(draft.source, from);
+                        return report === null ? null : { ...draft, report };
+                    }),
+                );
+                return measured
+                    .filter((entry): entry is Measured => entry !== null)
+                    .reduce<Measured | null>((top, entry) => (top === null || scoreOf(entry.report) > scoreOf(top.report) ? entry : top), null);
+            };
+
             try {
-                const first = await rewrite(original, contract.findings, "rewriting");
+                const first = await pass("rewriting", { source: original, findings: contract.findings }, contract.findings);
                 if (first === null) {
                     send({ type: "error", message: "The optimizer could not produce a version that compiles and keeps the contract's interface. Nothing was changed or charged." });
                     return;
                 }
-
-                const firstReport = await measure(first.source, { source: original, findings: contract.findings });
-                if (firstReport === null) throw new Error("The report on the optimized contract did not finish.");
-                let best: { source: string; changes: OptimizeChange[]; report: RepoReport } = {
-                    source: first.source,
-                    changes: first.changes,
-                    report: firstReport,
-                };
+                let best: Measured = first;
 
                 /*
                   Refinement, while there is time and something above
@@ -326,17 +372,16 @@ export async function POST(req: Request) {
                   look. A pass is kept only if the report scores it higher, so
                   refining can never make the result worse.
                 */
-                for (let pass = 0; pass < MAX_REFINEMENTS; pass++) {
+                for (let round = 0; round < MAX_REFINEMENTS; round++) {
                     const left = serious(best.report);
                     if (left.length === 0 || deadline - Date.now() < REFINE_RESERVE_MS + 60_000) break;
-                    const next = await rewrite(best.source, left, "refining");
-                    if (next === null) break;
-                    const report = await measure(next.source, {
-                        source: best.source,
-                        findings: best.report.contracts[0]?.findings ?? [],
-                    });
-                    if (report === null || scoreOf(report) <= scoreOf(best.report)) break;
-                    best = { source: next.source, changes: [...best.changes, ...next.changes], report };
+                    const next = await pass(
+                        "refining",
+                        { source: best.source, findings: best.report.contracts[0]?.findings ?? [] },
+                        left,
+                    );
+                    if (next === null || scoreOf(next.report) <= scoreOf(best.report)) break;
+                    best = { source: next.source, changes: [...best.changes, ...next.changes], report: next.report };
                 }
 
                 const optimizedContract = best.report.contracts[0];

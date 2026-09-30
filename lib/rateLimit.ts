@@ -220,12 +220,22 @@ async function durableHit(
  * comes from the session on the server, never from the request body, or it
  * would be the ceiling anybody could claim.
  */
+/**
+ * Local testing runs the expensive routes back to back, and six reports an hour
+ * stops that in minutes. RATE_LIMIT=off lifts every limit, but only outside a
+ * production build, so a stray variable on the live site cannot remove them.
+ */
+function limitsDisabled(): boolean {
+    return process.env.RATE_LIMIT === "off" && process.env.NODE_ENV !== "production";
+}
+
 export async function rateLimit(
     req: Request,
     rule: RateLimitRule,
     userId: string | null = null,
 ): Promise<RateLimitResult> {
     const max = userId !== null ? rule.signedIn : rule.anonymous;
+    if (limitsDisabled()) return { ok: true, remaining: max, retryAfter: 0, limit: max };
     const who = userId !== null ? `u:${userId}` : `a:${addressOf(req) ?? "unknown"}`;
     const key = `${rule.name}:${who}`;
 

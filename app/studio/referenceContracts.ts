@@ -1,9 +1,12 @@
 /**
  * The contracts on the start screen, one click each.
  *
- * Real code people already know, rather than a toy written to have bugs in it,
- * so the first report a visitor sees is about something they can judge for
- * themselves. The sources live in `public/samples/<id>/` at pinned commits (see
+ * Real code people already know, so the first report a visitor sees is about
+ * something they can judge for themselves. The DAO leads: it is the one every
+ * developer knows the ending of, and the one where Optimize has real bugs to fix,
+ * so the first session shows the whole product, a report and then a large,
+ * measured jump in score. Audited code like Uniswap barely moves under the
+ * optimizer, which is correct but makes a flat first impression. The sources live in `public/samples/<id>/` at pinned commits (see
  * the README there) and are fetched when chosen, so none of it ships in the
  * studio's bundle. The file lists are generated from those folders.
  */
@@ -14,6 +17,8 @@ export interface ReferenceContract {
     /** The contract the report audits; every other file is there to compile it. */
     contract: string;
     blurb: string;
+    /** Longer line for the featured button, when this one leads. */
+    pitch?: string;
     year: string;
     compiler: string;
     /** Path of the audited file, relative to the folder. */
@@ -22,6 +27,19 @@ export interface ReferenceContract {
 }
 
 export const REFERENCE_CONTRACTS: readonly ReferenceContract[] = [
+    {
+        id: "the-dao",
+        name: "The DAO",
+        contract: "TheDAO",
+        blurb: "The 2016 hack that split Ethereum, rebuilt.",
+        pitch: "The 2016 hack that drained 3.6M ETH. Run the report, then press Optimize and watch the score climb.",
+        year: "2016",
+        compiler: "0.8.24",
+        main: "contracts/TheDAO.sol",
+        files: [
+            "contracts/TheDAO.sol",
+        ],
+    },
     {
         id: "uniswap-v2",
         name: "Uniswap V2",
@@ -110,18 +128,6 @@ export const REFERENCE_CONTRACTS: readonly ReferenceContract[] = [
         main: "contracts/Comp.sol",
         files: [
             "contracts/Comp.sol",
-        ],
-    },
-    {
-        id: "the-dao",
-        name: "The DAO",
-        contract: "TheDAO",
-        blurb: "The 2016 hack that split Ethereum, rebuilt.",
-        year: "2016",
-        compiler: "0.8.24",
-        main: "contracts/TheDAO.sol",
-        files: [
-            "contracts/TheDAO.sol",
         ],
     },
 ];
