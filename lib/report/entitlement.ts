@@ -86,7 +86,7 @@ export const REPORT_PRICE_MON: string = formatEther(BigInt(REPORT_PRICE_WEI));
  * value `lib/track.ts` mints for analytics, offered on a header and falling
  * back to a cookie so a plain navigation still carries an owner. It is
  * client-supplied and therefore only ever an identity of convenience: it
- * decides which anonymous session sees its own first free report, never
+ * decides which anonymous session sees its own free reports, never
  * whether money changed hands. That one is the `report_unlocks` row.
  */
 const VISITOR_HEADER = 'x-visitor-id';
@@ -129,11 +129,12 @@ export async function resolveOwner(req: Request): Promise<ReportOwner> {
  * Why a viewer sees what they see.
  *
  * Carried alongside the boolean so the interface can tell the truth. Someone on
- * their first free report should read "this one is on us" rather than a price
+ * one of their free reports should read "this one is on us" rather than a price
  * they are not being asked to pay, and a paying tier should not be shown an
  * unlock button at all. None of these change what is served; they change what
  * is said about it.
  */
+/** `first-free` covers every report inside the free allowance (FREE_REPORTS), not only the first. */
 export type EntitlementReason = 'tier' | 'paid' | 'first-free' | 'none';
 
 export interface Entitlement {

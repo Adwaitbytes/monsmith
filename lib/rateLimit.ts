@@ -67,6 +67,8 @@ export const LIMITS = {
     assistant: { name: "assistant", anonymous: 40, signedIn: 200, windowSeconds: 3600 },
     /** Generation and audit through the agent. */
     agent: { name: "agent", anonymous: 20, signedIn: 100, windowSeconds: 3600 },
+    /** A card checkout session: cheap for us, but each one is a call to Dodo. */
+    checkout: { name: "checkout", anonymous: 20, signedIn: 60, windowSeconds: 3600 },
     /** Real compute, no model: an EVM run, a compile, a fetch. */
     compute: { name: "compute", anonymous: 90, signedIn: 300, windowSeconds: 3600 },
 } as const satisfies Record<string, RateLimitRule>;

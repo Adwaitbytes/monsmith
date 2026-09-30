@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { dodoConfig, reportPrice } from "@/lib/billing/dodo";
 import { entitlementFor, REPORT_PAYEE, REPORT_PRICE_MON, REPORT_PRICE_WEI } from "@/lib/report/entitlement";
+import { FREE_REPORTS } from "@/lib/report/freeReports";
 import { redactReport, summariseLocked } from "@/lib/report/redact";
 import { loadReport, type StoredReport } from "@/lib/report/store";
 
@@ -53,20 +55,30 @@ export async function GET(
         return NextResponse.json({ error: "Report not found" }, { status: 404 });
     }
 
-    const { entitled, reason } = await entitlementFor(id, req);
+    const { entitled, reason, owner } = await entitlementFor(id, req);
 
     // The upsell numbers are counted from the unredacted report on purpose.
     // They are counts and flags rather than content, so the promise of what
     // unlocking adds cannot drift from what the paid report actually holds.
     const summary = summariseLocked(stored.report);
 
+    // Card checkout is offered only when Dodo is configured and the product has a
+    // readable one-time price. The number comes from Dodo, so it cannot disagree
+    // with what the checkout charges.
+    const dodo = entitled ? null : dodoConfig();
+    const card = dodo === null ? null : await reportPrice(dodo);
+
     return NextResponse.json({
         report: redactReport(stored.report, entitled),
         locked: !entitled,
         reason,
+        // Locked for a signed-out visitor who would get this report free by
+        // signing in. The interface leads with that, before any price.
+        signInForFree: !entitled && owner.userId === null && FREE_REPORTS > 0,
+        freeReports: FREE_REPORTS,
         summary,
         price: entitled
             ? null
-            : { wei: REPORT_PRICE_WEI, mon: REPORT_PRICE_MON, payee: REPORT_PAYEE },
+            : { wei: REPORT_PRICE_WEI, mon: REPORT_PRICE_MON, payee: REPORT_PAYEE, card },
     });
 }

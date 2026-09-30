@@ -2,6 +2,7 @@ import 'server-only';
 
 import { neon } from '@neondatabase/serverless';
 
+import { freeAllowanceFor, isFreeReport } from './freeReports';
 import type { ReportOrigin, RepoReport } from './types';
 
 /**
@@ -59,6 +60,24 @@ async function ensureSchema(): Promise<void> {
             tx_hash    TEXT,
             amount_wei TEXT,
             created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )
+    `;
+    // Card payments arrived after the MON rail, so the columns that tell the two
+    // apart are added rather than declared. A refund finds its unlock through
+    // payment_id, which is why that one is unique.
+    await sql`ALTER TABLE report_unlocks ADD COLUMN IF NOT EXISTS provider TEXT`;
+    await sql`ALTER TABLE report_unlocks ADD COLUMN IF NOT EXISTS payment_id TEXT`;
+    await sql`ALTER TABLE report_unlocks ADD COLUMN IF NOT EXISTS amount_minor BIGINT`;
+    await sql`ALTER TABLE report_unlocks ADD COLUMN IF NOT EXISTS currency TEXT`;
+    await sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS report_unlocks_payment
+            ON report_unlocks (payment_id) WHERE payment_id IS NOT NULL
+    `;
+    await sql`
+        CREATE TABLE IF NOT EXISTS processed_webhooks (
+            webhook_id   TEXT PRIMARY KEY,
+            event_type   TEXT        NOT NULL,
+            processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         )
     `;
     await sql`
@@ -221,9 +240,9 @@ function subjectOf(origin: ReportOrigin, firstContract: string | null): string {
  * Whether a viewer may see the full report.
  *
  * Three ways in, checked cheapest first. A paying tier is unlimited, an explicit
- * unlock row is a settled payment, and the first report an account ever produces
- * is free so that nobody is asked to pay before they have seen the product work
- * once.
+ * unlock row is a settled payment, and an owner's first reports (FREE_REPORTS,
+ * two by default) are free so that nobody is asked to pay before they have seen
+ * the product work on their own code.
  */
 export async function isUnlocked(
     reportId: string,
@@ -244,25 +263,44 @@ export async function isUnlocked(
     `) as unknown[];
     if (unlocks.length > 0) return true;
 
-    return isFirstReport(reportId, owner);
+    return isWithinFreeAllowance(reportId, owner);
 }
 
-/** True when this is the earliest report the owner has produced. */
-async function isFirstReport(reportId: string, owner: ReportOwner): Promise<boolean> {
+/**
+ * True when this is one of the earliest reports a signed-in owner produced.
+ *
+ * Free reports need an account (see `freeAllowanceFor`), so a signed-out visitor
+ * never gets here with an allowance. Reports a person ran before signing in are
+ * adopted by their account first, so trying the product signed out and then
+ * signing in does not cost them their free reports.
+ */
+async function isWithinFreeAllowance(reportId: string, owner: ReportOwner): Promise<boolean> {
     const sql = client();
     if (sql === null) return true;
 
-    const key = owner.userId ?? owner.visitorId;
-    if (key === null) return false;
+    const allowance = freeAllowanceFor(owner);
+    if (allowance === 0 || owner.userId === null) return false;
 
-    const column = owner.userId !== null ? 'user_id' : 'visitor_id';
-    const rows = (await (column === 'user_id'
-        ? sql`SELECT report_id FROM reports WHERE user_id = ${key} ORDER BY created_at ASC LIMIT 1`
-        : sql`SELECT report_id FROM reports WHERE visitor_id = ${key} ORDER BY created_at ASC LIMIT 1`)) as Array<{
-        report_id: string;
-    }>;
+    if (owner.visitorId !== null) await adoptVisitorReports(owner.userId, owner.visitorId);
 
-    return rows[0]?.report_id === reportId;
+    const rows = (await sql`
+        SELECT report_id FROM reports WHERE user_id = ${owner.userId} ORDER BY created_at ASC LIMIT ${allowance}
+    `) as Array<{ report_id: string }>;
+
+    return isFreeReport(reportId, rows.map((row) => row.report_id), allowance);
+}
+
+/**
+ * Gives a signed-in person the reports their browser ran before they signed in.
+ *
+ * Only reports nobody has claimed: a report that already belongs to an account is
+ * never moved, whatever visitor id arrives. Idempotent and cheap once done, since
+ * the second call matches no rows.
+ */
+async function adoptVisitorReports(userId: string, visitorId: string): Promise<void> {
+    const sql = client();
+    if (sql === null) return;
+    await sql`UPDATE reports SET user_id = ${userId} WHERE visitor_id = ${visitorId} AND user_id IS NULL`;
 }
 
 export async function recordUnlock(
@@ -280,6 +318,83 @@ export async function recordUnlock(
         VALUES (${reportId}, ${owner.userId}, ${owner.visitorId}, ${txHash}, ${amountWei})
         ON CONFLICT (report_id) DO NOTHING
     `;
+}
+
+export interface CardUnlock {
+    reportId: string;
+    owner: ReportOwner;
+    paymentId: string;
+    amountMinor: number;
+    currency: string;
+}
+
+/**
+ * Records a report paid for by card. Returns false when no database is configured.
+ *
+ * Reached by two independent paths, the signed webhook and the lookup when a
+ * customer returns from checkout, and often both for the same payment. Both
+ * conflicts are therefore expected and harmless: the report already unlocked
+ * (by this payment, an earlier one, or MON), or this payment already recorded.
+ */
+export async function recordCardUnlock(unlock: CardUnlock): Promise<boolean> {
+    const sql = client();
+    if (sql === null) return false;
+    await ensureSchema();
+
+    await sql`
+        INSERT INTO report_unlocks (report_id, user_id, visitor_id, provider, payment_id, amount_minor, currency)
+        VALUES (
+            ${unlock.reportId}, ${unlock.owner.userId}, ${unlock.owner.visitorId},
+            'dodo', ${unlock.paymentId}, ${unlock.amountMinor}, ${unlock.currency}
+        )
+        ON CONFLICT DO NOTHING
+    `;
+    return true;
+}
+
+/**
+ * Takes back the report a card payment unlocked, after a full refund or a lost
+ * dispute. Returns the report id it relocked, or null when that payment unlocked
+ * nothing, which is normal when the report was already free for its owner.
+ */
+export async function revokeCardUnlock(paymentId: string): Promise<string | null> {
+    const sql = client();
+    if (sql === null) return null;
+    await ensureSchema();
+
+    const rows = (await sql`
+        DELETE FROM report_unlocks WHERE payment_id = ${paymentId} RETURNING report_id
+    `) as Array<{ report_id: string }>;
+    return rows[0]?.report_id ?? null;
+}
+
+/**
+ * Claims a webhook delivery for processing. True the first time an id is seen.
+ *
+ * Dodo retries a delivery until it gets a 2xx, and may deliver one event more
+ * than once, so every handler runs behind this. With no database there is
+ * nothing to remember against, and processing again is safe because every
+ * write here is idempotent anyway.
+ */
+export async function claimWebhook(webhookId: string, eventType: string): Promise<boolean> {
+    const sql = client();
+    if (sql === null) return true;
+    await ensureSchema();
+
+    const rows = (await sql`
+        INSERT INTO processed_webhooks (webhook_id, event_type)
+        VALUES (${webhookId}, ${eventType})
+        ON CONFLICT (webhook_id) DO NOTHING
+        RETURNING webhook_id
+    `) as unknown[];
+    return rows.length > 0;
+}
+
+/** Lets a delivery be retried after its handler failed part way. */
+export async function releaseWebhook(webhookId: string): Promise<void> {
+    const sql = client();
+    if (sql === null) return;
+    await sql`DELETE FROM processed_webhooks WHERE webhook_id = ${webhookId}`;
 }
 
 // ============= GITHUB INSTALLATIONS =============
