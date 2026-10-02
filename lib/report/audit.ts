@@ -1,6 +1,6 @@
 import "server-only";
 
-import { callAI, hasAIProvider } from "../aiClient";
+import { callAI, callPreferredAI, hasAIProvider } from "../aiClient";
 import { analyzeParallelPotential } from "../parallel/analyzer";
 import type { Finding, Severity } from "./types";
 
@@ -221,18 +221,59 @@ function repairJson<T>(text: string): T | null {
     }
 }
 
+/*
+  The models the audit runs on, strongest first. A wrong finding in a report
+  people pay for costs more than the model call, so this is not the cheap chat
+  chain. The review pass asks for the next model in the list on purpose: a
+  model checking its own work mostly agrees with itself. AUDIT_MODEL overrides.
+*/
+const AUDIT_MODELS = (process.env.AUDIT_MODEL ?? "anthropic/claude-sonnet-5.5,deepseek/deepseek-v4.1-flash")
+    .split(",")
+    .map((model) => model.trim())
+    .filter((model) => model.length > 0);
+
+/** The audit models starting from `offset`, so each pass can ask for a different first choice. */
+function auditModels(offset: number): string[] {
+    const start = offset % Math.max(1, AUDIT_MODELS.length);
+    return [...AUDIT_MODELS.slice(start), ...AUDIT_MODELS.slice(0, start)];
+}
+
+/**
+ * Which models a pass runs on. Describing a contract and listing its threats
+ * is summarising, which the fast models do well in seconds; finding and
+ * judging vulnerabilities is where a report is right or wrong, so those passes
+ * get the audit models. Splitting them is most of what keeps a strong audit
+ * near half a minute instead of nearly two.
+ */
+type Tier = "fast" | "strong";
+
+/** Long enough for a strong model to write a full set of findings, short enough to fall back in time. */
+const STRONG_TIMEOUT_MS = 70_000;
+
 async function ask<T>(
     system: string,
     prompt: string,
     deadline: number,
     modelOffset = 0,
+    tier: Tier = "strong",
 ): Promise<T | null> {
     if (Date.now() >= deadline) return null;
     try {
-        const raw = await callAI(prompt, system, undefined, deadline, modelOffset, {
-            temperature: 0.15,
-            maxTokens: 4096,
-        });
+        const models = auditModels(modelOffset);
+        const raw =
+            tier === "fast"
+                ? await callAI(prompt, system, undefined, deadline, modelOffset, { temperature: 0.15, maxTokens: 4096 })
+                : await callPreferredAI(models, prompt, system, deadline, {
+                      temperature: 0.15,
+                      // The chat default of twenty seconds cut detailed findings
+                      // off mid-answer and fell through to the weakest models,
+                      // which made the audit both slower and worse.
+                      modelTimeoutMs: STRONG_TIMEOUT_MS,
+                      // A reasoning model thinks inside this budget, so it gets room and a cap.
+                      ...(models[0]?.startsWith("deepseek/")
+                          ? { maxTokens: 12_000, reasoningEffort: "low" as const }
+                          : { maxTokens: 4096 }),
+                  });
         const parsed = extractJson<T>(raw);
         if (parsed === null) {
             // A pass that silently returns nothing is indistinguishable from a
@@ -332,7 +373,7 @@ Return JSON:
   "externalInteractions": ["every point where control or value leaves this contract"]
 }`;
 
-    const result = await ask<ContractDescription>(DESCRIBE_SYSTEM, prompt, deadline);
+    const result = await ask<ContractDescription>(DESCRIBE_SYSTEM, prompt, deadline, 0, "fast");
     if (result === null || typeof result.purpose !== "string") return null;
 
     return {
@@ -383,7 +424,7 @@ For each invariant and each asset, ask what an attacker could do to break it,
 given the actors and the external interactions above. Return JSON:
 {"threats":[{"id":"t1","title":"short","target":"which invariant or asset","approach":"concretely how, in this contract"}]}`;
 
-    const result = await ask<{ threats?: Threat[] }>(THREAT_SYSTEM, prompt, deadline);
+    const result = await ask<{ threats?: Threat[] }>(THREAT_SYSTEM, prompt, deadline, 0, "fast");
     if (result === null || !Array.isArray(result.threats)) return [];
 
     return result.threats
@@ -823,6 +864,12 @@ export interface FixReviewInput {
     prior: readonly Finding[];
     /** 1-indexed lines of the new source that were written or changed. */
     changedLines: readonly number[];
+    /**
+     * The threat model from the report being improved on. The contract's
+     * purpose did not change, so neither did what an attacker is after, and
+     * reusing it saves a model round-trip on every optimization.
+     */
+    threats?: ReadonlyArray<{ title: string; target: string; approach: string }>;
 }
 
 interface Recheck {
@@ -881,71 +928,82 @@ export async function fixReview(
     let stillPresent = prior.map(({ finding }) => ({ finding, line: finding.line ?? null }));
     const resolved: Array<{ title: string; reason: string }> = [];
 
-    if (prior.length > 0) {
-        const recheck = await ask<Recheck>(
-            "You re-check smart contract audit findings after a fix, the way an audit firm does a fix review. You judge each finding by the specific attack it describes: if that exact path no longer works in the new code, the finding is resolved, even if the same area could have some other weakness, which would be a different finding. If the described attack still works by any route, it is present.",
-            `These findings were reported against an earlier version of this contract. For each one, decide whether it is still present in the code below.
+    // The re-check of earlier findings and the hunt in the changed lines are
+    // independent, so they run side by side rather than one after the other.
+    const recheckEarlier = async (): Promise<void> => {
+        if (prior.length > 0) {
+            const recheck = await ask<Recheck>(
+                "You re-check smart contract audit findings after a fix, the way an audit firm does a fix review. You judge each finding by the specific attack it describes: if that exact path no longer works in the new code, the finding is resolved, even if the same area could have some other weakness, which would be a different finding. If the described attack still works by any route, it is present.",
+                `These findings were reported against an earlier version of this contract. For each one, decide whether it is still present in the code below.
 
-FINDINGS:
-${prior
-    .map(
-        ({ label, finding }) =>
-            `${label}. [${finding.severity}] ${finding.title}${finding.line === undefined ? "" : ` (was line ${finding.line})`}\n${(finding.description ?? "").slice(0, 1500)}${finding.evidence === undefined ? "" : `\nCode it rested on: ${finding.evidence.slice(0, 400)}`}`,
-    )
-    .join("\n\n")}
+    FINDINGS:
+    ${prior
+        .map(
+            ({ label, finding }) =>
+                `${label}. [${finding.severity}] ${finding.title}${finding.line === undefined ? "" : ` (was line ${finding.line})`}\n${(finding.description ?? "").slice(0, 1500)}${finding.evidence === undefined ? "" : `\nCode it rested on: ${finding.evidence.slice(0, 400)}`}`,
+        )
+        .join("\n\n")}
 
-THE CODE NOW:
-${numbered(source)}
+    THE CODE NOW:
+    ${numbered(source)}
 
-Reply with JSON only: {"results":[{"id":"P1","status":"present" or "resolved","line":<line number where it is now, or null>}]}`,
-            deadline,
-        );
-
-        if (recheck !== null && Array.isArray(recheck.results)) {
-            const verdicts = new Map(
-                recheck.results
-                    .filter((result) => typeof result.id === "string")
-                    .map((result) => [String(result.id).toUpperCase(), result] as const),
+    Reply with JSON only: {"results":[{"id":"P1","status":"present" or "resolved","line":<line number where it is now, or null>}]}`,
+                deadline,
             );
-            stillPresent = [];
-            for (const { label, finding } of prior) {
-                const verdict = verdicts.get(label);
-                // No verdict is not a resolution: an entry the model skipped stays.
-                if (verdict?.status === "resolved") {
-                    resolved.push({ title: finding.title, reason: "resolved by the fix" });
-                    continue;
+
+            if (recheck !== null && Array.isArray(recheck.results)) {
+                const verdicts = new Map(
+                    recheck.results
+                        .filter((result) => typeof result.id === "string")
+                        .map((result) => [String(result.id).toUpperCase(), result] as const),
+                );
+                stillPresent = [];
+                for (const { label, finding } of prior) {
+                    const verdict = verdicts.get(label);
+                    // No verdict is not a resolution: an entry the model skipped stays.
+                    if (verdict?.status === "resolved") {
+                        resolved.push({ title: finding.title, reason: "resolved by the fix" });
+                        continue;
+                    }
+                    const line = typeof verdict?.line === "number" && Number.isInteger(verdict.line) ? verdict.line : finding.line ?? null;
+                    stillPresent.push({ finding, line });
                 }
-                const line = typeof verdict?.line === "number" && Number.isInteger(verdict.line) ? verdict.line : finding.line ?? null;
-                stillPresent.push({ finding, line });
+            } else {
+                notes.push("The earlier findings could not be re-checked, so they are all carried forward.");
             }
-        } else {
-            notes.push("The earlier findings could not be re-checked, so they are all carried forward.");
         }
-    }
+    };
 
     // The fresh hunt, kept only where the code changed.
     let introduced: AuditFinding[] = [];
     let description: ContractDescription | null = null;
     let threats: Threat[] = [];
-    if (input.changedLines.length > 0 && deadline - Date.now() > 20_000) {
-        description = await describe(source, deadline);
-        if (description !== null) {
-            threats = await deriveThreats(description, source, deadline);
-            const changed = new Set(input.changedLines);
-            const nearChange = (line: number | null): boolean => {
-                if (line === null) return false;
-                for (let offset = -CHANGE_REACH; offset <= CHANGE_REACH; offset++) {
-                    if (changed.has(line + offset)) return true;
-                }
-                return false;
-            };
-            const candidates = dedupe(await findVulnerabilities(description, threats, source, deadline)).filter((finding) =>
-                nearChange(finding.line),
-            );
-            const { kept } = await review(candidates, source, deadline, options.confirmed ?? []);
-            introduced = kept.filter((finding) => finding.confidence >= CONFIDENCE_FLOOR);
+    const huntChanges = async (): Promise<void> => {
+        if (input.changedLines.length > 0 && deadline - Date.now() > 20_000) {
+            description = await describe(source, deadline);
+            if (description !== null) {
+                threats =
+                    input.threats !== undefined && input.threats.length > 0
+                        ? input.threats.map((threat, index) => ({ id: `T${index + 1}`, ...threat }))
+                        : await deriveThreats(description, source, deadline);
+                const changed = new Set(input.changedLines);
+                const nearChange = (line: number | null): boolean => {
+                    if (line === null) return false;
+                    for (let offset = -CHANGE_REACH; offset <= CHANGE_REACH; offset++) {
+                        if (changed.has(line + offset)) return true;
+                    }
+                    return false;
+                };
+                const candidates = dedupe(await findVulnerabilities(description, threats, source, deadline)).filter((finding) =>
+                    nearChange(finding.line),
+                );
+                const { kept } = await review(candidates, source, deadline, options.confirmed ?? []);
+                introduced = kept.filter((finding) => finding.confidence >= CONFIDENCE_FLOOR);
+            }
         }
-    }
+    };
+
+    await Promise.all([recheckEarlier(), huntChanges()]);
 
     if (resolved.length > 0) {
         notes.push(`${resolved.length} earlier finding${resolved.length === 1 ? " was" : "s were"} confirmed fixed.`);

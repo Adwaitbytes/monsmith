@@ -87,7 +87,9 @@ import { AccountMenu } from "./components/AccountMenu";
 import { CommandPalette } from "./components/CommandPalette";
 import type { OmniboxIntent } from "./components/Omnibox";
 import { StartScreen } from "./components/StartScreen";
-import { loadReferenceContract, loadShowcase, workspacePath, type ReferenceContract, type Showcase } from "./referenceContracts";
+import { AuditPicker } from "./components/AuditPicker";
+import { auditCandidates, defaultSelection, type AuditCandidate } from "@/lib/report/selection";
+import { findShowcase, loadReferenceContract, loadShowcase, workspacePath, type ReferenceContract, type Showcase } from "./referenceContracts";
 import { usePlan } from "@/lib/billing/usePlan";
 import { useReportUnlock } from "@/lib/billing/useReportUnlock";
 import { RepoPicker } from "./components/RepoPicker";
@@ -1488,11 +1490,40 @@ Be concise but thorough. Format your response with markdown for readability.`;
       const chosen = only !== undefined && only.length > 0 ? only : undefined;
       setShowStart(false);
       setUnlockError(null);
-      void report.run({
-        files: solidity,
-        origin: repoOrigin,
-        ...(chosen !== undefined ? { only: [...chosen] } : {}),
-      });
+
+      const runLive = () =>
+        void report.run({
+          files: solidity,
+          origin: repoOrigin,
+          ...(chosen !== undefined ? { only: [...chosen] } : {}),
+        });
+
+      /*
+        A starter contract left exactly as shipped has a prepared report, so
+        it plays back in seconds instead of re-running a minutes-long audit
+        whose answer is already known. That holds however the run was asked
+        for, as long as the run is about that contract: nothing else in the
+        workspace but the untouched starter file.
+      */
+      const target = chosen === undefined ? activePath : chosen.length === 1 ? chosen[0] : null;
+      const folder = target === null ? null : `${target.split("/")[0]}/`;
+      const aboutTarget =
+        target !== null &&
+        folder !== null &&
+        (chosen !== undefined ||
+          Object.entries(solidity).every(([path, content]) => path.startsWith(folder) || content === DEFAULT_CONTRACT));
+      if (target !== null && aboutTarget) {
+        void findShowcase(solidity, target).then((prepared) => {
+          if (prepared === null) {
+            runLive();
+            return;
+          }
+          showcases.current.set(prepared.report.reportId, prepared);
+          void report.replay(prepared.report, SHOWCASE_REPORT_MS);
+        });
+      } else {
+        runLive();
+      }
 
       addConsoleOutput(
         chosen === undefined
@@ -1501,7 +1532,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
       );
       track("audit", { walletAddress, detail: { surface: "report", origin: repoOrigin.kind } });
     },
-    [files, report, repoOrigin, walletAddress, addConsoleOutput],
+    [files, report, repoOrigin, walletAddress, addConsoleOutput, activePath],
   );
 
   /** Audits just the file in the editor, which is the common case while editing. */
@@ -1559,9 +1590,25 @@ Be concise but thorough. Format your response with markdown for readability.`;
     [addFiles, report, walletAddress, addConsoleOutput],
   );
 
+  /*
+    Choosing what the report covers. With one auditable contract there is
+    nothing to choose and it runs straight away; with more, the chooser opens
+    with the open file ticked, rather than auditing everything and letting the
+    server pick ten from a large repository.
+  */
+  const [picker, setPicker] = useState<{ candidates: AuditCandidate[]; initial: string[] } | null>(null);
+  const openAuditPicker = useCallback(() => {
+    const candidates = auditCandidates(solidityFiles(files));
+    if (candidates.length <= 1) {
+      runReport();
+      return;
+    }
+    setPicker({ candidates, initial: defaultSelection(candidates, activePath) });
+  }, [files, activePath, runReport]);
+
   const handlePrimary = () => {
     if (primaryAction === "deploy") handleDeploy();
-    else runReport();
+    else openAuditPicker();
   };
 
   /**
@@ -1790,6 +1837,16 @@ Be concise but thorough. Format your response with markdown for readability.`;
   const [optimizeAllowance, refreshOptimizeAllowance] = useOptimizeAllowance();
   const [optimizeTarget, setOptimizeTarget] = useState<ContractReport | null>(null);
 
+  const startLiveOptimize = useCallback(
+    (source: RepoReport, contract: ContractReport) => {
+      // Read at call time: this is also reached from a mount effect, before
+      // the rendered `files` has caught up with the stored workspace.
+      const workspace = solidityFiles(useWorkspace.getState().files);
+      void optimizer.start({ reportId: source.reportId, path: contract.path, files: workspace });
+    },
+    [optimizer],
+  );
+
   const startOptimize = useCallback(
     (source: RepoReport, target?: ContractReport) => {
       const contract =
@@ -1802,13 +1859,26 @@ Be concise but thorough. Format your response with markdown for readability.`;
         void optimizer.replay(showcase.optimization, SHOWCASE_OPTIMIZE_MS);
         return;
       }
-      // Read at call time: this is also reached from a mount effect, before
-      // the rendered `files` has caught up with the stored workspace.
-      const workspace = solidityFiles(useWorkspace.getState().files);
-      void optimizer.start({ reportId: source.reportId, path: contract.path, files: workspace });
+      /*
+        A report from before the prepared results existed, on a starter
+        contract that is still as shipped: swap in the prepared report so the
+        before and after agree, and play its optimization back rather than
+        spending minutes and credit producing the same answer again.
+      */
+      void findShowcase(useWorkspace.getState().files, contract.path).then((prepared) => {
+        if (prepared !== null) {
+          showcases.current.set(prepared.report.reportId, prepared);
+          report.replace(prepared.report);
+          setOptimizeTarget(prepared.report.contracts[0] ?? contract);
+          void optimizer.replay(prepared.optimization, SHOWCASE_OPTIMIZE_MS);
+          return;
+        }
+        startLiveOptimize(source, contract);
+      });
     },
-    [optimizer],
+    [optimizer, report, startLiveOptimize],
   );
+
 
   /*
     Arriving from a shared report's Optimize button. The report page has no
@@ -2116,7 +2186,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
   useShortcuts([
     { key: "b", mod: true, run: () => setSideBarView((v) => (v === null ? "explorer" : null)) },
     { key: "j", mod: true, run: toggleTerminal },
-    { key: "enter", mod: true, run: () => runReport() },
+    { key: "enter", mod: true, run: () => openAuditPicker() },
     { key: "s", mod: true, run: () => void handleCompile() },
     {
       key: "escape",
@@ -2134,6 +2204,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
     {
       runReport: () => runReport(),
       runReportForFile: runReportForActiveFile,
+      chooseContracts: openAuditPicker,
       compile: () => void handleCompile(),
       deploy: handleDeploy,
       importFromGitHub: openRepoPicker,
@@ -2914,6 +2985,17 @@ Be concise but thorough. Format your response with markdown for readability.`;
           reportUnlock.unlock();
         }}
         freeLeft={optimizeAllowance?.freeLeft ?? null}
+      />
+
+      <AuditPicker
+        open={picker !== null}
+        candidates={picker?.candidates ?? []}
+        initial={picker?.initial ?? []}
+        onClose={() => setPicker(null)}
+        onConfirm={(paths) => {
+          setPicker(null);
+          runReport(paths);
+        }}
       />
 
       <CommandPalette commands={commands} open={paletteOpen} onOpenChange={setPaletteOpen} />

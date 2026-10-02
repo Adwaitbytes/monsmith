@@ -44,6 +44,8 @@ export interface StudioActions {
     runReport: () => void;
     /** Audits only the file in the editor, for the edit-and-recheck loop. */
     runReportForFile: () => void;
+    /** Opens the chooser for which contracts the report covers. */
+    chooseContracts: () => void;
     compile: () => void;
     deploy: () => void;
     importFromGitHub: () => void;
@@ -97,6 +99,13 @@ export function buildCommands(
             group: 'Analyse',
             keywords: ['audit', 'security', 'scan', 'check', 'analyse', 'analyze', 'everything'],
             run: actions.runReport,
+        },
+        {
+            id: 'report.choose',
+            label: 'Choose contracts to audit',
+            group: 'Analyse',
+            keywords: ['select', 'pick', 'which', 'some', 'subset', 'files'],
+            run: actions.chooseContracts,
         },
         {
             id: 'report.file',

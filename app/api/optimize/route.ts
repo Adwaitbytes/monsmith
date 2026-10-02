@@ -55,13 +55,14 @@ const MAX_ATTEMPTS = 3;
 const MAX_FILE_CHARS = 120_000;
 
 /*
-  Cheap, capable code models first, named here so the optimizer does not fall
-  into the default chat chain. At these prices a run costs a fraction of a
-  cent, and quality is held up by the gates rather than by the model: an edit
-  set that does not compile, drops a function or fails to raise the measured
-  score is never shown as a win. OPTIMIZER_MODEL overrides the list.
+  The model that rewrites the contract. A rewrite people will deploy is worth
+  the strongest model, and a strong model gets it right in one pass, which is
+  also what makes it fast. The gates still apply: an edit set that does not
+  compile, drops a function or fails to raise the measured score is never shown
+  as a win. OPTIMIZER_MODEL takes a comma separated list; several models draft
+  in parallel and the best measured draft wins.
 */
-const OPTIMIZER_MODELS = (process.env.OPTIMIZER_MODEL ?? "deepseek/deepseek-v4.1-flash,qwen/qwen3-coder-next")
+const OPTIMIZER_MODELS = (process.env.OPTIMIZER_MODEL ?? "anthropic/claude-sonnet-5.5")
     .split(",")
     .map((model) => model.trim())
     .filter((model) => model.length > 0);
@@ -112,12 +113,51 @@ function changesFrom(edits: readonly Edit[], findings: readonly Finding[]): Opti
     }));
 }
 
-/** Findings still worth another pass: anything above informational. */
+/**
+ * Findings worth a second pass: critical and high only. A second pass for
+ * mediums added over a minute for a few points; a critical left behind is
+ * worth that minute, a style finding is not.
+ */
 function serious(report: RepoReport): Finding[] {
-    return (report.contracts[0]?.findings ?? []).filter((finding) => finding.severity !== "info");
+    return (report.contracts[0]?.findings ?? []).filter(
+        (finding) => finding.severity === "critical" || finding.severity === "high",
+    );
 }
 
 const MAX_REFINEMENTS = 2;
+
+/**
+ * How long the other models get once one draft has passed the gates. Waiting
+ * for every model made the slowest one, retries and all, set the pace: most of
+ * a two minute optimization was spent waiting on a draft that usually lost.
+ */
+const DRAFT_GRACE_MS = 15_000;
+
+type Draft = { source: string; changes: OptimizeChange[] };
+
+/** Every draft that is ready by the time the first good one has had company for a moment. */
+function firstDrafts(drafts: ReadonlyArray<Promise<Draft | null>>): Promise<Draft[]> {
+    return new Promise((resolve) => {
+        const ready: Draft[] = [];
+        let pending = drafts.length;
+        let grace: ReturnType<typeof setTimeout> | undefined;
+        const finish = () => {
+            if (grace !== undefined) clearTimeout(grace);
+            resolve([...ready]);
+        };
+        for (const draft of drafts) {
+            void draft.then((result) => {
+                pending -= 1;
+                if (result !== null) {
+                    ready.push(result);
+                    if (grace === undefined && pending > 0) grace = setTimeout(finish, DRAFT_GRACE_MS);
+                }
+                if (pending === 0) finish();
+            });
+        }
+        if (drafts.length === 0) finish();
+    });
+}
 
 function jsonError(message: string, status: number, reason?: "sign-in" | "pay") {
     return NextResponse.json({ success: false, error: message, ...(reason === undefined ? {} : { reason }) }, { status });
@@ -232,7 +272,9 @@ export async function POST(req: Request) {
                             maxTokens: 32_000,
                             temperature: 0.1,
                             modelTimeoutMs: REWRITE_TIMEOUT_MS,
-                            reasoningEffort: "medium",
+                            // Reasoning models such as DeepSeek spend the whole
+                            // budget thinking without a cap; others answer directly.
+                            ...(model.startsWith("deepseek/") ? { reasoningEffort: "low" as const } : {}),
                         });
                         return parseEdits(raw);
                     } catch (error) {
@@ -306,6 +348,7 @@ export async function POST(req: Request) {
                         path,
                         prior: from.findings.filter((finding) => finding.source === "ai"),
                         changedLines: diffLines(from.source, source).changed,
+                        ...(contract.threats !== undefined ? { threats: contract.threats } : {}),
                     },
                 })) {
                     if (!open || req.signal.aborted) return null;
@@ -339,8 +382,14 @@ export async function POST(req: Request) {
                             ? `${OPTIMIZER_MODELS.length} models drafting fixes for ${targets.length} ${targets.length === 1 ? "finding" : "findings"}`
                             : `Drafting fixes for ${targets.length} ${targets.length === 1 ? "finding" : "findings"}`,
                 });
-                const drafts = await Promise.all(OPTIMIZER_MODELS.map((model) => rewrite(model, from.source, targets)));
-                const valid = drafts.filter((draft): draft is { source: string; changes: OptimizeChange[] } => draft !== null);
+                const valid = await firstDrafts(
+                    OPTIMIZER_MODELS.map((model) =>
+                        rewrite(model, from.source, targets).catch((error: unknown) => {
+                            console.error(`Optimize: ${model} draft failed:`, error);
+                            return null;
+                        }),
+                    ),
+                );
                 const unique = valid.filter((draft, index) => valid.findIndex((other) => other.source === draft.source) === index);
                 if (unique.length === 0) return null;
 

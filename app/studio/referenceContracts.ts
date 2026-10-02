@@ -185,3 +185,16 @@ export async function loadShowcase(reference: ReferenceContract): Promise<Showca
         return null;
     }
 }
+
+/**
+ * The prepared result for a file, when it is a starter contract left exactly as
+ * shipped. Matching on the code rather than on how the file was opened means a
+ * returning visitor who reopens the studio, or runs the report from the
+ * toolbar, gets the same instant result as one who clicked the starter card.
+ */
+export async function findShowcase(files: Readonly<Record<string, string>>, path: string): Promise<Showcase | null> {
+    const reference = REFERENCE_CONTRACTS.find((entry) => workspacePath(entry, entry.main) === path);
+    if (reference === undefined) return null;
+    const showcase = await loadShowcase(reference);
+    return showcase !== null && files[path] === showcase.source ? showcase : null;
+}
