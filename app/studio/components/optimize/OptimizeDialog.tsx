@@ -16,6 +16,7 @@ import {
     X,
 } from 'lucide-react';
 
+import { optimizationToMarkdown } from '@/lib/optimize/comparison';
 import type { OptimizeState } from '@/lib/optimize/useOptimize';
 import type { OptimizeResult, OptimizeStage, ScoreSnapshot } from '@/lib/optimize/types';
 import type { Grade, Severity } from '@/lib/report/types';
@@ -125,14 +126,25 @@ function percentChange(before: number | null, after: number | null): string | nu
     return `${change > 0 ? '+' : ''}${change.toFixed(1)}%`;
 }
 
-function downloadSource(result: OptimizeResult): void {
-    const name = result.path.split('/').pop() ?? 'Contract.sol';
-    const url = URL.createObjectURL(new Blob([result.optimized], { type: 'text/plain' }));
+function save(contents: string, fileName: string, type: string): void {
+    const url = URL.createObjectURL(new Blob([contents], { type }));
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = name.replace(/\.sol$/i, '.optimized.sol');
+    anchor.download = fileName;
     anchor.click();
     URL.revokeObjectURL(url);
+}
+
+function downloadSource(result: OptimizeResult): void {
+    const name = result.path.split('/').pop() ?? 'Contract.sol';
+    save(result.optimized, name.replace(/\.sol$/i, '.optimized.sol'), 'text/plain');
+}
+
+/** Scores, changes, the diff and both versions of the contract, in one file. */
+function downloadComparison(result: OptimizeResult): void {
+    const name = (result.path.split('/').pop() ?? 'Contract.sol').replace(/\.sol$/i, '');
+    const markdown = optimizationToMarkdown(result, { after: `${window.location.origin}/report/${result.reportId}` });
+    save(markdown, `monsmith-${name.toLowerCase()}-before-and-after.md`, 'text/markdown');
 }
 
 function Running({ state, before, contractName }: {
@@ -376,6 +388,15 @@ function Result({ result, isDark, onApply, onClose, freeLeft }: {
                 >
                     <Check size={14} aria-hidden />
                     Apply to the editor
+                </button>
+                <button
+                    type="button"
+                    onClick={() => downloadComparison(result)}
+                    title="Scores before and after, every change and why, the diff, and both versions of the contract"
+                    className="inline-flex items-center gap-2 rounded-lg border border-accent-line bg-accent-soft px-3.5 py-2 text-[12.5px] font-medium text-accent outline-none ring-accent-line transition-colors hover:border-accent focus-visible:ring-2"
+                >
+                    <Download size={13} aria-hidden />
+                    Download before and after
                 </button>
                 <button
                     type="button"
