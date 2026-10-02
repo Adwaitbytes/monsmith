@@ -96,5 +96,33 @@ export function useOptimize() {
         }
     }, []);
 
-    return { state, start, reset };
+    /**
+     * Plays an optimization prepared in advance through the same stages a live
+     * one shows, for the starter contracts, whose result is the same for
+     * everyone and is not worth spending a model run on per click.
+     */
+    const replay = useCallback(async (result: OptimizeResult, durationMs: number) => {
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
+
+        const findings = Object.values(result.before.counts).reduce((total, count) => total + count, 0);
+        const steps: ReadonlyArray<{ stage: OptimizeStage; label: string; progress: { done: number; total: number } | null }> = [
+            { stage: 'rewriting', label: `Drafting fixes for ${findings} ${findings === 1 ? 'finding' : 'findings'}`, progress: null },
+            { stage: 'compiling', label: 'The new version compiles with every public function intact', progress: null },
+            { stage: 'reporting', label: 'Re-running the full report on the new code', progress: { done: 0, total: 1 } },
+            { stage: 'reporting', label: `Measured ${result.path}`, progress: { done: 1, total: 1 } },
+            { stage: 'saving', label: 'Saving the new report', progress: null },
+        ];
+        const pause = durationMs / steps.length;
+        for (const step of steps) {
+            if (controller.signal.aborted) return;
+            setState({ status: 'running', stage: step.stage, label: step.label, progress: step.progress });
+            await new Promise((resolve) => setTimeout(resolve, pause));
+        }
+        if (controller.signal.aborted) return;
+        setState({ status: 'done', result });
+    }, []);
+
+    return { state, start, reset, replay };
 }

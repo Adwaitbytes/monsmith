@@ -11,6 +11,9 @@
  * studio's bundle. The file lists are generated from those folders.
  */
 
+import type { OptimizeResult } from "@/lib/optimize/types";
+import type { RepoReport } from "@/lib/report/types";
+
 export interface ReferenceContract {
     id: string;
     name: string;
@@ -152,4 +155,33 @@ export async function loadReferenceContract(reference: ReferenceContract): Promi
         }),
     );
     return Object.fromEntries(entries);
+}
+
+/** A starter contract's report and optimization, prepared in advance. */
+export interface Showcase {
+    path: string;
+    /** The source the report was built from; a workspace that differs runs live. */
+    source: string;
+    report: RepoReport;
+    optimization: OptimizeResult;
+    optimizedReport: RepoReport;
+}
+
+function isShowcase(value: unknown): value is Showcase {
+    if (typeof value !== "object" || value === null) return false;
+    const record = value as Record<string, unknown>;
+    return typeof record.path === "string" && typeof record.source === "string" && typeof record.report === "object" && typeof record.optimization === "object" && typeof record.optimizedReport === "object";
+}
+
+/** The prepared result for a starter contract, or null to run it live. */
+export async function loadShowcase(reference: ReferenceContract): Promise<Showcase | null> {
+    try {
+        const response = await fetch(`/samples/${reference.id}/showcase.json`);
+        if (!response.ok) return null;
+        const data: unknown = await response.json();
+        return isShowcase(data) ? data : null;
+    } catch {
+        // No prepared result means a live run, which is slower but correct.
+        return null;
+    }
 }

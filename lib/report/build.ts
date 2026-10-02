@@ -106,6 +106,48 @@ export interface BuildInput {
  * consumer renders a list; a report finding points at a file, so the first
  * occurrence of the pattern that fired is worth recording.
  */
+/** A public mint, burn or withdraw, captured up to its opening brace. */
+const PRIVILEGED_FUNCTION = /\bfunction\s+((?:mint|burn|withdraw)\w*)\s*\(([^)]*)\)([^{;]*)\{/g;
+const UNGUARDED_PRIVILEGED = /\bfunction\s+(?:mint|burn|withdraw)\w*\s*\(/;
+const NOT_A_GUARD = new Set(['public', 'external', 'internal', 'private', 'view', 'pure', 'payable', 'virtual', 'override', 'returns']);
+
+/** The body of the function whose opening brace is at `open`. */
+function bodyFrom(code: string, open: number): string {
+    let depth = 0;
+    for (let index = open; index < code.length; index++) {
+        if (code[index] === '{') depth += 1;
+        else if (code[index] === '}') {
+            depth -= 1;
+            if (depth === 0) return code.slice(open + 1, index);
+        }
+    }
+    return code.slice(open + 1);
+}
+
+/**
+ * The first mint, burn or withdraw that anyone can call to act on funds that
+ * are not their own, or null.
+ *
+ * The rule used to fire on any contract with such a function and no Ownable,
+ * which marks WETH9 high for letting people withdraw their own deposit. A
+ * function is fine when a modifier guards it, when its body checks the caller,
+ * or when it only touches the caller's own funds: it uses msg.sender and takes
+ * no address to act on someone else.
+ */
+function unguardedPrivileged(code: string): string | null {
+    for (const match of code.matchAll(PRIVILEGED_FUNCTION)) {
+        const [whole, name, params, header] = match;
+        if (/\b(?:internal|private|view|pure)\b/.test(header)) continue;
+        const modifiers = header.match(/\b[A-Za-z_]\w*\b/g) ?? [];
+        if (modifiers.some((word) => !NOT_A_GUARD.has(word) && !/^(?:uint|int|bool|address|bytes|string)\d*$/.test(word))) continue;
+        const body = bodyFrom(code, (match.index ?? 0) + whole.length - 1);
+        if (/msg\.sender\s*==|==\s*msg\.sender|hasRole\s*\(|_checkOwner\s*\(|_checkRole\s*\(/.test(body)) continue;
+        if (body.includes('msg.sender') && !/\baddress\b/.test(params)) continue;
+        return name;
+    }
+    return null;
+}
+
 interface SecurityRule {
     severity: Severity;
     title: string;
@@ -113,7 +155,8 @@ interface SecurityRule {
     recommendation: string;
     /** Where in the source to point the reader, when the rule has a giveaway. */
     anchor?: RegExp;
-    applies(code: string): boolean;
+    /** `code` has comments blanked out; `source` is untouched, for the rules that read comments. */
+    applies(code: string, source: string): boolean;
 }
 
 const SECURITY_RULES: readonly SecurityRule[] = [
@@ -167,17 +210,8 @@ const SECURITY_RULES: readonly SecurityRule[] = [
         description: 'Privileged functions detected without proper access control',
         recommendation:
             "Import OpenZeppelin's Ownable or AccessControl and protect sensitive functions",
-        anchor: /\b(?:mint|burn|withdraw)\(/,
-        applies: (code) => {
-            const unguarded =
-                !code.includes('Ownable') &&
-                !code.includes('AccessControl') &&
-                !code.includes('onlyOwner');
-            const privileged =
-                code.includes('function') &&
-                (code.includes('mint(') || code.includes('burn(') || code.includes('withdraw('));
-            return unguarded && privileged;
-        },
+        anchor: UNGUARDED_PRIVILEGED,
+        applies: (code) => unguardedPrivileged(code) !== null,
     },
     {
         severity: 'medium',
@@ -210,8 +244,9 @@ const SECURITY_RULES: readonly SecurityRule[] = [
         description: 'Block timestamps can be manipulated by miners within a short range',
         recommendation:
             'Avoid using timestamps for critical logic or accept ~15 second variance',
-        anchor: /block\.timestamp/,
-        applies: (code) => code.includes('block.timestamp') || code.includes('now'),
+        anchor: /\bblock\.timestamp\b|\bnow\b/,
+        // A word test, not a substring one: "now" inside "known" is not a clock.
+        applies: (code) => /\bblock\.timestamp\b|\bnow\b/.test(code),
     },
     {
         severity: 'medium',
@@ -245,7 +280,8 @@ const SECURITY_RULES: readonly SecurityRule[] = [
         title: 'Missing SPDX License Identifier',
         description: 'All source files should specify a license',
         recommendation: 'Add // SPDX-License-Identifier: MIT at the top of the file',
-        applies: (code) => !code.includes('SPDX-License-Identifier'),
+        // The licence line is a comment, so this one reads the source as written.
+        applies: (_code, source) => !source.includes('SPDX-License-Identifier'),
     },
     {
         severity: 'critical',
@@ -282,8 +318,20 @@ function lineOf(code: string, anchor: RegExp | undefined): number | undefined {
     return code.slice(0, match.index).split('\n').length;
 }
 
-function analyzeSecurity(code: string): SecurityAnalysis {
-    const issues = SECURITY_RULES.filter((rule) => rule.applies(code)).map((rule) => ({
+/**
+ * Source with comments blanked out but every line kept, so the rules read code
+ * rather than prose and the lines they report still point at the right place.
+ * Without this, a comment that mentions tx.origin was a high finding.
+ */
+function withoutComments(source: string): string {
+    return source
+        .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '))
+        .replace(/\/\/[^\n]*/g, (comment) => ' '.repeat(comment.length));
+}
+
+function analyzeSecurity(source: string): SecurityAnalysis {
+    const code = withoutComments(source);
+    const issues = SECURITY_RULES.filter((rule) => rule.applies(code, source)).map((rule) => ({
         severity: rule.severity,
         title: rule.title,
         description: rule.description,
@@ -1021,3 +1069,38 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
 
     yield { type: 'complete', report };
 }
+
+/**
+ * A stored report with its static security pass run again on the given source.
+ *
+ * The static rules are deterministic, so when one is corrected a stored report
+ * can be brought up to date without repeating the model calls that produced the
+ * rest of it. Only the security section and its findings change; counts and
+ * health are recomputed from the result.
+ */
+export function rescoreStatic(report: RepoReport, sources: Readonly<Record<string, string>>): RepoReport {
+    const contracts = report.contracts.map((contract) => {
+        const source = sources[contract.path];
+        if (source === undefined) return contract;
+        const analysis = analyzeSecurity(source);
+        const findings = [
+            ...withIds(contract.id, 'security', securityFindings(contract.path, analysis)),
+            ...contract.findings.filter((finding) => finding.source !== 'security'),
+        ];
+        return {
+            ...contract,
+            findings,
+            counts: countBySeverity(findings),
+            health: healthFor(findings, contract.sections.parallel),
+            sections: {
+                ...contract.sections,
+                security: { status: 'ok' as const, data: analysis, durationMs: 0 },
+            },
+        };
+    });
+    const counts = contracts.reduce((total, contract) => addCounts(total, contract.counts), emptyCounts());
+    return { ...report, contracts, counts, health: healthAcross(contracts) };
+}
+
+/** Exposed for tests only: the static rules are pure and their false positives are the point. */
+export const __testing = { analyzeSecurity };

@@ -271,5 +271,57 @@ export function useReportStream() {
         setState({ status: 'ready', report: next });
     }, []);
 
-    return { state, run, cancel, replace };
+    /**
+     * Plays a report that was prepared in advance as if it were being run.
+     *
+     * The starter contracts are the same for everyone, so their reports are
+     * built once rather than on every click. Showing one instantly would skip
+     * the part that tells a first visitor what the product does, which is
+     * watching each analysis land, so the sections are revealed in the order a
+     * real run produces them, over a few seconds.
+     */
+    const replay = useCallback(async (report: RepoReport, durationMs: number) => {
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
+
+        const steps: ReadonlyArray<{ label: string; section: SectionKind | null }> = [
+            { label: 'Compiling the contract', section: null },
+            { label: 'Running the security rules', section: 'security' },
+            { label: 'Mapping storage access for parallel execution', section: 'parallel' },
+            { label: 'Measuring gas per function', section: 'gas' },
+            { label: 'Pricing the same calls on six chains', section: 'chainfit' },
+            { label: 'Building the threat model and auditing against it', section: null },
+        ];
+        const pause = durationMs / (steps.length + 1);
+        const revealed = new Set<SectionKind>();
+
+        const snapshot = (): RepoReport => ({
+            ...report,
+            health: null,
+            contracts: report.contracts.map((contract) => ({
+                ...contract,
+                health: null,
+                // Deep-audit findings arrive last, with the final report.
+                findings: contract.findings.filter((finding) => finding.source !== 'ai' && revealed.has(finding.source)),
+                sections: {
+                    security: revealed.has('security') ? contract.sections.security : { status: 'pending' },
+                    parallel: revealed.has('parallel') ? contract.sections.parallel : { status: 'pending' },
+                    gas: revealed.has('gas') ? contract.sections.gas : { status: 'pending' },
+                    chainfit: revealed.has('chainfit') ? contract.sections.chainfit : { status: 'pending' },
+                },
+            })),
+        });
+
+        for (const [index, step] of steps.entries()) {
+            if (controller.signal.aborted) return;
+            if (step.section !== null) revealed.add(step.section);
+            setState({ status: 'running', done: 0, total: report.contracts.length, label: step.label, partial: index === 0 ? null : snapshot() });
+            await new Promise((resolve) => setTimeout(resolve, pause));
+        }
+        if (controller.signal.aborted) return;
+        setState({ status: 'ready', report });
+    }, []);
+
+    return { state, run, cancel, replace, replay };
 }

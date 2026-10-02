@@ -224,7 +224,10 @@ export async function reportsFor(
                    jsonb_array_length(payload -> 'contracts') AS contract_count,
                    payload -> 'contracts' -> 0 ->> 'name' AS first_name
             FROM reports
-            WHERE visitor_id = ${key}
+            -- Signed out, a browser sees only reports no account owns. A
+            -- report run while signed in also carries this browser's id, and
+            -- listing it here showed someone's history after they left.
+            WHERE visitor_id = ${key} AND user_id IS NULL
             ORDER BY created_at DESC
             LIMIT ${limit}
           `)) as Array<{
@@ -481,9 +484,9 @@ export async function freeOptimizationsUsed(userId: string): Promise<number> {
 /**
  * Whether someone paid for this report, by card or MON.
  *
- * Unlocks granted by an optimization do not count: they are the product of a
- * free optimization, and letting them unlock further optimizations would make
- * the free allowance unlimited.
+ * Unlocks granted by an optimization, or given to the prepared starter reports,
+ * do not count: neither was paid for, and letting them unlock optimizations
+ * would make the free allowance unlimited.
  */
 export async function reportWasPaidFor(reportId: string): Promise<boolean> {
     const sql = client();
@@ -491,7 +494,8 @@ export async function reportWasPaidFor(reportId: string): Promise<boolean> {
     await ensureSchema();
     const rows = (await sql`
         SELECT 1 FROM report_unlocks
-        WHERE report_id = ${reportId} AND provider IS DISTINCT FROM 'optimization'
+        WHERE report_id = ${reportId}
+          AND (provider IS NULL OR provider NOT IN ('optimization', 'showcase'))
     `) as unknown[];
     return rows.length > 0;
 }

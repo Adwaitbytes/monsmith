@@ -15,6 +15,30 @@
 
 const VISITOR_KEY = "monsmith.visitor";
 
+/*
+  Mirrored into a cookie because the server renders shared report pages and
+  cannot read localStorage. Without it, opening your own report in a new tab,
+  which is what Download does, showed it locked as if to a stranger.
+*/
+function writeCookie(id: string): void {
+  if (typeof document === "undefined") return;
+  try {
+    document.cookie = `${VISITOR_KEY}=${encodeURIComponent(id)}; path=/; max-age=31536000; samesite=lax${
+      window.location.protocol === "https:" ? "; secure" : ""
+    }`;
+  } catch {
+    // A blocked cookie only costs the server-rendered view of a locked report.
+  }
+}
+
+function cookieHas(id: string): boolean {
+  try {
+    return typeof document !== "undefined" && document.cookie.includes(`${VISITOR_KEY}=${encodeURIComponent(id)}`);
+  } catch {
+    return false;
+  }
+}
+
 export function visitorId(): string {
   if (typeof window === "undefined") return "";
 
@@ -23,6 +47,7 @@ export function visitorId(): string {
     id = crypto.randomUUID();
     window.localStorage.setItem(VISITOR_KEY, id);
   }
+  if (!cookieHas(id)) writeCookie(id);
   return id;
 }
 
@@ -44,5 +69,6 @@ export function resetVisitorId(): string {
   } catch {
     // An unwritable store means the old id is already gone from this session.
   }
+  writeCookie(id);
   return id;
 }

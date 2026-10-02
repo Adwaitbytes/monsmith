@@ -65,6 +65,14 @@ import {
 } from "@/lib/apiTypes";
 
 // Dynamically import Monaco to avoid SSR issues
+/*
+  How long a prepared starter report and optimization take to play back. Long
+  enough to watch each analysis land, short enough that nobody waits on an
+  answer that already exists.
+*/
+const SHOWCASE_REPORT_MS = 9_000;
+const SHOWCASE_OPTIMIZE_MS = 10_000;
+
 const MonacoEditor = dynamic(() => import("@monaco-editor/react"), {
   ssr: false,
   loading: () => (
@@ -79,7 +87,7 @@ import { AccountMenu } from "./components/AccountMenu";
 import { CommandPalette } from "./components/CommandPalette";
 import type { OmniboxIntent } from "./components/Omnibox";
 import { StartScreen } from "./components/StartScreen";
-import { loadReferenceContract, workspacePath, type ReferenceContract } from "./referenceContracts";
+import { loadReferenceContract, loadShowcase, workspacePath, type ReferenceContract, type Showcase } from "./referenceContracts";
 import { usePlan } from "@/lib/billing/usePlan";
 import { useReportUnlock } from "@/lib/billing/useReportUnlock";
 import { RepoPicker } from "./components/RepoPicker";
@@ -1512,13 +1520,19 @@ Be concise but thorough. Format your response with markdown for readability.`;
    * run because the workspace update has not reached `files` in this render.
    */
   const [loadingReference, setLoadingReference] = useState<string | null>(null);
+  // Prepared results for the starter contracts, by report id, so Optimize can
+  // play the matching one back. Held in a ref: nothing renders from it.
+  const showcases = useRef(new Map<string, Showcase>());
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const runReference = useCallback(
     async (reference: ReferenceContract) => {
       setLoadingReference(reference.id);
       setReferenceError(null);
       try {
-        const referenceFiles = await loadReferenceContract(reference);
+        const [referenceFiles, showcase] = await Promise.all([
+          loadReferenceContract(reference),
+          loadShowcase(reference),
+        ]);
         const main = workspacePath(reference, reference.main);
         addFiles(referenceFiles, main);
         setLanguage("solidity");
@@ -1528,7 +1542,12 @@ Be concise but thorough. Format your response with markdown for readability.`;
         setUnlockError(null);
         setRailOpen(true);
         setRailForced(true);
-        void report.run({ files: referenceFiles, origin, only: [main] });
+        if (showcase !== null && referenceFiles[showcase.path] === showcase.source) {
+          showcases.current.set(showcase.report.reportId, showcase);
+          void report.replay(showcase.report, SHOWCASE_REPORT_MS);
+        } else {
+          void report.run({ files: referenceFiles, origin, only: [main] });
+        }
         addConsoleOutput(`Checking ${reference.name}.`);
         track("audit", { walletAddress, detail: { surface: "reference", origin: reference.id } });
       } catch (error) {
@@ -1778,6 +1797,11 @@ Be concise but thorough. Format your response with markdown for readability.`;
         [...source.contracts].sort((a, b) => (a.health?.score ?? 101) - (b.health?.score ?? 101))[0];
       if (contract === undefined) return;
       setOptimizeTarget(contract);
+      const showcase = showcases.current.get(source.reportId);
+      if (showcase !== undefined && useWorkspace.getState().files[showcase.path] === showcase.source) {
+        void optimizer.replay(showcase.optimization, SHOWCASE_OPTIMIZE_MS);
+        return;
+      }
       // Read at call time: this is also reached from a mount effect, before
       // the rendered `files` has caught up with the stored workspace.
       const workspace = solidityFiles(useWorkspace.getState().files);
@@ -1837,6 +1861,13 @@ Be concise but thorough. Format your response with markdown for readability.`;
       addConsoleOutput(
         `Applied the optimized ${basenameOf(result.path)}. Score ${result.before.score ?? "?"} to ${result.after.score ?? "?"}.`,
       );
+      const prepared = [...showcases.current.values()].find(
+        (showcase) => showcase.optimizedReport.reportId === result.reportId,
+      );
+      if (prepared !== undefined) {
+        report.replace(prepared.optimizedReport);
+        return;
+      }
       try {
         const response = await fetch(`/api/report/${result.reportId}`, { headers: { "x-visitor-id": visitorId() } });
         const data = (await response.json()) as { report?: RepoReport };
