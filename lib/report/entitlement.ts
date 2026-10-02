@@ -184,6 +184,17 @@ async function unlockRowExists(reportId: string): Promise<boolean | null> {
  * what a free viewer sees keeps its tests and keeps working; it is only ever
  * asked a question whose answer is currently always yes.
  */
+/**
+ * Whether reports can be bought with MON.
+ *
+ * The rail settles on Monad testnet, where MON is free to get, so with a card
+ * price live it would sell a $10.99 report for nothing. Off unless switched on,
+ * which is for when it settles on mainnet at a real price.
+ */
+export function monRailEnabled(): boolean {
+    return process.env.REPORTS_MON_RAIL === 'on';
+}
+
 export function paywallEnabled(): boolean {
     return process.env.REPORTS_PAYWALL === 'on';
 }

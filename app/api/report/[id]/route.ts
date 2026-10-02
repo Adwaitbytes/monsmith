@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { dodoConfig, reportPrice } from "@/lib/billing/dodo";
-import { entitlementFor, REPORT_PAYEE, REPORT_PRICE_MON, REPORT_PRICE_WEI } from "@/lib/report/entitlement";
+import { entitlementFor, monRailEnabled, REPORT_PAYEE, REPORT_PRICE_MON, REPORT_PRICE_WEI } from "@/lib/report/entitlement";
 import { FREE_REPORTS } from "@/lib/report/freeReports";
 import { redactReport, summariseLocked } from "@/lib/report/redact";
 import { loadReport, type StoredReport } from "@/lib/report/store";
@@ -79,6 +79,6 @@ export async function GET(
         summary,
         price: entitled
             ? null
-            : { wei: REPORT_PRICE_WEI, mon: REPORT_PRICE_MON, payee: REPORT_PAYEE, card },
+            : { ...(monRailEnabled() ? { wei: REPORT_PRICE_WEI, mon: REPORT_PRICE_MON, payee: REPORT_PAYEE } : {}), card },
     });
 }

@@ -5,6 +5,7 @@ import { getAddress, isAddress } from "viem";
 
 import {
     entitlementFor,
+    monRailEnabled,
     paywallEnabled,
     MONAD_CHAIN_ID,
     REPORT_PAYEE,
@@ -370,6 +371,13 @@ export async function POST(
             persisted: true,
             report: redactReport(stored.report, true),
         });
+    }
+
+    if (!monRailEnabled()) {
+        return NextResponse.json(
+            { success: false, error: "Paying in MON is not available right now. Unlock this report by card instead." },
+            { status: 403 },
+        );
     }
 
     let body: unknown = null;

@@ -139,7 +139,7 @@ function Offer({ plan }: { plan: Plan }) {
                         {price !== null && (
                             <>
                                 After that, <span className="font-medium text-text-primary">{price} per report</span>,
-                                optimization included, by card or in MON.{' '}
+                                optimization included, paid by card.{' '}
                             </>
                         )}
                         Every report shows its score, severity counts and finding titles for free.
