@@ -1,494 +1,189 @@
 # Monsmith
 
-A browser-based smart contract development environment for Monad Network.
+An AI auditor agent for Monad that audits and fixes smart contracts, then attests every audit onchain under its ERC-8004 identity, so wallets and agents can check a contract before they call it.
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-45%2F45%20passing-success)](#testing)
+- Live product: https://www.monsmith.com/studio
+- Check any contract: https://www.monsmith.com/verify
+- Agent registration file: https://www.monsmith.com/agent.json
+- Verification API for agents: `GET https://www.monsmith.com/api/verify?chainId=143&address=0x...`
 
-## About
+Licensed under Apache-2.0.
 
-Monsmith is an integrated development environment designed specifically for building smart contracts on Monad Network. It provides a complete toolchain including code editing, compilation, security analysis, and deployment capabilities - all accessible through a web browser without requiring local setup.
+## Monad Blitz: Metropolis submission
 
-The IDE is optimized for Monad's parallel execution architecture, offering unique analysis tools to help developers write contracts that take full advantage of Monad's 10,000 TPS throughput.
+**Track 04: Trust, Identity & AI Infrastructure.** Monsmith is a trust primitive other apps build on. An agent with its own ERC-8004 identity on Monad mainnet audits code and writes a signed record for each audit: the source hash, the score and the hash of the full report. Anyone can then verify that record with one contract read or one HTTP call. A Chainlink DON independently re-checks each record, and Envio indexes the full history.
 
-## Founder
+Bounties entered, and where each one lives in the code:
 
-Monsmith is founded and built by **[Adwait Keshari](https://www.monsmith.com/about)**, a full-stack and blockchain engineer building developer tools for Monad in public.
+| Bounty | What it does in Monsmith | Where |
+| --- | --- | --- |
+| **Qwen 3.8 Max** | Cross-examines every finding the hunting model produces. It may only reject a finding by citing the line that prevents the attack. The report names Qwen and says how many findings it upheld and rejected. | `lib/report/audit.ts` (review pass, `REVIEW_MODEL`), `lib/report/verification.ts`, shown in the report's Health section |
+| **Envio** | A HyperIndex indexer over every `Attested` event since deployment, through HyperSync. It powers the live ledger on `/verify` and `/api/attestations`. The public Monad RPC serves `eth_getLogs` 100 blocks at a time, so without it the history cannot practically be read. | `indexer/`, `lib/attest/ledger.ts`, `app/api/attestations`, `app/verify/LedgerFeed.tsx` |
+| **Chainlink CRE** | The orchestration layer for independent verification. A log trigger on Monad mainnet fires; the workflow reads the current attestation at finalized depth, has every node fetch `/api/verify` with identical consensus on whether the report still matches its hash, then makes a signed write to `MonsmithVerdicts` on Monad through the Keystone forwarder. | `cre/attestation-verifier/`, `contracts/cre/MonsmithVerdicts.sol` |
+| **Alchemy** | The RPC behind the agent's onchain work: attestation writes, reads, and code checks on Monad, Ethereum and Sepolia, with the public endpoints as fallback. Before an audit is tied to a deployed address, Alchemy confirms code is there and reads the EIP-1967 slot. A proxy's score is never bound to its address, because its owner can repoint it. `/verify` resolves a proxy to the implementation it runs. | `lib/attest/rpc.ts`, `app/api/report/[id]/attest/route.ts`, `app/api/verify/route.ts` |
 
-- LinkedIn: https://www.linkedin.com/in/adwait-keshari-b5793b294/
-- X (Twitter): https://x.com/AdwaitKeshari
-- GitHub: https://github.com/Adwaitbytes
-- Portfolio: https://adwait-portfolio-blond.vercel.app/
-- YouTube: https://www.youtube.com/@Iitmbs2024
-- Instagram: https://www.instagram.com/adwaitkeshari
-- TikTok: https://www.tiktok.com/@adwait503
+## The problem
 
-Live product: https://monsmith.com
+Agents and wallets increasingly call contracts nobody on the team has read. The audit, if one exists at all, is a PDF on a website, and nothing ties it to the bytes being called. Two failures follow:
 
-## Key Features
+1. You cannot ask, at the moment of the call, whether this exact code was audited and how it scored.
+2. You have to trust whoever published the audit not to edit it later.
 
-**Development Environment**
-- Monaco code editor with Solidity syntax highlighting and autocomplete
-- Multi-file project support for organizing complex contract systems
-- Real-time error detection and validation
-- Dark and light theme support
+## What Monsmith does
 
-**Compilation Pipeline**
-- solc-js compiled in-process, with OpenZeppelin imports resolved from a bundled source set
-- The compiler version is chosen from the pragma, so 0.5 and 0.8 sources both build
-- Solidity 0.8.24 with optimizer support (200 runs default)
-- Detailed error messages with contextual information
-- ABI and bytecode generation for deployment
+1. **Audit.** Paste a contract, import one by address, or pick a GitHub repository. The audit runs four passes:
+   - Describe what the contract does.
+   - Derive threats from its own assets and invariants.
+   - Hunt for concrete, line-cited attacks (Claude Sonnet 5.5).
+   - Have a different model family attack those findings (Qwen 3.8 Max).
 
-**Security Analysis**
-- Vulnerability scanning for common attack vectors (reentrancy, overflow, access control)
-- Pattern-based security recommendations
-- Risk assessment scoring
-- Automated suggestions for security improvements
+   Alongside the AI passes run deterministic static rules, a parallel-execution profile for Monad, a gas table, and a cross-chain cost comparison measured by running the contract in an EVM.
+2. **Fix.** "Optimize" rewrites the contract to fix the findings. A fix only counts if the result compiles and keeps its interface. It is then re-checked the way an audit firm runs a fix review: each earlier finding is confirmed fixed or still present, and new findings count only in the changed lines. Download the before and after as a diff.
+3. **Attest.** "Publish to Monad" writes the score, severity counts, source hash and report hash to `MonsmithAttestations` on Monad mainnet. Only the wallet that owns ERC-8004 agent #10332 can write, and that ownership is checked on every write.
+4. **Verify.** `/verify`, `/api/verify` and `MonsmithAttestations.ofDeployment` answer whether an address or a source was audited, and the score. The report is hashed again and compared, so an edited report shows up as edited. A Chainlink DON writes its own verdict to `MonsmithVerdicts`. A contract that wants more than Monsmith's word calls `isConfirmed(sourceHash, minScore)`.
 
-**Monad Parallel Profiler**
-- Storage dependency analysis for parallel execution optimization
-- Function-level parallelization scoring
-- Dependency graph visualization
-- Specific recommendations for improving contract throughput on Monad
+## Architecture
 
-**Chain Fit**
-- Runs your contract in a real EVM and reprices that exact execution under each chain's published gas schedule
-- Per-function cost on Monad, Ethereum, Base, Arbitrum, Polygon and BNB, in gas and in USD
-- Block time, block gas limit and gas price probed live from each chain's public RPC, no API keys
-- Findings tied to measurements from your contract, including the cases where Monad is the more expensive answer
+```mermaid
+flowchart LR
+    U[Developer, wallet or agent] -->|audit, optimize| S[Monsmith studio<br/>Next.js on Vercel]
+    S -->|hunt| C[Claude Sonnet 5.5]
+    S -->|cross-examine| Q[Qwen 3.8 Max]
+    S -->|static rules, gas, parallel profile, chain fit| E[solc-js + in-process EVM]
+    S -->|reports, payments| DB[(Neon Postgres)]
+    S -->|attest via Alchemy| A[MonsmithAttestations<br/>Monad mainnet]
+    A -->|ownerOf on every write| I[ERC-8004 Identity Registry<br/>agent #10332]
+    A -->|Attested events| X[Envio HyperIndex]
+    X -->|ledger| V["/verify + /api/attestations"]
+    A -->|log trigger| W[Chainlink CRE workflow]
+    W -->|every node: /api/verify, identical consensus| S
+    W -->|signed verdict via Keystone forwarder| R[MonsmithVerdicts<br/>Monad mainnet]
+    U -->|verify before calling| V
+```
 
-**Deployment**
-- MetaMask wallet integration
-- Support for Monad Testnet and Mainnet
-- Transaction confirmation with block explorer links
-- Deployment history tracking
+## Onchain, Monad mainnet (chain 143)
 
-**AI Assistance** (Optional)
-- Natural language contract generation using OpenAI or Groq APIs
-- Code explanation and documentation generation
-- Optimization suggestions based on gas usage patterns
-- Debugging assistance for compilation errors
+| What | Address or transaction |
+| --- | --- |
+| ERC-8004 Identity Registry | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
+| Monsmith agent | #10332, registered in [`0x6a00adf9…b029`](https://monadvision.com/tx/0x6a00adf97b62936058afa9db34e51c176c2fc46c98d1b8b6de61b8be9136b029), agentURI https://www.monsmith.com/agent.json |
+| MonsmithAttestations | [`0xfa57831Fcb96Effc1E36d41e44Cd0fb1aC16de77`](https://monadvision.com/address/0xfa57831Fcb96Effc1E36d41e44Cd0fb1aC16de77), deployed in [`0x51d10ff7…02a2`](https://monadvision.com/tx/0x51d10ff77c933e4ada65a71fafbcdb23b1abe5197f1c82ee85c4ea917d0d02a2) at block 112388073 |
+| MonsmithVerdicts (CRE receiver) | Deployed with `scripts/deploy-verdicts.mjs`; address recorded in `cre/attestation-verifier/config.staging.json` |
 
-**Python Transpiler** (Experimental)
-- PyMon: a constrained Python DSL for writing contracts, transpiled to Solidity
-- Start from a bundled Python template; it reads that shape, not arbitrary Python
-- The generated Solidity is shown before it is compiled, so it can be checked
+The first ten attestations are the five starter contracts, each before and after Monsmith's optimizer:
 
-**Contract Templates**
-- Pre-built templates for common patterns (ERC20, ERC721, DAO, Staking, DEX)
-- Production-tested implementations
-- Customizable parameters
+| Contract | Original | Optimized |
+| --- | --- | --- |
+| The DAO (rebuilt) | 39, [`0x89ef26f5…41c3`](https://monadvision.com/tx/0x89ef26f578557606b3f960182ab4879cbe3caa9d51cec7cbb5be1c6fdafc41c3) | 79, [`0xd16adc9f…0393`](https://monadvision.com/tx/0xd16adc9f7ddf741b0f64a342a01e085cdebbe3017d9c94e56a42f2ffdb940393) |
+| Uniswap v2 pair | 52, [`0x7a4c3ff2…d42a`](https://monadvision.com/tx/0x7a4c3ff2c869913c31f235b6b820ddcb059d2ac8ed213a5540b009ae931fd42a) | 53, [`0x20ec2813…a5ee`](https://monadvision.com/tx/0x20ec28132af0b14d49d1e59bcd3c17cad404a399f0abc349ce03f6e6474da5ee) |
+| Uniswap v3 pool | 53, [`0x5a13e549…c093`](https://monadvision.com/tx/0x5a13e549367736b2cccfe6545b71bf370cde5465e1df31f28b75ccff2f06c093) | 64, [`0xb813ecf9…daf4`](https://monadvision.com/tx/0xb813ecf9375f0d325352d6eb8080751ac45fa00d3a8359a3dec2bc43eee3daf4) |
+| WETH9 | 73, [`0xc21cfd4a…43a2`](https://monadvision.com/tx/0xc21cfd4ae2cd23a4a93d5afabb0749e73e28db11feceb9542b8da3217eb243a2) | 74, [`0x6de0b9ac…9e28`](https://monadvision.com/tx/0x6de0b9ac57fa0230edb6068530a5f43637d0fce96edae162f3eb4c4cafa49e28) |
+| Compound COMP | 80, [`0xab4d0b82…dac9`](https://monadvision.com/tx/0xab4d0b82a3e007c4c91f1586c76f6dc411e237456b8c32167863b19426fd9ac9) | 81, [`0xf94ecd88…d7eb`](https://monadvision.com/tx/0xf94ecd88fd182cd94a7178c8ca4631bdaeefffca63ea0582fa0eb2f849ead7eb) |
 
-**Analytics** (Optional)
-- First-party events in Neon Postgres, PostHog for product analytics
-- Stored reports, so a run can be reopened instead of paid for twice
+The CRE workflow has been simulated against the first of these. Every node agreed The DAO's report is intact (see `cre/README.md`).
 
-## Installation
+## Tech stack
 
-### Local Development
+- **App:** Next.js 16 (App Router) with React 19, TypeScript in strict mode, and Tailwind. Monaco is the editor, and React Three Fiber draws the landing hero.
+- **Compilation and analysis:**
+  - solc-js, with the compiler version chosen from the pragma.
+  - An in-process EVM for gas and cross-chain measurements.
+  - A storage-dependency parser for Monad's parallel execution.
+- **AI:** OpenRouter. The hunt runs on Claude Sonnet 5.5, the review on Qwen 3.8 Max, and the describe and threat passes on fast models.
+- **Data and accounts:** Neon Postgres, Clerk sign-in, Dodo Payments for card checkout, PostHog analytics.
+- **Chain:**
+  - viem.
+  - Alchemy, with the public RPCs as fallback.
+  - Solidity 0.8.24 contracts tested with Hardhat.
+  - ERC-8004 Identity Registry on Monad mainnet.
+- **Indexing:** Envio HyperIndex 3.14 over HyperSync.
+- **Orchestration:** Chainlink CRE TypeScript SDK 1.23, simulated with CRE CLI 1.36.
 
-Clone the repository and install dependencies:
+## What existed before Metropolis and what was built during it
 
-```bash
-git clone https://github.com/Adwaitbytes/monad-studio.git
-cd monad-studio
+The commit history is the original history, unedited. Everything up to **30 Aug 2026** (`5ac5a17`) existed before the build window:
+
+- the browser IDE (editor, multi-file projects, compile and deploy to Monad testnet and mainnet);
+- the contract template library;
+- the pattern-based security checks;
+- the parallel-execution profiler and its benchmark harness;
+- the usage analytics;
+- the PyMon Python-to-Solidity transpiler;
+- the Monsmith landing page.
+
+Built from **1 Sep 2026** onward, during the window:
+
+- **Measurement and compilation:**
+  - Chain Fit (per-function cost across six EVM chains, measured by running the contract).
+  - Any-version solc with flattening.
+  - Workspace persistence.
+- **The Contract Report:**
+  - The four-pass threat-model audit that replaced the checklist.
+  - Report history, redaction and sharing.
+  - PDF and Markdown downloads.
+- **Sources and access:**
+  - GitHub App import, including private repositories.
+  - Clerk accounts.
+- **The studio and Aria:**
+  - The studio redesign, which cut the toolbar from 17 controls to 4.
+  - Aria, the assistant that has read the open file.
+- **Payments:** two free reports, then Dodo card checkout.
+- **The optimizer:**
+  - Fix-review scoring.
+  - Before and after diffs.
+  - The five reference contracts, with instant playback.
+- **Trust layer:**
+  - ERC-8004 identity and onchain attestations.
+  - The `/verify` page and API.
+- **Bounty integrations:**
+  - Qwen 3.8 Max as the reviewer.
+  - The Envio indexer and ledger.
+  - Alchemy RPC and proxy-aware code checks.
+  - The Chainlink CRE verifier and `MonsmithVerdicts`.
+
+## Run it
+
+```sh
 npm install
+cp .env.example .env.local   # fill in what you need; every section says if it is optional
+npm run dev                  # http://localhost:3000
 ```
 
-Create a `.env.local` file with your configuration:
+Required to run audits: `OPENROUTER_API_KEY` and `DATABASE_URL`. Everything else is optional, and the feature it controls hides itself when unset.
 
-```env
-# AI provider - at least one is needed for generate/audit/explain/research.
-# Compile, deploy and transfer work without any of these.
-OPENAI_API_KEY=your_openai_api_key
-OPENROUTER_API_KEY=your_openrouter_api_key
-GROQ_API_KEY=your_groq_api_key
+Onchain identity, one time, from a funded wallet:
 
-# Optional: stored reports, analytics and the request limiter.
-# Without it the studio still runs; reports live only in the tab that made them
-# and the limiter falls back to counting in memory.
-DATABASE_URL=your_neon_connection_string
-
-# Optional: Deployment
-PRIVATE_KEY=your_private_key
+```sh
+npx hardhat compile
+node scripts/erc8004-setup.mjs          # registers the ERC-8004 agent and deploys MonsmithAttestations
+node scripts/deploy-verdicts.mjs        # deploys MonsmithVerdicts for the CRE workflow
 ```
 
-Start the development server:
+Indexer: see `indexer/README.md`. CRE workflow: see `cre/README.md`.
 
-```bash
-npm run dev
+## Tests
+
+```sh
+npm run test:unit                       # 291 tests: audit, reports, payments, attestations, ledger, RPC
+npx hardhat test                        # contracts, including MonsmithAttestations and MonsmithVerdicts
+cd indexer && pnpm test                 # Envio handlers
+cd cre/attestation-verifier && bun test # CRE workflow
 ```
 
-The application will be available at `http://localhost:3000`.
+## AI tools used
 
-### Production Deployment
+- **Inside the product:** Claude Sonnet 5.5 (finding vulnerabilities, optimizing), Qwen 3.8 Max (reviewing findings), and DeepSeek V4.1 Flash with other fast models (describing contracts and threats), all through OpenRouter. Each report says which model checked its findings.
+- **Building the product:** Claude Code (Anthropic) was used as a coding assistant throughout development, under the author's direction and review.
 
-Monsmith can be deployed to Vercel, Netlify, or any Node.js hosting platform.
+## Attribution
 
-For Vercel:
-```bash
-npm i -g vercel
-vercel
-```
+- Reference contracts in `public/samples/` are copied unchanged at pinned commits and keep their own licences: Uniswap v2 and v3, canonical WETH9, Compound COMP. The DAO is a rebuild of slock.it's original. See `public/samples/README.md`.
+- `contracts/cre/ReceiverTemplate.sol`, `IReceiver.sol` and `IERC165.sol` come from the Chainlink CRE templates (MIT). The bindings in `cre/contracts/evm/ts/generated/` are generated by the CRE CLI.
+- The ERC-8004 registries are the shared deployments on Monad mainnet.
+- OpenZeppelin Contracts are bundled for in-browser compilation (MIT).
 
-Add environment variables through your hosting platform's dashboard.
+See `NOTICE`.
 
-## Configuration
+## Author
 
-### AI Provider Setup
-
-**Groq** (Recommended)
-- Fast inference with free tier available
-- Sign up at console.groq.com
-- Generate API key in dashboard
-- Add `GROQ_API_KEY` to environment variables
-
-**OpenAI** (Alternative)
-- Higher quality responses for complex tasks
-- Requires paid API access
-- Create key at platform.openai.com
-- Add `OPENAI_API_KEY` to environment variables
-
-### Neon Postgres (Optional)
-
-For stored reports, analytics and durable rate limiting:
-1. Create a database at neon.tech
-2. Put its connection string in `DATABASE_URL`
-
-The tables create themselves on first use, so there is no migration step.
-
-## Usage
-
-### Writing Contracts
-
-The IDE provides three ways to start:
-
-1. **From Template** - Select from pre-built contracts (ERC20, NFT, DAO, Staking)
-2. **AI Generation** - Describe requirements in natural language
-3. **Blank File** - Write Solidity code from scratch
-
-The Monaco editor includes:
-- Syntax highlighting for Solidity
-- Autocomplete for language keywords
-- Error underlining
-- Code folding and minimap
-
-### Compilation
-
-Click the Compile button to build your contract. The system:
-- Resolves OpenZeppelin imports automatically
-- Runs Solidity compiler with optimization
-- Generates ABI and bytecode
-- Reports errors with line numbers and descriptions
-
-If AI features are enabled, compilation errors include contextual explanations and suggestions.
-
-### Security Auditing
-
-The Audit button triggers analysis that checks for:
-- Reentrancy vulnerabilities
-- Integer overflow/underflow risks
-- Access control issues
-- Unsafe external calls
-- Gas optimization opportunities
-
-Results include severity ratings and remediation recommendations.
-
-### Parallel Analysis
-
-The Parallel Profiler analyzes contracts for Monad-specific optimizations:
-
-1. Maps storage variable access patterns
-2. Identifies read/write conflicts between functions
-3. Calculates parallelization potential
-4. Generates dependency graph visualization
-5. Provides optimization suggestions
-
-This helps you write contracts that leverage Monad's parallel execution architecture.
-
-### Chain Fit
-
-The Chain Fit panel answers a narrower question than a comparison table: what does
-*this* contract cost, and how does it behave, on each chain you might ship it to.
-
-1. Compiles the contract and deploys it into a local EVM
-2. Calls every state-changing function and traces it opcode by opcode
-3. Reprices that one trace under each chain's gas schedule
-4. Converts gas into money at the gas price read from each chain's RPC just now
-
-Monad keeps Ethereum's gas costs everywhere except four places, so only four
-things are recomputed and everything else cancels:
-
-| | Ethereum and the L2s | Monad |
-|---|---|---|
-| Cold account access | 2,600 | 10,100 |
-| Cold storage | 2,100 per slot | 8,100 per 128-slot page |
-| Memory expansion | 3w + w²/512 | w/2, capped at 8 MB |
-| ecRecover / ecMul / ecPairing / point eval | baseline | 2x to 5x |
-| Max contract size | 24 KB | 128 KB |
-| Gas charged | gas used | gas limit |
-
-The Ethereum figure is what a real EVM charged, not an estimate, and the Monad
-figure is that measurement adjusted by the published MIP-8 schedule. The schedule
-is checked against the worked examples in Monad's own specification by
-`npm run test:chainfit`, so a repricing upstream shows up as a failing test rather
-than as a wrong number in a report.
-
-A public version, with sample contracts and the live network matrix, is at `/compare`.
-
-### Deployment
-
-To deploy a contract:
-
-1. Ensure the contract compiles successfully
-2. Connect MetaMask wallet
-3. Select target network (Monad Testnet or Mainnet)
-4. Click Deploy
-5. Confirm transaction in MetaMask
-6. Receive contract address and explorer link
-
-## Technical Stack
-
-**Frontend**
-- Next.js 16 with App Router
-- React 19
-- TypeScript
-- Tailwind CSS 4
-- Framer Motion for animations
-- Monaco Editor (VS Code engine)
-- Lucide React icons
-
-**State Management**
-- Zustand for application state
-- LocalStorage persistence
-
-**Blockchain Integration**
-- Viem for chain reads, wallet calls and deployment
-- OpenZeppelin contract libraries, bundled for import resolution
-
-**Backend Services**
-- Next.js API routes on the Node runtime
-- solc-js, bundled at 0.8.31 with older versions fetched on demand
-- Neon Postgres for stored reports and rate limits
-
-**AI Services** (Optional)
-- Groq API
-- OpenAI API
-
-**Python (PyMon)**
-- A constrained Python DSL transpiled to Solidity in `app/api/pymon`
-- Covers the shape the bundled templates use, not arbitrary Python
-
-**Testing**
-- `tests/` runs on the Node test runner: engines, report pipeline, workspace, rate limits
-- `test/` runs on Hardhat against the fixture contracts in `contracts/`
-
-**Analytics** (Optional)
-- Neon Postgres for first-party events, PostHog for product analytics
-
-## Monad Network
-
-Monsmith is built for Monad, an EVM-compatible blockchain with 10,000 TPS throughput via parallel execution.
-
-**Network Configuration**
-
-| Network | Chain ID | RPC Endpoint | Explorer |
-|---------|----------|--------------|----------|
-| Testnet | 10143 | https://testnet-rpc.monad.xyz | https://testnet.monadvision.com |
-| Mainnet | 143 | https://rpc.monad.xyz | https://monadvision.com |
-
-**Adding to MetaMask**
-
-The IDE prompts for network addition during deployment. Manual configuration:
-
-- Network Name: Monad Testnet
-- RPC URL: https://testnet-rpc.monad.xyz
-- Chain ID: 10143
-- Currency Symbol: MON
-
-**Parallel Execution**
-
-Monad's architecture executes transactions in parallel rather than sequentially. The Parallel Profiler helps identify:
-- Functions that can execute concurrently
-- Storage dependencies that create conflicts
-- Optimization opportunities for higher throughput
-
-## Project Structure
-
-```
-monad-studio/
-├── app/
-│   ├── api/                      # API routes
-│   │   ├── agent/                # AI generation endpoint
-│   │   ├── analytics/            # Analytics tracking
-│   │   ├── parallel/             # Parallel analysis
-│   │   ├── pymon/                # Python transpiler
-│   │   ├── security/             # Security audit
-│   │   └── templates/            # Contract templates
-│   ├── landing/                  # Landing page
-│   ├── studio/                   # Main IDE
-│   │   └── components/           # IDE components
-│   └── tutorials/                # Tutorial pages
-├── contracts/                    # Contract templates
-│   └── templates/                # Pre-built contracts
-├── lib/                          # Core libraries
-│   ├── contractTemplates.ts      # Template definitions
-│   ├── dependencyGraph.ts        # Graph generation
-│   ├── openzeppelin-bundle.ts    # Bundled OZ contracts
-│   ├── parallelAnalyzer.ts       # Public entry point for lib/parallel
-│   ├── rateLimit.ts              # Per-caller ceiling on the expensive routes
-│   ├── securityAnalyzer.js       # Security scanner
-│   └── store.ts                  # State management
-├── scripts/                      # Deployment scripts
-├── test/                         # Test suite
-├── tutorials/                    # Tutorial content
-├── hardhat.config.cjs            # Hardhat configuration
-└── package.json                  # Dependencies
-```
-
-## Testing
-
-Run the test suite:
-
-```bash
-npm run test:unit           # Node test runner: engines, report pipeline, workspace, limits
-npm test                    # Hardhat: the fixture contracts in contracts/
-npm run test:all            # Both
-npm run test:coverage       # Hardhat with coverage
-```
-
-Two suites, because there are two kinds of thing to test. `tests/` covers the
-TypeScript that makes this product work: the gas model, the EVM tracer, the
-audit pipeline, the workspace store, the rate limiter. `test/` covers the
-Solidity fixtures in `contracts/`, which is what Hardhat is for.
-
-243 passing: 198 in `tests/`, 45 in `test/`.
-
-## Development Commands
-
-```bash
-npm run dev                 # Start development server
-npm run build               # Build for production
-npm run start               # Run production build
-npm run compile             # Compile Solidity contracts
-npm run clean               # Clean build artifacts
-npm run lint                # Run linter
-npm run type-check          # TypeScript validation
-```
-
-## Deployment
-
-### Vercel
-
-```bash
-npm i -g vercel
-vercel
-```
-
-Add environment variables in Vercel dashboard.
-
-### Other Platforms
-
-Compatible with:
-- Netlify (build command: `npm run build`)
-- Railway (GitHub integration)
-- DigitalOcean (Node.js droplet)
-- Self-hosted (Docker or PM2)
-
-Refer to [DEPLOYMENT.md](DEPLOYMENT.md) for platform-specific instructions.
-
-## Contributing
-
-Contributions welcome. To contribute:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make changes with tests
-4. Submit pull request
-
-## Troubleshooting
-
-**Compilation fails**
-- Check OpenZeppelin import paths use `@openzeppelin/contracts`
-- Verify Solidity version 0.8.24
-- Clear cache with `npm run clean`
-
-**Deployment issues**
-- Confirm MetaMask connected to correct network
-- Verify sufficient MON balance for gas
-- Ensure contract compiled successfully
-
-**AI features not working**
-- Check API keys in `.env.local`
-- Verify API key validity and credits
-- Try alternative provider (Groq or OpenAI)
-
-**Python (PyMon)**
-- Needs no separate service: the transpiler runs in `app/api/pymon`
-- It reads the constrained DSL the bundled templates use, so start from one
-  rather than from arbitrary Python
-
-## License
-
-Proprietary. Copyright (c) 2026 Adwait Keshari. All rights reserved.
-
-Monsmith is a hosted product, not an open-source project. No licence is granted
-to copy, modify, redistribute, or run this source, in whole or in part.
-
-## Acknowledgments
-
-Built with:
-- Monad Network
-- OpenZeppelin contracts
-- Hardhat development environment
-- Monaco Editor
-- Groq and OpenAI APIs
-
-## Support
-
-- Documentation: [DEPLOYMENT.md](DEPLOYMENT.md)
-- Issues: [GitHub Issues](https://github.com/Adwaitbytes/monad-studio/issues)
-- Monad: [docs.monad.xyz](https://docs.monad.xyz)
-- Check Solidity version compatibility (0.8.24)
-- Clear Hardhat cache: `npm run clean`
-
-**Deployment Issues:**
-- Verify MetaMask is connected to correct network
-- Ensure wallet has sufficient MON for gas
-- Check contract compiled successfully before deploying
-
-**AI Not Working:**
-- Verify API keys in `.env.local`
-- Check API key has sufficient credits
-- Try alternative AI provider
-
-**PyMon Transpiler:**
-- Runs inside the Next.js app; there is no separate Python process to start
-- It handles the `PySmartContract` DSL, not arbitrary Python
-
----
-
-## License
-
-Proprietary. Copyright (c) 2026 Adwait Keshari. All rights reserved.
-
-Monsmith is a hosted product, not an open-source project. No licence is granted
-to copy, modify, redistribute, or run this source, in whole or in part.
-
----
-
-## Acknowledgments
-
-Monsmith is built with and for the Monad ecosystem:
-
-- **Monad Labs** - For building the fastest EVM-compatible blockchain
-- **OpenZeppelin** - For secure, audited smart contract libraries
-- **Hardhat** - For the best Solidity development experience
-- **Monaco Editor** - For bringing VS Code to the browser
-- **Groq** - For blazing-fast AI inference
-- **Vercel** - For seamless deployment and hosting
-
----
-
-*Ship smart contracts at 10,000 TPS*
+Built by [Adwait Keshari](https://x.com/AdwaitKeshari), solo. GitHub: [Adwaitbytes](https://github.com/Adwaitbytes).
