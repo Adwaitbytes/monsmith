@@ -10,6 +10,7 @@ import {
     type OnchainAttestation,
 } from "@/lib/attest/chain";
 import { reportHash } from "@/lib/attest/hash";
+import { deployedCode, supportsChain } from "@/lib/attest/rpc";
 import { isReportId } from "@/lib/billing/reportPayments";
 import { LIMITS, rateLimit, tooManyRequests } from "@/lib/rateLimit";
 import { loadReport } from "@/lib/report/store";
@@ -26,6 +27,10 @@ import { loadReport } from "@/lib/report/store";
  *
  *   GET /api/verify?source=0x<keccak256 of the source file>
  *   GET /api/verify?chainId=143&address=0x<deployed contract>
+ *
+ * An address that is an EIP-1967 proxy with no attestation of its own is
+ * answered for the implementation it points at, and the reply says so
+ * (proxyOf), since that is the code a call would actually run.
  */
 
 export const runtime = "nodejs";
@@ -57,6 +62,9 @@ export async function GET(req: Request) {
     const chainId = Number(query.get("chainId") ?? "143");
 
     let attestation: OnchainAttestation | null;
+    // Set when the address asked about is a proxy and the answer is about the
+    // code it currently points at, which is what a caller would actually run.
+    let implementation: Address | null = null;
     try {
         if (source !== null) {
             if (!/^0x[0-9a-fA-F]{64}$/.test(source)) return reply({ error: "source must be a 32-byte hex hash." }, 400);
@@ -66,6 +74,13 @@ export async function GET(req: Request) {
                 return reply({ error: "Give a valid chainId and address." }, 400);
             }
             attestation = await attestationOfDeployment(config, chainId, address as Address);
+            if (attestation === null && supportsChain(chainId)) {
+                const code = await deployedCode(chainId, address as Address);
+                if (code.implementation !== null) {
+                    implementation = code.implementation;
+                    attestation = await attestationOfDeployment(config, chainId, code.implementation);
+                }
+            }
         } else {
             return reply({ error: "Ask about a source hash (?source=) or a deployed contract (?chainId=&address=)." }, 400);
         }
@@ -75,11 +90,13 @@ export async function GET(req: Request) {
     }
 
     const agent = { agentId: config.agentId.toString(), registry: AGENT_REGISTRY_ID };
+    const proxy = implementation === null ? {} : { proxyOf: implementation };
     if (attestation === null) {
-        return reply({ attested: false, agent, contract: config.address });
+        return reply({ attested: false, agent, contract: config.address, ...proxy });
     }
     return reply({
         attested: true,
+        ...proxy,
         agent,
         contract: config.address,
         contractUrl: `${EXPLORER}/address/${config.address}`,

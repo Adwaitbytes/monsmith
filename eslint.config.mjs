@@ -16,6 +16,9 @@ const eslintConfig = defineConfig([
     "artifacts/**",
     "cache/**",
     "typechain-types/**",
+    // Separate projects with their own toolchains and checks.
+    "indexer/**",
+    "cre/**",
   ]),
   {
     // Hardhat's config, deploy scripts and Mocha suites run under CommonJS by

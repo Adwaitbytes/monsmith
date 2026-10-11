@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { keccak256, toBytes, isAddress } from 'viem';
 import { ArrowRight, BadgeCheck, Check, Copy, FileCode2, Loader2, SearchX, ShieldCheck } from 'lucide-react';
 
+import { LedgerFeed } from './LedgerFeed';
+
 /**
  * Verify a contract against Monsmith's onchain record.
  *
@@ -37,6 +39,8 @@ interface Verdict {
         reportURI: string;
     };
     reportMatches?: boolean | null;
+    /** The implementation the answer is about, when the address asked about is a proxy. */
+    proxyOf?: string;
     error?: string;
 }
 
@@ -224,6 +228,15 @@ export function VerifyClient() {
                                 <BadgeCheck size={14} className="shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
                                 Attested by Monsmith, ERC-8004 agent #{verdict.agent.agentId}, on {new Date(attestation.attestedAt).toUTCString()}
                             </li>
+                            {verdict.proxyOf !== undefined && (
+                                <li className="flex items-start gap-2 text-text-secondary">
+                                    <ArrowRight size={14} className="mt-0.5 shrink-0 text-text-muted" aria-hidden />
+                                    <span>
+                                        This address is a proxy. The audit is of the code it points at now,{' '}
+                                        <span className="font-mono text-[12px]">{verdict.proxyOf}</span>. Its owner can change that.
+                                    </span>
+                                </li>
+                            )}
                             {verdict.reportMatches === true && (
                                 <li className="flex items-center gap-2 text-text-secondary">
                                     <Check size={14} className="shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
@@ -250,6 +263,8 @@ export function VerifyClient() {
                     </section>
                 )}
             </div>
+
+            <LedgerFeed />
 
             <section className="mt-12 rounded-2xl border border-border-subtle bg-surface-sunken p-5">
                 <h2 className="text-[14px] font-semibold">For agents and wallets</h2>

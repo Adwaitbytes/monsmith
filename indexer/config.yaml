@@ -1,0 +1,20 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+#
+# Monsmith's attestation ledger. Every audit Monsmith publishes is an Attested
+# event on Monad mainnet; this indexes them through HyperSync from the block
+# the contract was deployed in, so the full history is one query away. The
+# public Monad RPC answers eth_getLogs over at most 100 blocks at a time, and
+# Monad makes about 216,000 blocks a day.
+name: monsmith-attestations
+disable_default_cross_chain: true
+chains:
+  - id: 143
+    # The deployment of MonsmithAttestations, tx 0x51d10ff7...02a2.
+    start_block: 112388073
+    contracts:
+      - name: MonsmithAttestations
+        abi_file_path: ./abis/MonsmithAttestations.json
+        address:
+          - "0xfa57831Fcb96Effc1E36d41e44Cd0fb1aC16de77"
+        events:
+          - event: Attested(bytes32 indexed sourceHash, uint256 indexed chainId, address indexed target, uint8 score, uint16 critical, uint16 high, bytes32 reportHash, string reportURI)

@@ -3,6 +3,7 @@ import type { Address, Hex } from "viem";
 
 import { attestConfig, EXPLORER, writeAttestation } from "@/lib/attest/chain";
 import { reportHash } from "@/lib/attest/hash";
+import { deployedCode, supportsChain } from "@/lib/attest/rpc";
 import { getApiViewer } from "@/lib/auth/server";
 import { isReportId } from "@/lib/billing/reportPayments";
 import { LIMITS, rateLimit, tooManyRequests } from "@/lib/rateLimit";
@@ -81,7 +82,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     const origin = report.origin;
-    const deployment = origin.kind === "address" ? { chainId: origin.chainId, target: origin.address as Address } : null;
+    let deployment = origin.kind === "address" ? { chainId: origin.chainId, target: origin.address as Address } : null;
+    let boundToSource = false;
+    if (deployment !== null && supportsChain(deployment.chainId)) {
+        const { chainId, target } = deployment;
+        try {
+            const code = await deployedCode(chainId, target);
+            if (!code.hasCode) {
+                return NextResponse.json(
+                    { success: false, error: "There is no contract at this address any more, so there is nothing to attest it against." },
+                    { status: 409 },
+                );
+            }
+            // A proxy can be repointed at other code, so its score is
+            // published against the audited source only, never the address.
+            if (code.implementation !== null) {
+                deployment = null;
+                boundToSource = true;
+            }
+        } catch (error) {
+            console.error(`Attest: checking the code at ${target} on chain ${chainId} failed:`, error);
+            return NextResponse.json({ success: false, error: "Could not read the deployed contract. Try again in a moment." }, { status: 502 });
+        }
+    }
     const hash = reportHash(report);
     const uri = `${siteUrl()}/report/${id}`;
 
@@ -111,5 +134,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         );
     }
 
-    return NextResponse.json({ success: true, attestations: (await attestationsFor(id)).map(shape) });
+    return NextResponse.json({ success: true, boundToSource, attestations: (await attestationsFor(id)).map(shape) });
 }

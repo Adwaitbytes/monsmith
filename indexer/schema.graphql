@@ -1,0 +1,51 @@
+# One row per Attested event, in the order Monad recorded them. An attestation
+# for a source that was already attested supersedes the earlier one onchain,
+# so history lives here and nowhere else.
+type Attestation {
+  id: ID!
+  sourceHash: String! @index
+  auditedChainId: BigInt!
+  # The deployed contract the audit is tied to, or the zero address for source
+  # that was audited before it was deployed.
+  target: String! @index
+  score: Int!
+  critical: Int!
+  high: Int!
+  reportHash: String!
+  reportURI: String!
+  # True when this source had been attested before, so the score is a re-audit.
+  reattested: Boolean!
+  blockNumber: Int!
+  timestamp: Int! @index
+  txHash: String!
+}
+
+# The latest word on each audited source.
+type AuditedSource {
+  id: ID!
+  latest: Attestation!
+  firstScore: Int!
+  latestScore: Int!
+  attestations: Int!
+}
+
+# The latest word on each deployed contract, which is what a wallet asks about.
+type Deployment {
+  id: ID!
+  auditedChainId: BigInt!
+  target: String!
+  latest: Attestation!
+  sourceHash: String!
+}
+
+# Running totals across everything the agent has attested.
+type AgentStats {
+  id: ID!
+  attestations: Int!
+  sources: Int!
+  deployments: Int!
+  scoreSum: Int!
+  criticalFound: Int!
+  highFound: Int!
+  lastAttestedAt: Int!
+}
