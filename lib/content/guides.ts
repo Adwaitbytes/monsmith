@@ -716,6 +716,52 @@ contract Guestbook {
   },
 
   {
+    slug: "kimi-k3-writes-the-threat-model",
+    title: "How Kimi K3 writes the threat model behind every Monsmith audit",
+    seoTitle: "Kimi K3 Writes Monsmith's Threat Models",
+    description:
+      "Monsmith audits a contract against a threat model derived from that contract's own assets and invariants. Kimi K3 writes it. Here is why that pass matters most, what Kimi produced for The DAO, and how it is kept fast.",
+    keywords: ["Kimi K3", "Kimi smart contract", "Moonshot AI audit", "AI threat model", "smart contract threat modeling", "Monsmith Kimi"],
+    category: "Security",
+    level: "Advanced",
+    published: "2026-10-11",
+    updated: "2026-10-11",
+    readMinutes: 5,
+    terms: ["audit", "reentrancy", "access-control"],
+    related: ["qwen-3-8-max-cross-examines-audit-findings", "ai-smart-contract-audit"],
+    blocks: [
+      { type: "p", text: "Most automated audits ask every contract the same questions: is there reentrancy, is there an unchecked call, is there tx.origin. A vault, a governor and a token get the same checklist. Monsmith does not start from a checklist. It starts by asking what this contract holds, who can touch it, and what must stay true, and then derives what an attacker would try. That threat model decides what the rest of the audit looks for, and Kimi K3 writes it." },
+      { type: "h2", text: "Where Kimi sits" },
+      { type: "ol", items: [
+        "Describe: what the contract does, its assets, actors, invariants and external calls. Fast models.",
+        "Threat model: for each asset and invariant, how an attacker would break it in this contract. Kimi K3.",
+        "Hunt: concrete attacks tied to lines, tested against Kimi's threats. Claude Sonnet 5.5.",
+        "Review: every finding cross-examined, rejected only with a cited line. Qwen 3.8 Max.",
+      ] },
+      { type: "p", text: "Three model families, each doing the step it is best at, and none checking its own work. If the threat model misses an angle, the hunt is less likely to look there, so this is the pass where a model that reasons about intent before mechanics earns its place." },
+      { type: "h2", text: "What it produced for The DAO" },
+      { type: "p", text: "The DAO is the start contract in Monsmith's studio. In a run on 11 October 2026, Kimi K3 derived six threats from its description:" },
+      { type: "ol", items: [
+        "Recursive splitDAO re-entry drains the entire ether pool.",
+        "Re-entrant reward payout double-counts or inflates reward claims.",
+        "Curator hijack via tx.origin phishing.",
+        "Reward dilution via just-in-time token purchase.",
+        "Integer overflow breaks minting 1:1 and totalSupply invariants.",
+        "Blocked or griefed splitDAO via a failing recipient.",
+      ] },
+      { type: "p", text: "The first is the 2016 exploit. The second and fourth are less famous and more interesting: a second reentrancy through the reward path, and buying tokens just before rewards arrive to claim rewards earned by others. The hunt turned these into six line-cited findings, two critical and two high, and Qwen 3.8 Max upheld all six." },
+      { type: "h2", text: "Kept fast" },
+      { type: "p", text: "Kimi K3 reasons before it answers, so it runs with a low reasoning effort and a 25 second limit. If it is slow or unavailable, the fast models write the threat model instead and the report does not credit Kimi. The report's threat model section says which model wrote it, and so does the downloaded Markdown." },
+      { type: "h2", text: "Why it matters onchain" },
+      { type: "p", text: "When a report is published to Monad, its hash goes onchain under Monsmith's ERC-8004 identity. The threat model and the record of who wrote it are part of that hashed report, so the reasoning behind a score cannot be changed after it is published." },
+    ],
+    faq: [
+      { q: "What does Kimi do in Monsmith?", a: "Kimi K3 writes the threat model for every audited contract: what an attacker would go after, derived from that contract's own assets, actors and invariants. The vulnerability hunt and the review are both built on it." },
+      { q: "Which models does a Monsmith audit use?", a: "Fast models describe the contract, Kimi K3 writes the threat model, Claude Sonnet 5.5 hunts for concrete attacks, and Qwen 3.8 Max cross-examines every finding. The report names the models that did the threat model and the review." },
+    ],
+  },
+
+  {
     slug: "qwen-3-8-max-cross-examines-audit-findings",
     title: "Why Monsmith has Qwen 3.8 Max cross-examine every finding before it reaches a report",
     seoTitle: "Qwen 3.8 Max as the Second Auditor in Monsmith",
