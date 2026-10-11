@@ -879,6 +879,7 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
     const auditNotes = new Set<string>();
     const descriptions = new Map<string, string>();
     const verifications = new Map<string, NonNullable<ContractReport['verification']>>();
+    const threatAuthors = new Map<string, string>();
     const threatModels = new Map<
         string,
         Array<{ title: string; target: string; approach: string }>
@@ -986,6 +987,7 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
             for (const note of audit.notes) auditNotes.add(note);
             if (audit.description !== null) descriptions.set(id, audit.description.purpose);
             if (audit.verification !== undefined) verifications.set(id, audit.verification);
+            if (audit.threatModelBy !== undefined) threatAuthors.set(id, audit.threatModelBy);
             if (audit.threats.length > 0) {
                 threatModels.set(
                     id,
@@ -1012,6 +1014,7 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
             ...(purpose !== undefined ? { purpose } : {}),
             ...(threatModels.has(id) ? { threats: threatModels.get(id) } : {}),
             ...(verifications.has(id) ? { verification: verifications.get(id) } : {}),
+            ...(threatAuthors.has(id) ? { threatModelBy: threatAuthors.get(id) } : {}),
             health: healthFor(findings, sections.parallel),
             findings,
             counts: contractCounts,

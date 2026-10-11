@@ -105,6 +105,8 @@ export interface DeepAudit {
      * general chain, so a report never credits a model that did not do the work.
      */
     verification?: Verification;
+    /** The named model that wrote the threat model, when one did. */
+    threatModelBy?: string;
 }
 
 export interface Verification {
@@ -269,9 +271,22 @@ function auditModels(offset: number): string[] {
  * get the audit models. Splitting them is most of what keeps a strong audit
  * near half a minute instead of nearly two.
  */
-type Tier = "fast" | "strong";
+type Tier = "fast" | "threat" | "strong";
 
-const REASONING_MODELS = /^(deepseek\/|qwen\/qwen3\.8-max)/;
+/*
+  The model that writes the threat model: from the contract's description, what
+  an attacker would go after and how. Kimi K3 reasons about intent before
+  mechanics, which is the order this pass needs. It runs on a short leash: when
+  it is slow or down, the fast chain takes over rather than the audit waiting.
+  THREAT_MODEL overrides.
+*/
+const THREAT_MODELS = (process.env.THREAT_MODEL ?? "moonshotai/kimi-k3")
+    .split(",")
+    .map((model) => model.trim())
+    .filter((model) => model.length > 0);
+const THREAT_TIMEOUT_MS = 25_000;
+
+const REASONING_MODELS = /^(deepseek\/|qwen\/qwen3\.8-max|moonshotai\/kimi)/;
 
 /** Long enough for a strong model to write a full set of findings, short enough to fall back in time. */
 const STRONG_TIMEOUT_MS = 70_000;
@@ -299,6 +314,13 @@ async function askAnswered<T>(
         const answer =
             tier === "fast"
                 ? { text: await callAI(prompt, system, undefined, deadline, modelOffset, { temperature: 0.15, maxTokens: 4096 }), model: null }
+                : tier === "threat"
+                ? await callPreferredAIAnswered(THREAT_MODELS, prompt, system, deadline, {
+                      temperature: 0.15,
+                      modelTimeoutMs: THREAT_TIMEOUT_MS,
+                      maxTokens: 8_000,
+                      reasoningEffort: "low",
+                  })
                 : await callPreferredAIAnswered(models, prompt, system, deadline, {
                       temperature: 0.15,
                       // The chat default of twenty seconds cut detailed findings
@@ -450,11 +472,12 @@ generic vulnerability categories. "Reentrancy" is not a threat; "an attacker
 re-enters withdraw through the ETH transfer to drain the pool before their
 balance is decremented" is. Respond with JSON only.`;
 
+/** The threats, and the model that wrote them when it was a named threat model. */
 async function deriveThreats(
     description: ContractDescription,
     source: string,
     deadline: number,
-): Promise<Threat[]> {
+): Promise<{ threats: Threat[]; model: string | null }> {
     const prompt = `Contract purpose: ${description.purpose}
 Assets: ${description.assets.join("; ")}
 Actors: ${description.actors.map((a) => `${a.name}${a.trusted ? " (trusted)" : ""}: ${a.canDo}`).join("; ")}
@@ -467,10 +490,10 @@ For each invariant and each asset, ask what an attacker could do to break it,
 given the actors and the external interactions above. Return JSON:
 {"threats":[{"id":"t1","title":"short","target":"which invariant or asset","approach":"concretely how, in this contract"}]}`;
 
-    const result = await ask<{ threats?: Threat[] }>(THREAT_SYSTEM, prompt, deadline, 0, "fast");
-    if (result === null || !Array.isArray(result.threats)) return [];
+    const { parsed: result, model } = await askAnswered<{ threats?: Threat[] }>(THREAT_SYSTEM, prompt, deadline, THREAT_MODELS, "threat");
+    if (result === null || !Array.isArray(result.threats)) return { threats: [], model: null };
 
-    return result.threats
+    const threats = result.threats
         .filter((threat) => threat !== null && typeof threat === "object")
         .map((threat, index) => ({
             id: String(threat.id ?? `t${index + 1}`),
@@ -479,6 +502,7 @@ given the actors and the external interactions above. Return JSON:
             approach: String(threat.approach ?? ""),
         }))
         .slice(0, 20);
+    return { threats, model: threats.length === 0 ? null : model };
 }
 
 // ============= PASS 3: WHERE IT ACTUALLY BREAKS =============
@@ -862,7 +886,7 @@ export async function deepAudit(
         };
     }
 
-    const threats = await deriveThreats(description, source, deadline);
+    const { threats, model: threatModelBy } = await deriveThreats(description, source, deadline);
     if (threats.length === 0) notes.push("No threat model was produced, so findings are unguided.");
 
     const candidates = await findVulnerabilities(description, threats, source, deadline);
@@ -899,6 +923,7 @@ export async function deepAudit(
         complete: true,
         notes,
         ...(reviewer !== null ? { verification: { model: reviewer, upheld: kept.length, rejected: rejected.length } } : {}),
+        ...(threatModelBy !== null ? { threatModelBy } : {}),
     };
 }
 
@@ -1030,7 +1055,7 @@ export async function fixReview(
                 threats =
                     input.threats !== undefined && input.threats.length > 0
                         ? input.threats.map((threat, index) => ({ id: `T${index + 1}`, ...threat }))
-                        : await deriveThreats(description, source, deadline);
+                        : (await deriveThreats(description, source, deadline)).threats;
                 const changed = new Set(input.changedLines);
                 const nearChange = (line: number | null): boolean => {
                     if (line === null) return false;

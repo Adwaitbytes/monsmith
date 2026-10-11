@@ -230,6 +230,8 @@ export interface ContractReport {
      * happen.
      */
     verification?: { model: string; upheld: number; rejected: number };
+    /** The model that wrote `threats`, when it was the named threat model. */
+    threatModelBy?: string;
     health: Health | null;
     findings: Finding[];
     counts: SeverityCounts;

@@ -22,7 +22,7 @@ import type {
     SkipReason,
 } from '@/lib/report/types';
 import { SECTION_KINDS, SECTION_LABELS } from '@/lib/report/types';
-import { verificationSentence, verificationSummary } from '@/lib/report/verification';
+import { modelName, verificationSentence, verificationSummary } from '@/lib/report/verification';
 
 import { FindingCard } from './FindingCard';
 import {
@@ -782,6 +782,9 @@ function ThreatModel({ report }: { report: RepoReport }) {
         (sum, contract) => sum + asList(contract.threats).length,
         0,
     );
+    const authors = [
+        ...new Set(withThreats.flatMap((contract) => (contract.threatModelBy === undefined ? [] : [modelName(contract.threatModelBy)]))),
+    ];
 
     return (
         <section className="border-b border-border-subtle px-5 py-4">
@@ -791,7 +794,7 @@ function ThreatModel({ report }: { report: RepoReport }) {
                         Threat model
                     </span>
                     <span className="flex items-center gap-1.5 text-[11px] text-text-muted">
-                        {total} tested
+                        {total} tested{authors.length > 0 ? ` · by ${authors.join(' and ')}` : ''}
                         <ChevronDown
                             size={13}
                             className="transition-transform group-open:rotate-180 motion-reduce:transition-none"

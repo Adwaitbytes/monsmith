@@ -128,6 +128,12 @@ function contractBlock(contract: ContractReport): string[] {
     const lines = [`## ${contract.name}`, '', `\`${contract.path}\``, ''];
     if (contract.health !== null) lines.push(`**Score: ${contract.health.score} / 100 (${contract.health.grade})**`, '');
     if (contract.purpose !== undefined) lines.push(plain(contract.purpose), '');
+    const threats = Array.isArray(contract.threats) ? contract.threats : [];
+    if (threats.length > 0) {
+        lines.push(`### Threat model${contract.threatModelBy === undefined ? '' : `, written by ${modelName(contract.threatModelBy)}`}`, '');
+        for (const threat of threats) lines.push(`- **${plain(threat.title)}**: ${plain(threat.approach)}`);
+        lines.push('');
+    }
     if (contract.verification !== undefined) {
         const { model, upheld, rejected } = contract.verification;
         lines.push(`Findings cross-examined by ${modelName(model)}: ${upheld} upheld, ${rejected} rejected.`, '');

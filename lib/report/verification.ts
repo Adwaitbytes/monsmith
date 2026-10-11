@@ -12,6 +12,7 @@ const NAMES: ReadonlyArray<readonly [RegExp, string]> = [
     [/^qwen\/qwen3\.8-max/, 'Qwen 3.8 Max'],
     [/^anthropic\/claude-sonnet-5\.5/, 'Claude Sonnet 5.5'],
     [/^deepseek\/deepseek-v4\.1-flash/, 'DeepSeek V4.1 Flash'],
+    [/^moonshotai\/kimi-k3/, 'Kimi K3'],
 ];
 
 export function modelName(id: string): string {

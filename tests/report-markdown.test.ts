@@ -112,3 +112,20 @@ test("no long dashes reach the document", () => {
 test("the file name is safe and dated", () => {
     assert.equal(reportFileName(report(ALL), "md"), "monsmith-uniswap-v2-core-2026-10-01.md");
 });
+
+test("the download names who wrote the threat model and who checked the findings", () => {
+    const base = report([finding("a", "high")]);
+    const credited: RepoReport = {
+        ...base,
+        contracts: base.contracts.map((contract) => ({
+            ...contract,
+            threats: [{ title: "Drain the pool", target: "deposits", approach: "Re-enter withdraw before the balance is cleared" }],
+            threatModelBy: "moonshotai/kimi-k3",
+            verification: { model: "qwen/qwen3.8-max-0902", upheld: 1, rejected: 2 },
+        })),
+    };
+    const markdown = reportToMarkdown(credited);
+    assert.match(markdown, /### Threat model, written by Kimi K3/);
+    assert.match(markdown, /\*\*Drain the pool\*\*: Re-enter withdraw before the balance is cleared/);
+    assert.match(markdown, /Findings cross-examined by Qwen 3\.8 Max: 1 upheld, 2 rejected\./);
+});
