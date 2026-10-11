@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { SignInButton } from '@clerk/nextjs';
+import { useAuthState } from '@/lib/auth/client';
 import { Github, Loader2, Lock, Search, X } from 'lucide-react';
 
 import type { RepoSummary } from '@/lib/github/source';
@@ -89,6 +89,7 @@ function PickerBody({
     onPick,
     onPasteInstead,
 }: RepoPickerProps) {
+    const { openSignIn } = useAuthState();
     const [query, setQuery] = useState('');
     const [active, setActive] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -245,11 +246,9 @@ function PickerBody({
                                               the page, so the editor they have
                                               open survives the detour.
                                             */
-                                            <SignInButton mode="modal">
-                                                <button className="rounded-lg bg-accent px-4 py-2 text-[12.5px] font-semibold text-white outline-none ring-accent-line transition-opacity hover:opacity-90 focus-visible:ring-2">
+                                                <button type="button" onClick={openSignIn} className="rounded-lg bg-accent px-4 py-2 text-[12.5px] font-semibold text-white outline-none ring-accent-line transition-opacity hover:opacity-90 focus-visible:ring-2">
                                                     Sign in to connect GitHub
                                                 </button>
-                                            </SignInButton>
                                         ) : !appAvailable ? (
                                             <p className="text-[12.5px] text-text-muted">
                                                 GitHub is not set up on this deployment.

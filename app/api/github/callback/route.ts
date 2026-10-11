@@ -13,7 +13,7 @@ import { removeInstallation, saveInstallation } from "@/lib/report/store";
  *
  * This is the only point where an outside origin hands us an identifier we then
  * store against a user, so it is the only point where CSRF matters. The state
- * issued by `/api/github/status` binds the install to one Clerk user id and one
+ * issued by `/api/github/status` binds the install to one user id and one
  * fifteen minute window, and it is checked before anything is written.
  *
  * Every outcome is a redirect back into the studio with a `github` query

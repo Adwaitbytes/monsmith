@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useAuthState } from '@/lib/auth/client';
 
 export interface OptimizeAllowance {
     paywall: boolean;
@@ -18,7 +18,7 @@ function isAllowance(value: unknown): value is OptimizeAllowance {
 
 /** The viewer's free optimizations, refreshed on sign-in and on demand. */
 export function useOptimizeAllowance(): [OptimizeAllowance | null, () => void] {
-    const { userId, isLoaded } = useAuth();
+    const { userId, isLoaded } = useAuthState();
     const [allowance, setAllowance] = useState<OptimizeAllowance | null>(null);
     const [tick, setTick] = useState(0);
 

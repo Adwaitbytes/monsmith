@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useAuth } from '@clerk/nextjs';
+import { useAuthState } from '@/lib/auth/client';
 
 import { resetVisitorId } from '@/lib/visitor';
 import { clearWorkspace } from '@/lib/workspace';
@@ -20,11 +20,11 @@ import { clearWorkspace } from '@/lib/workspace';
  * come back when it signs in; this clears what this browser is holding.
  *
  * Only a real transition counts. A visitor who was never signed in is not
- * signing out, and wiping their files because Clerk resolved to "nobody" would
+ * signing out, and wiping their files because sign-in resolved to "nobody" would
  * be the more destructive bug.
  */
 export function SessionReset() {
-    const { isLoaded, userId } = useAuth();
+    const { isLoaded, userId } = useAuthState();
     const signedInAs = useRef<string | null>(null);
 
     useEffect(() => {

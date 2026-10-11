@@ -2,9 +2,9 @@ import React from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { clerkClient } from "@clerk/nextjs/server";
 
 import { can, TIER_LABELS, TIER_LIMITS, parseRole, parseTier } from "@/lib/auth/roles";
+import { emailOf, privy } from "@/lib/auth/privy";
 import { getViewer } from "@/lib/auth/server";
 
 import { MonsmithMark } from "../landing/MonsmithMark";
@@ -39,27 +39,26 @@ interface AccountRow {
 
 async function loadAccounts(): Promise<{ rows: AccountRow[]; error: string | null }> {
     try {
-        const client = await clerkClient();
-        const { data } = await client.users.getUserList({ limit: 100, orderBy: "-created_at" });
-
-        const rows = data.map((user) => {
-            const metadata = user.publicMetadata as { role?: unknown; tier?: unknown };
-            return {
+        const rows: AccountRow[] = [];
+        for await (const user of privy().users().list({ limit: 100 })) {
+            const metadata = (user.custom_metadata ?? {}) as { role?: unknown; tier?: unknown };
+            rows.push({
                 id: user.id,
-                email: user.primaryEmailAddress?.emailAddress ?? "no email",
-                name: [user.firstName, user.lastName].filter(Boolean).join(" ") || "—",
+                email: emailOf(user) ?? "no email",
+                name: "—",
                 role: parseRole(metadata.role),
                 tier: parseTier(metadata.tier),
-                createdAt: user.createdAt,
-                lastActiveAt: user.lastActiveAt,
-            };
-        });
-
+                createdAt: user.created_at * 1000,
+                lastActiveAt: null,
+            });
+            if (rows.length >= 100) break;
+        }
+        rows.sort((a, b) => b.createdAt - a.createdAt);
         return { rows, error: null };
     } catch (error) {
         return {
             rows: [],
-            error: error instanceof Error ? error.message : "Could not reach Clerk.",
+            error: error instanceof Error ? error.message : "Could not reach Privy.",
         };
     }
 }
@@ -216,7 +215,7 @@ export default async function AdminPage() {
                 </div>
 
                 <p className="mt-6 max-w-3xl text-[12.5px] leading-relaxed text-text-muted">
-                    Admin rights come from the <span className="font-mono">CLERK_ADMIN_EMAILS</span>{" "}
+                    Admin rights come from the <span className="font-mono">ADMIN_EMAILS</span>{" "}
                     environment variable, which is read only on the server. An account cannot be made
                     admin by editing its own profile metadata, and adding an admin does not require a
                     deploy.

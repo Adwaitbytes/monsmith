@@ -2,7 +2,7 @@
 
 import React, { useSyncExternalStore } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { SignInButton, useAuth } from '@clerk/nextjs';
+import { useAuthState } from '@/lib/auth/client';
 import { ArrowRight, Boxes, Check, FilePlus2, Github, Loader2, Play } from 'lucide-react';
 
 import { formatPrice, freeBundlePhrase, type Plan } from '@/lib/billing/offer';
@@ -61,7 +61,7 @@ const LINK_CLASS =
     'inline-flex items-center gap-1.5 rounded-md px-1 py-0.5 text-[12.5px] text-text-secondary outline-none ring-accent-line transition-colors hover:text-text-primary focus-visible:ring-2';
 
 function Offer({ plan }: { plan: Plan }) {
-    const { isSignedIn } = useAuth();
+    const { isSignedIn, openSignIn } = useAuthState();
     const price = plan.price === null ? null : formatPrice(plan.price);
     const free = plan.freeReports;
     const bundle = freeBundlePhrase(plan);
@@ -145,14 +145,13 @@ function Offer({ plan }: { plan: Plan }) {
                         Every report shows its score, severity counts and finding titles for free.
                     </p>
                     {free > 0 && isSignedIn === false && (
-                        <SignInButton mode="modal">
                             <button
                                 type="button"
+                                onClick={openSignIn}
                                 className="shrink-0 rounded-lg border border-border-strong bg-surface-raised px-3.5 py-2 text-[12.5px] font-medium text-text-primary outline-none ring-accent-line transition-colors hover:border-accent-line hover:text-accent focus-visible:ring-2"
                             >
                                 Sign in free
                             </button>
-                        </SignInButton>
                     )}
                 </div>
             )}

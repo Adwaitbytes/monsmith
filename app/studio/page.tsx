@@ -103,7 +103,7 @@ import { useShortcuts } from "./useShortcuts";
 import { useReportStream } from "@/lib/report/useReportStream";
 import { useGitHub, importFailed } from "@/lib/github/useGitHub";
 import type { ContractReport, ReportOrigin, RepoReport } from "@/lib/report/types";
-import { useClerk } from "@clerk/nextjs";
+import { useAuthState } from "@/lib/auth/client";
 import { OptimizeDialog } from "./components/optimize/OptimizeDialog";
 import { useOptimize } from "@/lib/optimize/useOptimize";
 import { useOptimizeAllowance } from "@/lib/optimize/useOptimizeAllowance";
@@ -1832,7 +1832,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
     at. The whole workspace goes up so the optimized file compiles against the
     same imports the report used.
   */
-  const clerk = useClerk();
+  const { openSignIn } = useAuthState();
   const optimizer = useOptimize();
   const [optimizeAllowance, refreshOptimizeAllowance] = useOptimizeAllowance();
   const [optimizeTarget, setOptimizeTarget] = useState<ContractReport | null>(null);
@@ -2979,7 +2979,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
           if (report.state.status === "ready" && optimizeTarget !== null) startOptimize(report.state.report, optimizeTarget);
         }}
         onApply={(result) => void applyOptimization(result)}
-        onSignIn={() => clerk.openSignIn()}
+        onSignIn={openSignIn}
         onUnlock={() => {
           closeOptimize();
           reportUnlock.unlock();

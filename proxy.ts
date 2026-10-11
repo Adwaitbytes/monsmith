@@ -1,4 +1,6 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse, type NextRequest } from "next/server";
+
+import { SESSION_COOKIE } from "@/lib/auth/session";
 
 /**
  * Request proxy.
@@ -10,21 +12,22 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
  * has never heard of us, and the studio is worth more as something you can try
  * than as something you must sign up for. Signing in adds capability; it is
  * never the price of entry.
+ *
+ * This only turns away requests to the admin surface that carry no session at
+ * all. Whether the session is valid, and whether it belongs to an admin, is
+ * decided by the page and route themselves, next to the data they guard.
  */
 
-const isProtected = createRouteMatcher(["/admin(.*)", "/api/admin(.*)"]);
-
-export default clerkMiddleware(async (auth, request) => {
-    if (isProtected(request)) {
-        await auth.protect();
+export function proxy(request: NextRequest) {
+    if (request.cookies.get(SESSION_COOKIE) === undefined) {
+        if (request.nextUrl.pathname.startsWith("/api/")) {
+            return NextResponse.json({ error: "Sign in first." }, { status: 401 });
+        }
+        return NextResponse.redirect(new URL("/", request.url));
     }
-});
+    return NextResponse.next();
+}
 
 export const config = {
-    matcher: [
-        // Everything except static assets and Next internals.
-        "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest|mp4)).*)",
-        "/(api|trpc)(.*)",
-        "/__clerk/:path*",
-    ],
+    matcher: ["/admin/:path*", "/api/admin/:path*"],
 };

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { clerkClient } from "@clerk/nextjs/server";
 
 import { can, parseTier } from "@/lib/auth/roles";
+import { privy } from "@/lib/auth/privy";
 import { getViewer } from "@/lib/auth/server";
 
 /**
@@ -35,11 +35,9 @@ export async function POST(request: Request) {
     const tier = parseTier(body.tier);
 
     try {
-        const client = await clerkClient();
-        const user = await client.users.getUser(body.userId);
-        await client.users.updateUser(body.userId, {
-            publicMetadata: { ...user.publicMetadata, tier },
-        });
+        const users = privy().users();
+        const user = await users._get(body.userId);
+        await users.setCustomMetadata(body.userId, { custom_metadata: { ...(user.custom_metadata ?? {}), tier } });
         return NextResponse.json({ success: true, tier });
     } catch (error) {
         return NextResponse.json(

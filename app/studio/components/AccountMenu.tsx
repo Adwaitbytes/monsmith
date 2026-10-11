@@ -21,7 +21,7 @@ import { AuthControls } from '../../AuthControls';
  * back. It is drawn with the caution colour only once selected. Painting the
  * normal case in warning colours would make the warning mean nothing.
  *
- * Signed-out state is Clerk's own controls rather than a second sign-in button
+ * Signed-out state is the shared sign-in control rather than a second button
  * invented here, so there is one place in the app that knows what signing in
  * looks like.
  */
@@ -55,7 +55,7 @@ export interface AccountMenuProps {
 const EASE: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 /** Marks the elements the menu's arrow keys walk between. Explicit opt-in, so
- *  focusable nodes inside Clerk's own controls do not join the rotation. */
+ *  focusable nodes inside the account controls do not join the rotation. */
 const STOP = 'data-menu-stop';
 
 interface SegmentOption<T extends string> {

@@ -18,7 +18,6 @@
     "test:unit": "node --import tsx --import ./tests/register.mjs --test tests/*.test.ts"
   },
   "dependencies": {
-    "@clerk/nextjs": "^7.9.1",
     "@dynamic-labs-wallet/node": "^1.1.34",
     "@dynamic-labs-wallet/node-evm": "^1.1.34",
     "@ethereumjs/common": "^10.1.3",
@@ -28,6 +27,8 @@
     "@monaco-editor/react": "^4.7.0",
     "@neondatabase/serverless": "^1.1.0",
     "@openzeppelin/contracts": "^5.4.0",
+    "@privy-io/node": "^0.35.0",
+    "@privy-io/react-auth": "^3.48.1",
     "@react-three/fiber": "^9.7.0",
     "@types/d3": "^7.4.3",
     "dodopayments": "^2.52.0",

@@ -14,11 +14,6 @@ export interface EthereumProvider {
   isMetaMask?: boolean;
 }
 
-declare global {
-  interface Window {
-    ethereum?: EthereumProvider;
-  }
-}
 
 /** Provider error shape used by MetaMask (e.g. 4902 = chain not added). */
 export interface ProviderRpcError extends Error {
@@ -29,8 +24,29 @@ export function isProviderRpcError(error: unknown): error is ProviderRpcError {
   return error instanceof Error && typeof (error as ProviderRpcError).code === "number";
 }
 
-/** Returns the injected wallet provider, or null when no wallet is installed. */
+let embeddedProvider: EthereumProvider | null = null;
+
+/**
+ * The signed-in user's Privy embedded wallet, registered by the auth bridge.
+ * It is what lets someone who signed in with Google deploy and sign without
+ * installing a browser wallet; null when signed out.
+ */
+export function setEmbeddedProvider(provider: EthereumProvider | null): void {
+  embeddedProvider = provider;
+}
+
+export function hasEmbeddedProvider(): boolean {
+  return embeddedProvider !== null;
+}
+
+/**
+ * The wallet to sign with: an installed browser wallet when there is one,
+ * since a person who installed one chose it, otherwise the embedded wallet
+ * that came with their account. Null when there is neither.
+ */
 export function getEthereumProvider(): EthereumProvider | null {
   if (typeof window === "undefined") return null;
-  return window.ethereum ?? null;
+  // Typed here rather than globally: wallet SDKs declare window.ethereum too.
+  const injected = (window as Window & { ethereum?: EthereumProvider }).ethereum;
+  return injected ?? embeddedProvider;
 }

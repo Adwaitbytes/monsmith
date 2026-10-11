@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
   // runtime. Bundling it is both pointless and slow.
   // The Dynamic wallet SDK signs through MPC code compiled to WebAssembly,
   // which the bundler cannot place; Node loads it as it ships.
+  // See lib/stubs/stripe-js.js.
+  turbopack: { resolveAlias: { "@stripe/stripe-js": "./lib/stubs/stripe-js.js" } },
+
   serverExternalPackages: ["solc", "@dynamic-labs-wallet/node-evm", "@dynamic-labs-wallet/node", "@evervault/wasm-attestation-bindings"],
 
   async redirects() {

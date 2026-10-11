@@ -192,7 +192,7 @@ const STATE_TTL_MS = 15 * 60_000;
 
 /** Any server-only secret will do; these two are the ones this app already has. */
 function stateSecret(): string | null {
-    return env('CLERK_SECRET_KEY') ?? env('DATABASE_URL');
+    return env('PRIVY_APP_SECRET') ?? env('DATABASE_URL');
 }
 
 export function issueInstallState(userId: string): string {
@@ -223,7 +223,7 @@ export function verifyInstallState(state: string | null, userId: string): boolea
         // and expiry still have to match, which is weaker than a signature but is
         // not nothing, and refusing outright would make the connect flow depend
         // on a database this app is designed to run without.
-        console.warn('[github] install state unsigned: set CLERK_SECRET_KEY or DATABASE_URL');
+        console.warn('[github] install state unsigned: set PRIVY_APP_SECRET or DATABASE_URL');
         return true;
     }
 

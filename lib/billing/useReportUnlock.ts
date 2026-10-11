@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAuth, useClerk } from '@clerk/nextjs';
+import { useAuthState } from '@/lib/auth/client';
 
 import type { RepoReport } from '@/lib/report/types';
 import { visitorId } from '@/lib/visitor';
@@ -70,8 +70,7 @@ export function useReportUnlock({
     /** The MON rail, where the page has one. */
     payMon?: () => void;
 }): ReportUnlock {
-    const { userId, isLoaded } = useAuth();
-    const clerk = useClerk();
+    const { userId, isLoaded, openSignIn } = useAuthState();
     // Keyed by report so a new report never shows the previous one's offer.
     const [fetched, setFetched] = useState<{ reportId: string; offer: ReportOffer | null } | null>(null);
     const [busy, setBusy] = useState(false);
@@ -160,7 +159,7 @@ export function useReportUnlock({
         // reachable from a locked finding clicked in that first moment.
         if (offer === null) return;
         if (offer.signInForFree) {
-            clerk.openSignIn();
+            openSignIn();
             return;
         }
         if (offer.card !== null) {
@@ -172,7 +171,7 @@ export function useReportUnlock({
             return;
         }
         setError('Payments are not available right now.');
-    }, [offer, clerk, payCard, payMon]);
+    }, [offer, openSignIn, payCard, payMon]);
 
     return { offer, unlock, busy, error };
 }

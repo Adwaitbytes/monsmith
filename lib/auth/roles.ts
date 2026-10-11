@@ -10,7 +10,7 @@
  *         get. Pricing is not settled, so the tiers exist and the limits are
  *         declared in one table rather than scattered through call sites.
  *
- * Nothing in here reads Clerk directly. Resolution lives in `server.ts` so this
+ * Nothing in here reads Privy directly. Resolution lives in `server.ts` so this
  * file stays importable from client components that only need the shape of a
  * permission, and so the rules can be unit-tested without a request.
  */
@@ -133,12 +133,12 @@ export function can(viewer: Viewer, permission: Permission): boolean {
     return viewer.permissions.includes(permission);
 }
 
-/** Narrows an untrusted string from Clerk metadata to a known role. */
+/** Narrows an untrusted string from user metadata to a known role. */
 export function parseRole(value: unknown): Role {
     return value === "admin" ? "admin" : "member";
 }
 
-/** Narrows an untrusted string from Clerk metadata to a known tier. */
+/** Narrows an untrusted string from user metadata to a known tier. */
 export function parseTier(value: unknown): Tier {
     return value === "pro" || value === "enterprise" ? value : "free";
 }
