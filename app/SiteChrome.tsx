@@ -15,6 +15,7 @@ export const PRIMARY_NAV: ReadonlyArray<{ label: string; href: string }> = [
   { label: "Learn", href: "/learn" },
   { label: "Glossary", href: "/glossary" },
   { label: "Tutorials", href: "/tutorials" },
+  // Redirects off-site, so it is never prefetched: a prefetch of a cross-origin redirect fails CORS.
   { label: "Builder guide", href: "/guide" },
   { label: "Chain Fit", href: "/compare" },
   { label: "About", href: "/about" },
@@ -30,7 +31,7 @@ export function SiteNav({ children }: { children?: ReactNode }) {
         </Link>
         <div className="hidden items-center gap-6 md:flex">
           {PRIMARY_NAV.map((item) => (
-            <Link key={item.href} href={item.href} className="text-sm text-text-secondary transition-colors hover:text-text-primary">
+            <Link key={item.href} href={item.href} prefetch={item.href === "/guide" ? false : undefined} className="text-sm text-text-secondary transition-colors hover:text-text-primary">
               {item.label}
             </Link>
           ))}
@@ -116,7 +117,7 @@ export function SiteFooter() {
                       {l.label}
                     </a>
                   ) : (
-                    <Link href={l.href} className="text-sm text-text-secondary transition-colors hover:text-text-primary">
+                    <Link href={l.href} prefetch={l.href === "/guide" ? false : undefined} className="text-sm text-text-secondary transition-colors hover:text-text-primary">
                       {l.label}
                     </Link>
                   )}
