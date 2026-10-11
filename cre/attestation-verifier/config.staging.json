@@ -1,7 +1,7 @@
 {
   "chainSelectorName": "monad-mainnet",
   "attestationsAddress": "0xfa57831Fcb96Effc1E36d41e44Cd0fb1aC16de77",
-  "verdictsAddress": "0x0000000000000000000000000000000000000000",
+  "verdictsAddress": "0x37c8ced74d81b7c6aa8515b0cc0798bb6d4bd2bc",
   "verifyUrl": "https://www.monsmith.com/api/verify",
   "gasLimit": "300000"
 }

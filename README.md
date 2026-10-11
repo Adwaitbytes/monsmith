@@ -68,7 +68,7 @@ flowchart LR
 | ERC-8004 Identity Registry | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
 | Monsmith agent | #10332, registered in [`0x6a00adf9…b029`](https://monadvision.com/tx/0x6a00adf97b62936058afa9db34e51c176c2fc46c98d1b8b6de61b8be9136b029), agentURI https://www.monsmith.com/agent.json |
 | MonsmithAttestations | [`0xfa57831Fcb96Effc1E36d41e44Cd0fb1aC16de77`](https://monadvision.com/address/0xfa57831Fcb96Effc1E36d41e44Cd0fb1aC16de77), deployed in [`0x51d10ff7…02a2`](https://monadvision.com/tx/0x51d10ff77c933e4ada65a71fafbcdb23b1abe5197f1c82ee85c4ea917d0d02a2) at block 112388073 |
-| MonsmithVerdicts (CRE receiver) | Deployed with `scripts/deploy-verdicts.mjs`; address recorded in `cre/attestation-verifier/config.staging.json` |
+| MonsmithVerdicts (CRE receiver) | [`0x37c8ced74d81b7c6aa8515b0cc0798bb6d4bd2bc`](https://monadvision.com/address/0x37c8ced74d81b7c6aa8515b0cc0798bb6d4bd2bc), deployed in [`0xf1d955d8…79ec`](https://monadvision.com/tx/0xf1d955d869dce9912b2db1d3c5405b8c64ee359e8821258e1da0f8955b8579ec), forwarder: CRE simulation forwarder `0x9eF6468C5f37b976E57d52054c693269479A784d` |
 
 The first ten attestations are the five starter contracts, each before and after Monsmith's optimizer:
 
