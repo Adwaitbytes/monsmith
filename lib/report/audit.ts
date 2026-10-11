@@ -1,6 +1,6 @@
 import "server-only";
 
-import { callAI, callPreferredAI, hasAIProvider } from "../aiClient";
+import { callAI, callPreferredAIAnswered, hasAIProvider } from "../aiClient";
 import { analyzeParallelPotential } from "../parallel/analyzer";
 import type { Finding, Severity } from "./types";
 
@@ -99,6 +99,18 @@ export interface DeepAudit {
     /** True when every pass ran. False means the report says so. */
     complete: boolean;
     notes: string[];
+    /**
+     * Who cross-examined the findings, when the review pass ran on one of the
+     * named review models. Absent when it did not run or fell back to the
+     * general chain, so a report never credits a model that did not do the work.
+     */
+    verification?: Verification;
+}
+
+export interface Verification {
+    model: string;
+    upheld: number;
+    rejected: number;
 }
 
 /**
@@ -232,6 +244,18 @@ const AUDIT_MODELS = (process.env.AUDIT_MODEL ?? "anthropic/claude-sonnet-5.5,de
     .map((model) => model.trim())
     .filter((model) => model.length > 0);
 
+/*
+  The model that cross-examines the findings. It is a different family from the
+  one that hunts on purpose: the review exists to catch the hunter's mistakes,
+  and a model from the same lineage tends to share them. Qwen 3.8 Max reads long
+  contracts whole and argues by citation, which is what this pass asks for.
+  REVIEW_MODEL overrides; the audit models stand behind it.
+*/
+const REVIEW_MODELS = (process.env.REVIEW_MODEL ?? "qwen/qwen3.8-max-0902")
+    .split(",")
+    .map((model) => model.trim())
+    .filter((model) => model.length > 0);
+
 /** The audit models starting from `offset`, so each pass can ask for a different first choice. */
 function auditModels(offset: number): string[] {
     const start = offset % Math.max(1, AUDIT_MODELS.length);
@@ -247,6 +271,8 @@ function auditModels(offset: number): string[] {
  */
 type Tier = "fast" | "strong";
 
+const REASONING_MODELS = /^(deepseek\/|qwen\/qwen3\.8-max)/;
+
 /** Long enough for a strong model to write a full set of findings, short enough to fall back in time. */
 const STRONG_TIMEOUT_MS = 70_000;
 
@@ -257,23 +283,40 @@ async function ask<T>(
     modelOffset = 0,
     tier: Tier = "strong",
 ): Promise<T | null> {
-    if (Date.now() >= deadline) return null;
+    return (await askAnswered<T>(system, prompt, deadline, auditModels(modelOffset), tier, modelOffset)).parsed;
+}
+
+async function askAnswered<T>(
+    system: string,
+    prompt: string,
+    deadline: number,
+    models: readonly string[],
+    tier: Tier = "strong",
+    modelOffset = 0,
+): Promise<{ parsed: T | null; model: string | null }> {
+    if (Date.now() >= deadline) return { parsed: null, model: null };
     try {
-        const models = auditModels(modelOffset);
-        const raw =
+        const answer =
             tier === "fast"
-                ? await callAI(prompt, system, undefined, deadline, modelOffset, { temperature: 0.15, maxTokens: 4096 })
-                : await callPreferredAI(models, prompt, system, deadline, {
+                ? { text: await callAI(prompt, system, undefined, deadline, modelOffset, { temperature: 0.15, maxTokens: 4096 }), model: null }
+                : await callPreferredAIAnswered(models, prompt, system, deadline, {
                       temperature: 0.15,
                       // The chat default of twenty seconds cut detailed findings
                       // off mid-answer and fell through to the weakest models,
                       // which made the audit both slower and worse.
                       modelTimeoutMs: STRONG_TIMEOUT_MS,
-                      // A reasoning model thinks inside this budget, so it gets room and a cap.
-                      ...(models[0]?.startsWith("deepseek/")
-                          ? { maxTokens: 12_000, reasoningEffort: "low" as const }
-                          : { maxTokens: 4096 }),
+                      // Thinking counts against this cap, and Sonnet 5.5 decides
+                      // for itself when to think: at 4096 it once spent 2341
+                      // tokens reasoning and the findings were cut off mid-JSON.
+                      // Unused room costs nothing.
+                      maxTokens: 16_000,
+                      // Qwen 3.8 Max and DeepSeek always reason; they cannot be
+                      // turned off, so they get an effort cap instead.
+                      ...(models[0] !== undefined && REASONING_MODELS.test(models[0])
+                          ? { reasoningEffort: "low" as const }
+                          : {}),
                   });
+        const raw = answer.text;
         const parsed = extractJson<T>(raw);
         if (parsed === null) {
             // A pass that silently returns nothing is indistinguishable from a
@@ -287,10 +330,10 @@ async function ask<T>(
                 console.warn(`[audit] full response:\n${raw}`);
             }
         }
-        return parsed;
+        return { parsed, model: parsed === null ? null : answer.model };
     } catch (error) {
         console.warn("[audit] pass failed:", error instanceof Error ? error.message : error);
-        return null;
+        return { parsed: null, model: null };
     }
 }
 
@@ -591,8 +634,8 @@ async function review(
     source: string,
     deadline: number,
     confirmed: ReadonlyArray<{ title: string; line?: number }>,
-): Promise<{ kept: AuditFinding[]; rejected: Array<{ title: string; reason: string }> }> {
-    if (findings.length === 0) return { kept: [], rejected: [] };
+): Promise<{ kept: AuditFinding[]; rejected: Array<{ title: string; reason: string }>; reviewer: string | null }> {
+    if (findings.length === 0) return { kept: [], rejected: [], reviewer: null };
 
     const established =
         confirmed.length === 0
@@ -623,7 +666,8 @@ For each, return a verdict. Return JSON:
 
 Do not include source code or code fences in any field.`;
 
-    const result = await ask<{
+    const reviewers = [...new Set([...REVIEW_MODELS, ...auditModels(1)])];
+    const { parsed: result, model: reviewer } = await askAnswered<{
         verdicts?: Array<{
             index: number;
             holds: boolean;
@@ -631,13 +675,13 @@ Do not include source code or code fences in any field.`;
             severity?: string;
             preventedByLine?: number | null;
         }>;
-    }>(REVIEW_SYSTEM, prompt, deadline, 1);
+    }>(REVIEW_SYSTEM, prompt, deadline, reviewers, "strong", 1);
 
     // A review that did not run must not silently pass everything: findings are
-    // kept, but the caller is told the audit is incomplete so the report can
-    // say the verification step did not happen.
+    // kept, and no reviewer is credited, so the report does not claim a
+    // verification that did not happen.
     if (result === null || !Array.isArray(result.verdicts)) {
-        return { kept: findings, rejected: [] };
+        return { kept: findings, rejected: [], reviewer: null };
     }
 
     const verdicts = new Map<number, { holds: boolean; reason: string; severity?: string }>();
@@ -690,7 +734,7 @@ Do not include source code or code fences in any field.`;
         kept.push({ ...finding, severity: corrected });
     });
 
-    return { kept, rejected };
+    return { kept, rejected, reviewer };
 }
 
 /**
@@ -825,7 +869,7 @@ export async function deepAudit(
 
     const deduped = dedupe(candidates);
 
-    const { kept, rejected } = await review(
+    const { kept, rejected, reviewer } = await review(
         deduped,
         source,
         deadline,
@@ -854,6 +898,7 @@ export async function deepAudit(
         rejected,
         complete: true,
         notes,
+        ...(reviewer !== null ? { verification: { model: reviewer, upheld: kept.length, rejected: rejected.length } } : {}),
     };
 }
 

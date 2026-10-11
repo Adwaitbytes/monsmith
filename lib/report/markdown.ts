@@ -16,6 +16,7 @@ import type { GasProfile } from '../gasProfiler';
 import type { ParallelAnalysisResult } from '../parallel/analyzer';
 import { optimizationPriorities } from '../parallel/graph';
 import { SEVERITIES, type ContractReport, type Finding, type RepoReport, type Severity } from './types';
+import { modelName } from './verification';
 
 const SEVERITY_LABEL: Readonly<Record<Severity, string>> = {
     critical: 'Critical',
@@ -127,6 +128,10 @@ function contractBlock(contract: ContractReport): string[] {
     const lines = [`## ${contract.name}`, '', `\`${contract.path}\``, ''];
     if (contract.health !== null) lines.push(`**Score: ${contract.health.score} / 100 (${contract.health.grade})**`, '');
     if (contract.purpose !== undefined) lines.push(plain(contract.purpose), '');
+    if (contract.verification !== undefined) {
+        const { model, upheld, rejected } = contract.verification;
+        lines.push(`Findings cross-examined by ${modelName(model)}: ${upheld} upheld, ${rejected} rejected.`, '');
+    }
 
     const findings = [...contract.findings].sort(
         (a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity),

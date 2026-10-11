@@ -171,6 +171,11 @@ async function callOpenRouterModel(
         const content = data.choices?.[0]?.message?.content;
         // Reasoning models can spend the whole budget on reasoning and return nothing.
         if (!content) throw new Error("empty completion");
+        // A completion cut off at the token cap is half an answer, and half a
+        // JSON answer parses as nothing. Failing here lets the next model try.
+        if (data.choices?.[0]?.finish_reason === "length") {
+            throw new Error(`cut off at the token cap after ${data.usage?.completion_tokens ?? "?"} tokens (${data.usage?.completion_tokens_details?.reasoning_tokens ?? 0} reasoning)`);
+        }
         return content;
     } finally {
         clearTimeout(timer);
@@ -284,20 +289,35 @@ export async function callPreferredAI(
     deadline: number,
     overrides: AIOptions = {}
 ): Promise<string> {
+    return (await callPreferredAIAnswered(preferred, prompt, systemRole, deadline, overrides)).text;
+}
+
+/**
+ * The same, saying which named model answered, or null when none did and the
+ * default chain took over. A report that credits a model with checking its
+ * findings has to know that model is the one that actually did.
+ */
+export async function callPreferredAIAnswered(
+    preferred: readonly string[],
+    prompt: string,
+    systemRole: string,
+    deadline: number,
+    overrides: AIOptions = {}
+): Promise<{ text: string; model: string | null }> {
     const options: ResolvedOptions = { ...DEFAULT_OPTIONS, ...overrides };
     if (OPENROUTER_API_KEY) {
         for (const model of preferred) {
             const remaining = deadline - Date.now();
             if (remaining < 3_000) break;
             try {
-                return await callOpenRouterModel(model, prompt, systemRole, Math.min(options.modelTimeoutMs, remaining), options);
+                return { text: await callOpenRouterModel(model, prompt, systemRole, Math.min(options.modelTimeoutMs, remaining), options), model };
             } catch (error) {
                 const reason = error instanceof Error ? error.message : String(error);
                 console.warn(`[ai] Preferred model ${model} failed, falling back: ${reason}`);
             }
         }
     }
-    return callAI(prompt, systemRole, undefined, deadline, 0, overrides);
+    return { text: await callAI(prompt, systemRole, undefined, deadline, 0, overrides), model: null };
 }
 
 export async function callAI(

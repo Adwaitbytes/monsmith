@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Loader2, MinusCircle, Play, RotateCw, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Loader2, MinusCircle, Play, RotateCw, ShieldCheck, X } from 'lucide-react';
 
 import type { ChainFitReport } from '@/lib/chainfit/report';
 import type { GasProfile } from '@/lib/gasProfiler';
@@ -22,6 +22,7 @@ import type {
     SkipReason,
 } from '@/lib/report/types';
 import { SECTION_KINDS, SECTION_LABELS } from '@/lib/report/types';
+import { verificationSentence, verificationSummary } from '@/lib/report/verification';
 
 import { FindingCard } from './FindingCard';
 import {
@@ -845,6 +846,7 @@ function HealthSection({
     const skipped = asList(report.skipped);
     const notes = asList(report.notes);
     const origin = originText(report);
+    const verification = verificationSummary(report);
 
     return (
         <RailSection anchor="health" label="Health" status={`${contracts.length} audited`}>
@@ -883,6 +885,13 @@ function HealthSection({
                             );
                         })}
                     </ul>
+                )}
+
+                {verification !== null && (
+                    <p className="flex gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/[0.06] px-3 py-2 text-[12px] leading-relaxed text-text-secondary">
+                        <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" strokeWidth={2} aria-hidden="true" />
+                        {verificationSentence(verification)}
+                    </p>
                 )}
 
                 {notes.length > 0 && (

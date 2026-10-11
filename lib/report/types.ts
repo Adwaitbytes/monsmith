@@ -223,6 +223,13 @@ export interface ContractReport {
      * things and found nothing".
      */
     threats?: Array<{ title: string; target: string; approach: string }>;
+    /**
+     * The independent review of the AI findings: which model cross-examined
+     * them and how many it upheld or rejected. Absent when the review did not
+     * run on a named model, so a report never credits a check that did not
+     * happen.
+     */
+    verification?: { model: string; upheld: number; rejected: number };
     health: Health | null;
     findings: Finding[];
     counts: SeverityCounts;
