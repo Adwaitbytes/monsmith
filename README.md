@@ -20,6 +20,9 @@ Bounties entered, and where each one lives in the code:
 | **Qwen 3.8 Max** | Cross-examines every finding the hunting model produces. It may only reject a finding by citing the line that prevents the attack. The report names Qwen and says how many findings it upheld and rejected. | `lib/report/audit.ts` (review pass, `REVIEW_MODEL`), `lib/report/verification.ts`, shown in the report's Health section |
 | **Envio** | A HyperIndex indexer over every `Attested` event since deployment, through HyperSync. It powers the live ledger on `/verify` and `/api/attestations`. The public Monad RPC serves `eth_getLogs` 100 blocks at a time, so without it the history cannot practically be read. | `indexer/`, `lib/attest/ledger.ts`, `app/api/attestations`, `app/verify/LedgerFeed.tsx` |
 | **Chainlink CRE** | The orchestration layer for independent verification. A log trigger on Monad mainnet fires; the workflow reads the current attestation at finalized depth, has every node fetch `/api/verify` with identical consensus on whether the report still matches its hash, then makes a signed write to `MonsmithVerdicts` on Monad through the Keystone forwarder. | `cre/attestation-verifier/`, `contracts/cre/MonsmithVerdicts.sol` |
+| **Kimi** | Kimi K3 writes the threat model for every contract: what an attacker would go after, derived from that contract's own assets and invariants. The hunt and Qwen's review are both built on it, and the report says which model wrote it. | `lib/report/audit.ts` (`THREAT_MODEL`), report Threat model section, [article](https://www.monsmith.com/learn/kimi-k3-writes-the-threat-model) |
+| **Dynamic** | Monsmith's ERC-8004 identity is held by a Dynamic server wallet (MPC, TWO_OF_TWO: one key share on our server, one with Dynamic, both needed to sign), and that wallet signs every attestation. A leaked deployment setting is no longer a leaked key, and because the attestations contract checks `ownerOf` on every write, signing power follows the identity. | `lib/attest/signer.ts`, `scripts/dynamic-agent-wallet.mjs`, `scripts/move-identity-to-dynamic.mjs` |
+| **Nansen** | "What is at stake" on reports of deployed contracts and on `/verify`: what the contract holds now and who it has dealt with over 30 days, labelled, from Nansen's balance and counterparty endpoints. Findings are weighed by the money behind them. | `lib/stake/nansen.ts`, `app/api/stake`, `app/components/StakeCard.tsx` |
 | **Alchemy** | The RPC behind the agent's onchain work: attestation writes, reads, and code checks on Monad, Ethereum and Sepolia, with the public endpoints as fallback. Before an audit is tied to a deployed address, Alchemy confirms code is there and reads the EIP-1967 slot. A proxy's score is never bound to its address, because its owner can repoint it. `/verify` resolves a proxy to the implementation it runs. | `lib/attest/rpc.ts`, `app/api/report/[id]/attest/route.ts`, `app/api/verify/route.ts` |
 
 ## The problem
@@ -66,7 +69,7 @@ flowchart LR
 | What | Address or transaction |
 | --- | --- |
 | ERC-8004 Identity Registry | `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` |
-| Monsmith agent | #10332, registered in [`0x6a00adf9…b029`](https://monadvision.com/tx/0x6a00adf97b62936058afa9db34e51c176c2fc46c98d1b8b6de61b8be9136b029), agentURI https://www.monsmith.com/agent.json |
+| Monsmith agent | #10332, held by its Dynamic MPC wallet [`0x37E6Be20…a683`](https://monadvision.com/address/0x37E6Be20e5cad8701c0355B38Bc955C46CcCa683) since [`0x700c0568…dc64`](https://monadvision.com/tx/0x700c05686de63291bcf98570dfb61f1ba6d991dbe59ece32a80f92cdd089dc64); registered in [`0x6a00adf9…b029`](https://monadvision.com/tx/0x6a00adf97b62936058afa9db34e51c176c2fc46c98d1b8b6de61b8be9136b029), agentURI https://www.monsmith.com/agent.json |
 | MonsmithAttestations | [`0xfa57831Fcb96Effc1E36d41e44Cd0fb1aC16de77`](https://monadvision.com/address/0xfa57831Fcb96Effc1E36d41e44Cd0fb1aC16de77), deployed in [`0x51d10ff7…02a2`](https://monadvision.com/tx/0x51d10ff77c933e4ada65a71fafbcdb23b1abe5197f1c82ee85c4ea917d0d02a2) at block 112388073 |
 | MonsmithVerdicts (CRE receiver) | [`0x37c8ced74d81b7c6aa8515b0cc0798bb6d4bd2bc`](https://monadvision.com/address/0x37c8ced74d81b7c6aa8515b0cc0798bb6d4bd2bc), deployed in [`0xf1d955d8…79ec`](https://monadvision.com/tx/0xf1d955d869dce9912b2db1d3c5405b8c64ee359e8821258e1da0f8955b8579ec), forwarder: CRE simulation forwarder `0x9eF6468C5f37b976E57d52054c693269479A784d` |
 
@@ -140,6 +143,7 @@ Built from **1 Sep 2026** onward, during the window:
   - The Envio indexer and ledger.
   - Alchemy RPC and proxy-aware code checks.
   - The Chainlink CRE verifier and `MonsmithVerdicts`.
+  - Kimi K3 threat models, the Dynamic MPC agent wallet, and Nansen's "What is at stake".
 
 ## Run it
 
@@ -172,7 +176,7 @@ cd cre/attestation-verifier && bun test # CRE workflow
 
 ## AI tools used
 
-- **Inside the product:** Claude Sonnet 5.5 (finding vulnerabilities, optimizing), Qwen 3.8 Max (reviewing findings), and DeepSeek V4.1 Flash with other fast models (describing contracts and threats), all through OpenRouter. Each report says which model checked its findings.
+- **Inside the product:** Claude Sonnet 5.5 (finding vulnerabilities, optimizing), Kimi K3 (threat models), Qwen 3.8 Max (reviewing findings), and DeepSeek V4.1 Flash with other fast models (describing contracts), all through OpenRouter. Each report says which models wrote its threat model and checked its findings.
 - **Building the product:** Claude Code (Anthropic) was used as a coding assistant throughout development, under the author's direction and review.
 
 ## Attribution
