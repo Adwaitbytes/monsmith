@@ -22,6 +22,7 @@ Bounties entered, and where each one lives in the code:
 | **Chainlink CRE** | The orchestration layer for independent verification. A log trigger on Monad mainnet fires; the workflow reads the current attestation at finalized depth, has every node fetch `/api/verify` with identical consensus on whether the report still matches its hash, then makes a signed write to `MonsmithVerdicts` on Monad through the Keystone forwarder. | `cre/attestation-verifier/`, `contracts/cre/MonsmithVerdicts.sol` |
 | **Kimi** | Kimi K3 writes the threat model for every contract: what an attacker would go after, derived from that contract's own assets and invariants. The hunt and Qwen's review are both built on it, and the report says which model wrote it. | `lib/report/audit.ts` (`THREAT_MODEL`), report Threat model section, [article](https://www.monsmith.com/learn/kimi-k3-writes-the-threat-model) |
 | **Dynamic** | Monsmith's ERC-8004 identity is held by a Dynamic server wallet (MPC, TWO_OF_TWO: one key share on our server, one with Dynamic, both needed to sign), and that wallet signs every attestation. A leaked deployment setting is no longer a leaked key, and because the attestations contract checks `ownerOf` on every write, signing power follows the identity. | `lib/attest/signer.ts`, `scripts/dynamic-agent-wallet.mjs`, `scripts/move-identity-to-dynamic.mjs` |
+| **Privy** | Privy is the account layer: Google, GitHub or email sign-in, verified on the server from Privy's identity token, and an embedded Monad wallet for every account. The studio signs and deploys with that wallet when no browser wallet is installed, so someone who signed in with Google can audit a contract and deploy it to Monad without installing anything. | `lib/auth/client.tsx`, `lib/auth/privy.ts`, `lib/auth/server.ts`, `app/api/auth/session`, `lib/ethereum.ts` |
 | **Nansen** | "What is at stake" on reports of deployed contracts and on `/verify`: what the contract holds now and who it has dealt with over 30 days, labelled, from Nansen's balance and counterparty endpoints. Findings are weighed by the money behind them. | `lib/stake/nansen.ts`, `app/api/stake`, `app/components/StakeCard.tsx` |
 | **Alchemy** | The RPC behind the agent's onchain work: attestation writes, reads, and code checks on Monad, Ethereum and Sepolia, with the public endpoints as fallback. Before an audit is tied to a deployed address, Alchemy confirms code is there and reads the EIP-1967 slot. A proxy's score is never bound to its address, because its owner can repoint it. `/verify` resolves a proxy to the implementation it runs. | `lib/attest/rpc.ts`, `app/api/report/[id]/attest/route.ts`, `app/api/verify/route.ts` |
 
@@ -93,7 +94,7 @@ The CRE workflow has run against the first of these with `cre workflow simulate 
   - An in-process EVM for gas and cross-chain measurements.
   - A storage-dependency parser for Monad's parallel execution.
 - **AI:** OpenRouter. The hunt runs on Claude Sonnet 5.5, the review on Qwen 3.8 Max, and the describe and threat passes on fast models.
-- **Data and accounts:** Neon Postgres, Clerk sign-in, Dodo Payments for card checkout, PostHog analytics.
+- **Data and accounts:** Neon Postgres, Privy sign-in with embedded Monad wallets, Dodo Payments for card checkout, PostHog analytics.
 - **Chain:**
   - viem.
   - Alchemy, with the public RPCs as fallback.
@@ -126,7 +127,7 @@ Built from **1 Sep 2026** onward, during the window:
   - PDF and Markdown downloads.
 - **Sources and access:**
   - GitHub App import, including private repositories.
-  - Clerk accounts.
+  - Accounts (Clerk at first, replaced by Privy on 11 Oct 2026).
 - **The studio and Aria:**
   - The studio redesign, which cut the toolbar from 17 controls to 4.
   - Aria, the assistant that has read the open file.
