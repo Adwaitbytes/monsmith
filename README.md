@@ -80,7 +80,7 @@ The first ten attestations are the five starter contracts, each before and after
 | WETH9 | 73, [`0xc21cfd4a…43a2`](https://monadvision.com/tx/0xc21cfd4ae2cd23a4a93d5afabb0749e73e28db11feceb9542b8da3217eb243a2) | 74, [`0x6de0b9ac…9e28`](https://monadvision.com/tx/0x6de0b9ac57fa0230edb6068530a5f43637d0fce96edae162f3eb4c4cafa49e28) |
 | Compound COMP | 80, [`0xab4d0b82…dac9`](https://monadvision.com/tx/0xab4d0b82a3e007c4c91f1586c76f6dc411e237456b8c32167863b19426fd9ac9) | 81, [`0xf94ecd88…d7eb`](https://monadvision.com/tx/0xf94ecd88fd182cd94a7178c8ca4631bdaeefffca63ea0582fa0eb2f849ead7eb) |
 
-The CRE workflow has been simulated against the first of these. Every node agreed The DAO's report is intact (see `cre/README.md`).
+The CRE workflow has run against the first of these with `cre workflow simulate --broadcast`. The nodes agreed The DAO's report is intact, and the signed verdict was delivered to MonsmithVerdicts in [`0x0b1b6e7b…c94b`](https://monadvision.com/tx/0x0b1b6e7bd92ea0a220abdc582a542caefb9bd3ceb8eb91d5e8436186c9fec94b). `isConfirmed(0x2f2bddf5…68aa, 30)` now returns true on Monad mainnet; with a minimum of 50 it returns false, since The DAO scored 39.
 
 ## Tech stack
 

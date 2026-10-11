@@ -25,6 +25,11 @@ verdict on the audit before it.
 The receiver contract is `contracts/cre/MonsmithVerdicts.sol` in the main
 repository, tested in `test/MonsmithVerdicts.test.cjs`.
 
+## On Monad mainnet
+
+- MonsmithVerdicts: `0x37c8ced74d81b7c6aa8515b0cc0798bb6d4bd2bc`, wired to CRE's simulation forwarder `0x9eF6468C5f37b976E57d52054c693269479A784d`
+- First verdict, from `cre workflow simulate --broadcast` on The DAO's attestation: [`0x0b1b6e7b…c94b`](https://monadvision.com/tx/0x0b1b6e7bd92ea0a220abdc582a542caefb9bd3ceb8eb91d5e8436186c9fec94b). The nodes agreed the report is intact; `isConfirmed(sourceHash, 30)` returns true.
+
 ## Run it
 
 ```sh
