@@ -191,6 +191,15 @@ export interface ContractReport {
     /** Stable within a report. The workspace path, which is already unique. */
     id: string;
     path: string;
+    /**
+     * keccak256 of the audited source, taken when it was audited.
+     *
+     * What an onchain attestation is keyed by. Recording it here, on the
+     * server that saw the code, is what lets an attestation be about the code
+     * that was actually audited rather than whatever a client sends later.
+     * Absent on reports from before attestations existed.
+     */
+    sourceHash?: string;
     /** The contract solc considers the artifact, not the filename. */
     name: string;
     /**

@@ -37,6 +37,8 @@ import {
     type OptimizationSuggestion,
     type ParallelAnalysisResult,
 } from '../parallel/analyzer';
+import { keccak256, toBytes } from 'viem';
+
 import { flattenImportClosure } from '../flatten';
 import { compileVersioned } from '../solc/compile';
 import {
@@ -1003,6 +1005,7 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
         const report: ContractReport = {
             id,
             path,
+            sourceHash: keccak256(toBytes(source)),
             name: resolveName(path, source, sections),
             ...(purpose !== undefined ? { purpose } : {}),
             ...(threatModels.has(id) ? { threats: threatModels.get(id) } : {}),

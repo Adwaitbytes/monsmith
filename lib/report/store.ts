@@ -108,6 +108,16 @@ async function ensureSchema(): Promise<void> {
     `;
     await sql`CREATE INDEX IF NOT EXISTS optimizations_user ON optimizations (user_id) WHERE free`;
     await sql`
+        CREATE TABLE IF NOT EXISTS attestations (
+            report_id     TEXT        NOT NULL,
+            contract_path TEXT        NOT NULL,
+            source_hash   TEXT        NOT NULL,
+            tx_hash       TEXT        NOT NULL,
+            created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            PRIMARY KEY (report_id, contract_path)
+        )
+    `;
+    await sql`
         CREATE INDEX IF NOT EXISTS github_installations_user
             ON github_installations (user_id)
     `;
@@ -540,5 +550,41 @@ export async function recordOptimization(record: OptimizationRecord): Promise<vo
             ${record.beforeScore},
             ${record.afterScore}
         )
+    `;
+}
+
+// ============= ATTESTATIONS =============
+
+export interface StoredAttestation {
+    contractPath: string;
+    sourceHash: string;
+    txHash: string;
+    createdAt: string;
+}
+
+/** What has already been published onchain for a report, so it is never paid for twice. */
+export async function attestationsFor(reportId: string): Promise<StoredAttestation[]> {
+    const sql = client();
+    if (sql === null) return [];
+    await ensureSchema();
+    const rows = (await sql`
+        SELECT contract_path, source_hash, tx_hash, created_at FROM attestations WHERE report_id = ${reportId}
+    `) as Array<{ contract_path: string; source_hash: string; tx_hash: string; created_at: string }>;
+    return rows.map((row) => ({
+        contractPath: row.contract_path,
+        sourceHash: row.source_hash,
+        txHash: row.tx_hash,
+        createdAt: new Date(row.created_at).toISOString(),
+    }));
+}
+
+export async function recordAttestation(reportId: string, contractPath: string, sourceHash: string, txHash: string): Promise<void> {
+    const sql = client();
+    if (sql === null) return;
+    await ensureSchema();
+    await sql`
+        INSERT INTO attestations (report_id, contract_path, source_hash, tx_hash)
+        VALUES (${reportId}, ${contractPath}, ${sourceHash}, ${txHash})
+        ON CONFLICT (report_id, contract_path) DO NOTHING
     `;
 }

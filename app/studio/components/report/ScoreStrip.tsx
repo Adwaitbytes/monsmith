@@ -2,6 +2,7 @@
 
 import { ArrowRight, Loader2, Share2, Sparkles } from 'lucide-react';
 
+import { ReportAttest } from './ReportAttest';
 import { ReportDownload } from './ReportDownload';
 
 import type { Finding, Grade, RepoReport, SectionKind, Severity } from '@/lib/report/types';
@@ -375,6 +376,7 @@ export function ScoreStrip({ report, activeSection, onJump, onShare, onDownloadP
                                 </button>
                             )}
                             {onDownloadPdf !== undefined && <ReportDownload report={report} onPdf={onDownloadPdf} />}
+                            {onDownloadPdf !== undefined && !report.redacted && <ReportAttest reportId={report.reportId} />}
                         </div>
                     </div>
                     <p className="mt-1 text-[12.5px] leading-relaxed text-text-secondary">
