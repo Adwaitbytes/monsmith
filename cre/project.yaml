@@ -1,0 +1,8 @@
+# ==========================================================================
+# CRE PROJECT SETTINGS FILE
+# ==========================================================================
+# Monsmith's attestations and the DON's verdicts both live on Monad mainnet.
+staging-settings:
+    rpcs:
+        - chain-name: monad-mainnet
+          url: https://rpc.monad.xyz

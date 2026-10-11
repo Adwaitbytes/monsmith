@@ -1,0 +1,358 @@
+[
+ {
+  "inputs": [
+   {
+    "internalType": "contract IAgentIdentity",
+    "name": "registry",
+    "type": "address"
+   },
+   {
+    "internalType": "uint256",
+    "name": "agent",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "nonpayable",
+  "type": "constructor"
+ },
+ {
+  "inputs": [],
+  "name": "EmptySource",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "address",
+    "name": "caller",
+    "type": "address"
+   },
+   {
+    "internalType": "address",
+    "name": "owner",
+    "type": "address"
+   }
+  ],
+  "name": "NotAgentOwner",
+  "type": "error"
+ },
+ {
+  "inputs": [],
+  "name": "NotAttested",
+  "type": "error"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint8",
+    "name": "score",
+    "type": "uint8"
+   }
+  ],
+  "name": "ScoreOutOfRange",
+  "type": "error"
+ },
+ {
+  "anonymous": false,
+  "inputs": [
+   {
+    "indexed": true,
+    "internalType": "bytes32",
+    "name": "sourceHash",
+    "type": "bytes32"
+   },
+   {
+    "indexed": true,
+    "internalType": "uint256",
+    "name": "chainId",
+    "type": "uint256"
+   },
+   {
+    "indexed": true,
+    "internalType": "address",
+    "name": "target",
+    "type": "address"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint8",
+    "name": "score",
+    "type": "uint8"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint16",
+    "name": "critical",
+    "type": "uint16"
+   },
+   {
+    "indexed": false,
+    "internalType": "uint16",
+    "name": "high",
+    "type": "uint16"
+   },
+   {
+    "indexed": false,
+    "internalType": "bytes32",
+    "name": "reportHash",
+    "type": "bytes32"
+   },
+   {
+    "indexed": false,
+    "internalType": "string",
+    "name": "reportURI",
+    "type": "string"
+   }
+  ],
+  "name": "Attested",
+  "type": "event"
+ },
+ {
+  "inputs": [],
+  "name": "agentId",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "bytes32",
+    "name": "sourceHash",
+    "type": "bytes32"
+   },
+   {
+    "internalType": "uint256",
+    "name": "chainId",
+    "type": "uint256"
+   },
+   {
+    "internalType": "address",
+    "name": "target",
+    "type": "address"
+   },
+   {
+    "internalType": "uint8",
+    "name": "score",
+    "type": "uint8"
+   },
+   {
+    "internalType": "uint16",
+    "name": "critical",
+    "type": "uint16"
+   },
+   {
+    "internalType": "uint16",
+    "name": "high",
+    "type": "uint16"
+   },
+   {
+    "internalType": "uint16",
+    "name": "medium",
+    "type": "uint16"
+   },
+   {
+    "internalType": "uint16",
+    "name": "low",
+    "type": "uint16"
+   },
+   {
+    "internalType": "bytes32",
+    "name": "reportHash",
+    "type": "bytes32"
+   },
+   {
+    "internalType": "string",
+    "name": "reportURI",
+    "type": "string"
+   }
+  ],
+  "name": "attest",
+  "outputs": [],
+  "stateMutability": "nonpayable",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "attestationCount",
+  "outputs": [
+   {
+    "internalType": "uint256",
+    "name": "",
+    "type": "uint256"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [],
+  "name": "identityRegistry",
+  "outputs": [
+   {
+    "internalType": "contract IAgentIdentity",
+    "name": "",
+    "type": "address"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "bytes32",
+    "name": "sourceHash",
+    "type": "bytes32"
+   }
+  ],
+  "name": "isAttested",
+  "outputs": [
+   {
+    "internalType": "bool",
+    "name": "",
+    "type": "bool"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "uint256",
+    "name": "chainId",
+    "type": "uint256"
+   },
+   {
+    "internalType": "address",
+    "name": "target",
+    "type": "address"
+   }
+  ],
+  "name": "ofDeployment",
+  "outputs": [
+   {
+    "internalType": "bytes32",
+    "name": "sourceHash",
+    "type": "bytes32"
+   },
+   {
+    "components": [
+     {
+      "internalType": "uint8",
+      "name": "score",
+      "type": "uint8"
+     },
+     {
+      "internalType": "uint16",
+      "name": "critical",
+      "type": "uint16"
+     },
+     {
+      "internalType": "uint16",
+      "name": "high",
+      "type": "uint16"
+     },
+     {
+      "internalType": "uint16",
+      "name": "medium",
+      "type": "uint16"
+     },
+     {
+      "internalType": "uint16",
+      "name": "low",
+      "type": "uint16"
+     },
+     {
+      "internalType": "uint64",
+      "name": "timestamp",
+      "type": "uint64"
+     },
+     {
+      "internalType": "bytes32",
+      "name": "reportHash",
+      "type": "bytes32"
+     },
+     {
+      "internalType": "string",
+      "name": "reportURI",
+      "type": "string"
+     }
+    ],
+    "internalType": "struct MonsmithAttestations.Attestation",
+    "name": "attestation",
+    "type": "tuple"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ },
+ {
+  "inputs": [
+   {
+    "internalType": "bytes32",
+    "name": "sourceHash",
+    "type": "bytes32"
+   }
+  ],
+  "name": "ofSource",
+  "outputs": [
+   {
+    "components": [
+     {
+      "internalType": "uint8",
+      "name": "score",
+      "type": "uint8"
+     },
+     {
+      "internalType": "uint16",
+      "name": "critical",
+      "type": "uint16"
+     },
+     {
+      "internalType": "uint16",
+      "name": "high",
+      "type": "uint16"
+     },
+     {
+      "internalType": "uint16",
+      "name": "medium",
+      "type": "uint16"
+     },
+     {
+      "internalType": "uint16",
+      "name": "low",
+      "type": "uint16"
+     },
+     {
+      "internalType": "uint64",
+      "name": "timestamp",
+      "type": "uint64"
+     },
+     {
+      "internalType": "bytes32",
+      "name": "reportHash",
+      "type": "bytes32"
+     },
+     {
+      "internalType": "string",
+      "name": "reportURI",
+      "type": "string"
+     }
+    ],
+    "internalType": "struct MonsmithAttestations.Attestation",
+    "name": "attestation",
+    "type": "tuple"
+   }
+  ],
+  "stateMutability": "view",
+  "type": "function"
+ }
+]
