@@ -24,6 +24,7 @@ import type {
 import { SECTION_KINDS, SECTION_LABELS } from '@/lib/report/types';
 import { modelName, verificationSentence, verificationSummary } from '@/lib/report/verification';
 
+import { StakeCard } from '@/app/components/StakeCard';
 import { FindingCard } from './FindingCard';
 import {
     GRADE_TONE,
@@ -895,6 +896,14 @@ function HealthSection({
                         <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" strokeWidth={2} aria-hidden="true" />
                         {verificationSentence(verification)}
                     </p>
+                )}
+
+                {report.origin.kind === 'address' && (
+                    <StakeCard
+                        chainId={report.origin.chainId}
+                        address={report.origin.address}
+                        severe={(asFinite(report.counts.critical) ?? 0) + (asFinite(report.counts.high) ?? 0)}
+                    />
                 )}
 
                 {notes.length > 0 && (

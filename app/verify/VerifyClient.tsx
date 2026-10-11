@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { keccak256, toBytes, isAddress } from 'viem';
 import { ArrowRight, BadgeCheck, Check, Copy, FileCode2, Loader2, SearchX, ShieldCheck } from 'lucide-react';
 
+import { StakeCard } from '../components/StakeCard';
 import { LedgerFeed } from './LedgerFeed';
 
 /**
@@ -263,6 +264,14 @@ export function VerifyClient() {
                     </section>
                 )}
             </div>
+
+            {asked !== null && verdict !== null && verdict.error === undefined && (
+                <StakeCard
+                    chainId={CHAINS.find((chain) => chain.key === asked.chainKey)?.id ?? 143}
+                    address={asked.address}
+                    {...(attestation !== undefined ? { severe: attestation.critical + attestation.high } : {})}
+                />
+            )}
 
             <LedgerFeed />
 
