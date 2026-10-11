@@ -23,6 +23,7 @@ Bounties entered, and where each one lives in the code:
 | **Kimi** | Kimi K3 writes the threat model for every contract: what an attacker would go after, derived from that contract's own assets and invariants. The hunt and Qwen's review are both built on it, and the report says which model wrote it. | `lib/report/audit.ts` (`THREAT_MODEL`), report Threat model section, [article](https://www.monsmith.com/learn/kimi-k3-writes-the-threat-model) |
 | **Dynamic** | Monsmith's ERC-8004 identity is held by a Dynamic server wallet (MPC, TWO_OF_TWO: one key share on our server, one with Dynamic, both needed to sign), and that wallet signs every attestation. A leaked deployment setting is no longer a leaked key, and because the attestations contract checks `ownerOf` on every write, signing power follows the identity. | `lib/attest/signer.ts`, `scripts/dynamic-agent-wallet.mjs`, `scripts/move-identity-to-dynamic.mjs` |
 | **Privy** | Privy is the account layer: Google, GitHub or email sign-in, verified on the server from Privy's identity token, and an embedded Monad wallet for every account. The studio signs and deploys with that wallet when no browser wallet is installed, so someone who signed in with Google can audit a contract and deploy it to Monad without installing anything. | `lib/auth/client.tsx`, `lib/auth/privy.ts`, `lib/auth/server.ts`, `app/api/auth/session`, `lib/ethereum.ts` |
+| **Mera** (One Passkey, Many Keys) | Sealed reports, a non-wallet use of Mera's PRF-derived key. An audit of private code says where that code breaks, so Monsmith can download it sealed: the Markdown report encrypted in the browser into a Mera secret vault (HKDF from the passkey's PRF output to AES-256-GCM, fresh salt per file). The file is safe in email, a drive or a public repo; it opens only at `/open` with the passkey that sealed it, and Monsmith never sees the key. | `lib/seal/sealedReport.ts`, `app/open`, `app/studio/components/report/ReportDownload.tsx` |
 | **Nansen** | "What is at stake" on reports of deployed contracts and on `/verify`: what the contract holds now and who it has dealt with over 30 days, labelled, from Nansen's balance and counterparty endpoints. Findings are weighed by the money behind them. | `lib/stake/nansen.ts`, `app/api/stake`, `app/components/StakeCard.tsx` |
 | **Alchemy** | The RPC behind the agent's onchain work: attestation writes, reads, and code checks on Monad, Ethereum and Sepolia, with the public endpoints as fallback. Before an audit is tied to a deployed address, Alchemy confirms code is there and reads the EIP-1967 slot. A proxy's score is never bound to its address, because its owner can repoint it. `/verify` resolves a proxy to the implementation it runs. | `lib/attest/rpc.ts`, `app/api/report/[id]/attest/route.ts`, `app/api/verify/route.ts` |
 
@@ -144,7 +145,7 @@ Built from **1 Sep 2026** onward, during the window:
   - The Envio indexer and ledger.
   - Alchemy RPC and proxy-aware code checks.
   - The Chainlink CRE verifier and `MonsmithVerdicts`.
-  - Kimi K3 threat models, the Dynamic MPC agent wallet, and Nansen's "What is at stake".
+  - Kimi K3 threat models, the Dynamic MPC agent wallet, Nansen's "What is at stake", Privy accounts with embedded wallets, and Mera sealed reports.
 
 ## Run it
 
