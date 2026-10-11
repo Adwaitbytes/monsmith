@@ -2,7 +2,7 @@
   "name": "monsmith",
   "version": "0.1.0",
   "private": true,
-  "license": "Apache-2.0",
+  "license": "MIT",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -19,6 +19,8 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^7.9.1",
+    "@dynamic-labs-wallet/node": "^1.1.34",
+    "@dynamic-labs-wallet/node-evm": "^1.1.34",
     "@ethereumjs/common": "^10.1.3",
     "@ethereumjs/evm": "^10.1.3",
     "@ethereumjs/statemanager": "^10.1.3",
@@ -78,6 +80,5 @@
     "hardhat"
   ],
   "author": "Adwait Keshari",
-  "license": "MIT",
   "type": "module"
 }

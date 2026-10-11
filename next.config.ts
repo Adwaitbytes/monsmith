@@ -5,7 +5,9 @@ import { BUILDER_GUIDE_PATH, BUILDER_GUIDE_URL } from "./lib/builderGuide";
 const nextConfig: NextConfig = {
   // solc is 24 MB of Emscripten output and is loaded through `require` at
   // runtime. Bundling it is both pointless and slow.
-  serverExternalPackages: ["solc"],
+  // The Dynamic wallet SDK signs through MPC code compiled to WebAssembly,
+  // which the bundler cannot place; Node loads it as it ships.
+  serverExternalPackages: ["solc", "@dynamic-labs-wallet/node-evm", "@dynamic-labs-wallet/node", "@evervault/wasm-attestation-bindings"],
 
   async redirects() {
     return [

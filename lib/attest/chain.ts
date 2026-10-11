@@ -1,10 +1,10 @@
 import 'server-only';
 
-import { BaseError, ContractFunctionRevertedError, createPublicClient, createWalletClient, parseAbi, type Address, type Hex } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { BaseError, ContractFunctionRevertedError, createPublicClient, parseAbi, type Address, type Hex } from 'viem';
 import { monad } from 'viem/chains';
 
 import { transportFor } from './rpc';
+import { attesterWallet } from './signer';
 
 /**
  * Reading and writing Monsmith's audit attestations on Monad mainnet.
@@ -130,10 +130,8 @@ export interface AttestInput {
  * not a round number.
  */
 export async function writeAttestation(config: AttestConfig, input: AttestInput): Promise<Hex> {
-    const key = process.env.MONSMITH_ATTESTER_KEY;
-    if (key === undefined || !/^0x[0-9a-fA-F]{64}$/.test(key)) throw new Error('The attester key is not configured.');
-    const account = privateKeyToAccount(key as Hex);
-    const wallet = createWalletClient({ account, chain: monad, transport: transportFor(monad.id, 30_000) });
+    const wallet = await attesterWallet();
+    const account = wallet.account;
     const client = readClient();
     const clamp = (value: number) => Math.min(65_535, Math.max(0, Math.round(value)));
     const args = [
