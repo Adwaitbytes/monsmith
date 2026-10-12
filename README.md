@@ -582,4 +582,4 @@ See [`NOTICE`](NOTICE). Licensed under [Apache-2.0](LICENSE).
 
 ## Author
 
-Built solo by [Adwait Keshari](https://x.com/AdwaitKeshari) ([GitHub](https://github.com/Adwaitbytes)), PU DAO.
+Built solo by [Adwait Keshari](https://x.com/AdwaitKeshari) ([GitHub](https://github.com/Adwaitbytes)).
