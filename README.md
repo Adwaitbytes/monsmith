@@ -37,6 +37,7 @@
 - [Metropolis entry at a glance](#metropolis-entry-at-a-glance)
 - [Videos](#videos)
 - [Judges: see it working in 60 seconds](#judges-see-it-working-in-60-seconds)
+- [Usage so far](#usage-so-far)
 - [The problem](#the-problem)
 - [How Monsmith works](#how-monsmith-works)
 - [Architecture](#architecture)
@@ -106,6 +107,21 @@ No account needed for the first three steps.
 2. Press **Optimize this contract**. Monsmith rewrites it, re-checks it like a fix review, and the score goes **39 to 79**, with a before and after diff.
 3. Open **[monsmith.com/verify](https://www.monsmith.com/verify)**. The ledger, indexed by Envio, lists every audit on Monad. Paste The DAO's source or any address to get its onchain score.
 4. To audit your own contract, sign in with Google, GitHub or email. The first two reports and two optimizations are free, and Privy gives you a Monad wallet to deploy with.
+
+---
+
+## Usage so far
+
+Since 1 Sep 2026, from Monsmith's own analytics. The author's testing is included, so treat these as a floor on effort, not a claim of customers.
+
+| | |
+| --- | --- |
+| Visitors | 234 |
+| Full audit reports run | 65, by 28 different people or accounts |
+| Contracts deployed from the studio | 14 |
+| Audits attested on Monad mainnet | 11 |
+| Chainlink CRE verdicts on mainnet | 2 |
+| Paid reports | none yet; card checkout is live |
 
 ---
 
