@@ -200,7 +200,7 @@ sequenceDiagram
 It then writes the signed verdict `(sourceHash, score, reportHash, reportMatches)` through the Keystone forwarder to [`MonsmithVerdicts`](contracts/cre/MonsmithVerdicts.sol). `isConfirmed(sourceHash, minScore)` says yes only when the DON confirmed **the attestation that is current**, so a re-audit is never vouched for by the verdict on the audit before it.
 
 ```mermaid
-flowchart LR
+flowchart TB
     A["Attested event<br/>Monad mainnet"] --> T["EVM log trigger"]
     T --> R["EVM read: ofSource<br/>at finalized depth"]
     R --> H["HTTP, every node<br/>GET /api/verify"]
@@ -332,7 +332,7 @@ sequenceDiagram
 The `.sealed.json` carries only the title and date in the clear. It is safe in email, a drive or a public repository, and opens only at [`/open`](https://www.monsmith.com/open) with the passkey that sealed it. Monsmith's servers never see the key or the sealed plaintext.
 
 ```mermaid
-flowchart LR
+flowchart TB
     R["Report (Markdown)"] --> PK["Touch ID / passkey<br/>WebAuthn PRF"]
     PK --> K["HKDF to AES-256-GCM<br/>fresh salt per file"]
     K --> F[".sealed.json<br/>title + date visible,<br/>findings ciphertext"]
@@ -372,7 +372,7 @@ It goes beyond showing data: when critical or high findings sit on real money, t
 **Why.** A single model grading its own findings is not an audit. Monsmith splits the work across model families so each pass is checked by a different one.
 
 ```mermaid
-flowchart LR
+flowchart TB
     SRC["Contract source"] --> D["1. Describe"]
     D --> T["2. Threat model<br/>Kimi K3<br/>assets, actors, invariants"]
     T --> H["3. Attack hunt<br/>Claude Sonnet 5.5<br/>line-cited findings"]
