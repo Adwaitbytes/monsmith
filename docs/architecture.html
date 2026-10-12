@@ -1,0 +1,131 @@
+<!doctype html>
+<!-- Source for docs/assets/architecture.png. Render with headless Chrome at 1600x980, device scale 2. -->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+  @font-face { font-family: "Inter"; src: url("assets/fonts/Inter-latin.woff2") format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "JetBrains Mono"; src: url("assets/fonts/JetBrainsMono-latin.woff2") format("woff2"); font-weight: 100 800; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1600px; height: 980px; background: #f4f2ee; }
+  body { position: relative; font-family: "Inter", sans-serif; color: #141218; overflow: hidden; }
+  .title { position: absolute; left: 56px; top: 40px; font-size: 30px; font-weight: 600; letter-spacing: -0.02em; }
+  .sub { position: absolute; left: 56px; top: 82px; font-size: 17px; color: #6b6775; }
+  .band { position: absolute; left: 40px; right: 40px; border-radius: 22px; }
+  .band.top { top: 128px; height: 340px; background: #ffffff; border: 1.5px solid #e2dfd9; }
+  .band.bottom { top: 500px; height: 450px; background: #ffffff; border: 1.5px solid #e2dfd9; }
+  .band .label { position: absolute; left: 24px; top: 18px; font-family: "JetBrains Mono", monospace; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #836ef9; }
+  .step { position: absolute; width: 268px; height: 262px; padding: 18px 18px 16px; border-radius: 16px; background: #faf9f6; border: 1.5px solid #e9e6e0; }
+  .step .n { font-family: "JetBrains Mono", monospace; font-size: 13px; font-weight: 600; color: #a29eaa; }
+  .step .h { margin-top: 6px; font-size: 21px; font-weight: 600; letter-spacing: -0.015em; }
+  .step .d { margin-top: 6px; font-size: 14px; line-height: 1.4; color: #5c5866; }
+  .chips { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { padding: 5px 9px; border-radius: 8px; font-size: 13px; font-weight: 600; background: #efebff; color: #5b47d6; }
+  .chip.g { background: #e6f5ee; color: #17784f; }
+  .chip.b { background: #e8eefc; color: #2c4fb8; }
+  .chip.o { background: #fdf0e3; color: #a35a12; }
+  .chain { position: absolute; left: 520px; top: 568px; width: 560px; height: 300px; border-radius: 20px; background: #141218; color: #f4f2ee; padding: 22px 24px; }
+  .chain .lbl { font-family: "JetBrains Mono", monospace; font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #a897ff; }
+  .contract { margin-top: 14px; padding: 14px 16px; border-radius: 12px; background: #221f2b; }
+  .contract .cn { font-family: "JetBrains Mono", monospace; font-size: 17px; font-weight: 600; color: #ffffff; }
+  .contract .cd { margin-top: 4px; font-size: 14px; color: #b9b3cc; }
+  .side { position: absolute; width: 380px; padding: 20px 20px 18px; border-radius: 16px; background: #faf9f6; border: 1.5px solid #e9e6e0; }
+  .side .h { font-size: 20px; font-weight: 600; letter-spacing: -0.015em; }
+  .side .d { margin-top: 6px; font-size: 14px; line-height: 1.45; color: #5c5866; }
+  .reader { position: absolute; left: 1112px; width: 424px; padding: 20px; border-radius: 16px; background: #f1eefe; border: 1.5px solid #ddd5ff; }
+  .reader .h { font-size: 20px; font-weight: 600; }
+  .reader code { font-family: "JetBrains Mono", monospace; font-size: 14px; color: #3d2fa8; }
+  .reader .d { margin-top: 6px; font-size: 14px; line-height: 1.45; color: #4d4866; }
+  svg { position: absolute; inset: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+  <div class="title">Monsmith architecture</div>
+  <div class="sub">An audit becomes a signed, onchain fact that any wallet, agent or contract can check before it calls.</div>
+
+  <div class="band top"><div class="label">Make the contract safe · monsmith.com/studio</div></div>
+
+  <div class="step" style="left:64px;top:176px">
+    <div class="n">01</div><div class="h">Sign in</div>
+    <div class="d">Google, GitHub or email. Every account gets its own Monad wallet.</div>
+    <div class="chips"><span class="chip">Privy</span></div>
+  </div>
+  <div class="step" style="left:362px;top:176px">
+    <div class="n">02</div><div class="h">Audit</div>
+    <div class="d">Threat model, line-cited attack hunt, cross-examination. Plus static rules, gas and Monad parallelism.</div>
+    <div class="chips"><span class="chip">Kimi K3</span><span class="chip">Claude</span><span class="chip">Qwen 3.8 Max</span></div>
+  </div>
+  <div class="step" style="left:660px;top:176px">
+    <div class="n">03</div><div class="h">Weigh and fix</div>
+    <div class="d">What the contract holds puts findings in order. Optimize rewrites it and re-checks the fix: The DAO 39 to 79.</div>
+    <div class="chips"><span class="chip o">Nansen</span></div>
+  </div>
+  <div class="step" style="left:958px;top:176px">
+    <div class="n">04</div><div class="h">Keep or ship</div>
+    <div class="d">Seal the report to your passkey, or deploy the fixed contract from the Privy wallet.</div>
+    <div class="chips"><span class="chip">Mera</span><span class="chip">Privy</span></div>
+  </div>
+  <div class="step" style="left:1256px;top:176px">
+    <div class="n">05</div><div class="h">Publish to Monad</div>
+    <div class="d">The agent signs with a 2-of-2 MPC wallet. Code at the address is checked first.</div>
+    <div class="chips"><span class="chip">Dynamic</span><span class="chip b">Alchemy</span></div>
+  </div>
+
+  <div class="band bottom"><div class="label">Make the audit checkable · Monad mainnet</div></div>
+
+  <div class="side" style="left:64px;top:568px">
+    <div class="h">Envio indexes the history</div>
+    <div class="d">HyperIndex over every Attested event through HyperSync. Powers the ledger on /verify and /api/attestations.</div>
+    <div class="chips"><span class="chip g">Envio</span></div>
+  </div>
+  <div class="side" style="left:64px;top:742px">
+    <div class="h">A Chainlink DON re-checks it</div>
+    <div class="d">Log trigger, finalized read, every node checks the report with identical consensus, signed verdict on Monad.</div>
+    <div class="chips"><span class="chip b">Chainlink CRE</span></div>
+  </div>
+
+  <div class="chain">
+    <div class="lbl">Monad mainnet · chain 143</div>
+    <div class="contract"><div class="cn">ERC-8004 Identity Registry</div><div class="cd">Monsmith is agent 10332, owned by the Dynamic wallet</div></div>
+    <div class="contract"><div class="cn">MonsmithAttestations</div><div class="cd">score · severity counts · sourceHash · reportHash · 11 attestations</div></div>
+    <div class="contract"><div class="cn">MonsmithVerdicts</div><div class="cd">the DON's verdicts · isConfirmed(sourceHash, minScore) · 2 verdicts</div></div>
+  </div>
+
+  <div class="reader" style="top:568px">
+    <div class="h">Wallets, dApps and agents</div>
+    <div class="d">Check a contract before calling it.</div>
+  </div>
+  <div class="reader" style="top:680px">
+    <code>GET /api/verify?chainId=143&amp;address=0x…</code>
+    <div class="d">Score, severity, report URL, and whether the report still matches its hash. Proxies resolved to their implementation.</div>
+  </div>
+  <div class="reader" style="top:826px">
+    <code>MonsmithVerdicts.isConfirmed(hash, 70)</code>
+    <div class="d">True only for the current, Chainlink-confirmed audit.</div>
+  </div>
+
+  <svg width="1600" height="980" viewBox="0 0 1600 980">
+    <defs>
+      <marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#836EF9"/></marker>
+    </defs>
+    <g stroke="#836EF9" stroke-width="2.5" fill="none" marker-end="url(#a)">
+      <path d="M334 276 L358 276"/>
+      <path d="M632 276 L656 276"/>
+      <path d="M930 276 L954 276"/>
+      <path d="M1228 276 L1252 276"/>
+      <path d="M1390 442 C1390 530, 900 480, 820 562"/>
+      <path d="M516 640 L450 640"/>
+      <path d="M516 810 L450 810"/>
+      <path d="M450 856 L516 856"/>
+      <path d="M1108 610 L1084 610"/>
+      <path d="M1108 866 L1084 866"/>
+    </g>
+    <g font-family="Inter" font-size="13" font-weight="600" fill="#836EF9">
+      <text x="1404" y="484">attest() through Alchemy</text>
+      <text x="458" y="630">events</text>
+      <text x="458" y="800">trigger</text>
+      <text x="458" y="868">verdict</text>
+    </g>
+  </svg>
+</body>
+</html>
