@@ -349,6 +349,7 @@ export async function POST(req: Request) {
                         prior: from.findings.filter((finding) => finding.source === "ai"),
                         changedLines: diffLines(from.source, source).changed,
                         ...(contract.threats !== undefined ? { threats: contract.threats } : {}),
+                        ...(contract.invariants !== undefined ? { invariants: contract.invariants } : {}),
                     },
                 })) {
                     if (!open || req.signal.aborted) return null;

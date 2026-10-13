@@ -224,6 +224,12 @@ export interface ContractReport {
      */
     threats?: Array<{ title: string; target: string; approach: string }>;
     /**
+     * What the contract must always keep true, from the same audit pass as
+     * `threats`. Kept so a later fix can be checked against what the original
+     * code promised.
+     */
+    invariants?: string[];
+    /**
      * The independent review of the AI findings: which model cross-examined
      * them and how many it upheld or rejected. Absent when the review did not
      * run on a named model, so a report never credits a check that did not

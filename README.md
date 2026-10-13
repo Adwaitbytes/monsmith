@@ -141,7 +141,7 @@ Monsmith fixes both. The audit is tied to the keccak256 of the code, signed by a
 | | Step | What happens |
 | --- | --- | --- |
 | 1 | **Audit** | Paste a contract, import one by address, or pick a GitHub repository. Four AI passes (describe, threat model by **Kimi K3**, attack hunt by **Claude Sonnet 5.5**, cross-examination by **Qwen 3.8 Max**) run next to deterministic static rules, a Monad parallel-execution profile, a gas table, and a cross-chain cost comparison measured by actually running the contract. |
-| 2 | **Fix** | **Optimize** rewrites the contract to fix its findings. A fix counts only if it compiles and keeps its interface. It is then re-checked the way an audit firm runs a fix review, and you can download the before and after as a diff. |
+| 2 | **Fix** | **Optimize** rewrites the contract to fix its findings, weighing more than one way to fix each serious finding and naming the alternative it rejected. A fix counts only if it compiles and keeps its interface. Then a fix review runs on the new code: every earlier finding is re-checked, the **whole contract is audited again** (a fix in one place can break something elsewhere, so new findings are kept wherever they sit and labelled), and the **invariants Kimi K3 derived from the original contract are checked against the fixed code**. Download the before and after as a diff. |
 | 3 | **Attest** | **Publish to Monad** writes the score, severity counts, source hash and report hash to `MonsmithAttestations`, signed by the agent's **Dynamic** MPC wallet through **Alchemy**. Only the owner of ERC-8004 agent #10332 can write. |
 | 4 | **Verify** | `/verify`, `GET /api/verify` and `MonsmithAttestations.ofDeployment` answer "was this audited, and how did it score?" The report is hashed again, so an edited report shows up as edited. **Envio** serves the full history. A **Chainlink CRE** workflow writes an independent verdict, and contracts call `MonsmithVerdicts.isConfirmed`. |
 | + | **Around it** | **Privy** accounts with a Monad wallet each, **Mera**-sealed reports for private code, and **Nansen**'s "What is at stake" on deployed contracts. |
@@ -400,6 +400,9 @@ flowchart TB
 
 - **Kimi K3** (`moonshotai/kimi-k3`) writes the threat model: from the contract's own assets, actors and invariants, what an attacker would go after and how. The hunt tests it and the review judges against it, so it shapes the whole audit. [Article](https://www.monsmith.com/learn/kimi-k3-writes-the-threat-model).
 - **Qwen 3.8 Max** (`qwen/qwen3.8-max-0902`) cross-examines every finding. It may only reject a finding by citing the line that prevents the attack. Every report names the model and how many findings it upheld and rejected, and that record is inside the attested report hash, on Monad. [Article](https://www.monsmith.com/learn/qwen-3-8-max-cross-examines-audit-findings).
+
+- **Masked findings.** The hunt also reports issues that only become reachable once another one is fixed (one bug often hides the next), and each names the finding that blocks it.
+- **After a fix**, the same invariants Kimi K3 derived from the original contract are checked against the new code. An invariant counts as broken only with a cited line and the calls that break it, and the reviewer still judges it.
 
 **Proof:** MyToken's live report: Kimi K3 threat model with 5 threats tested; Qwen 3.8 Max upheld 2 findings and rejected 0; score 85, attested in [`0x1a295209…bcfc`](https://monadvision.com/tx/0x1a295209f50c6a47ea6ca0cc26db496ac814ff78631288c92c63f97e6420bcfc).
 

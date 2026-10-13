@@ -880,6 +880,7 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
     const descriptions = new Map<string, string>();
     const verifications = new Map<string, NonNullable<ContractReport['verification']>>();
     const threatAuthors = new Map<string, string>();
+    const invariantSets = new Map<string, string[]>();
     const threatModels = new Map<
         string,
         Array<{ title: string; target: string; approach: string }>
@@ -986,6 +987,9 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
             findings.push(...toFindings(audit, id));
             for (const note of audit.notes) auditNotes.add(note);
             if (audit.description !== null) descriptions.set(id, audit.description.purpose);
+            if (audit.description !== null && audit.description.invariants.length > 0) {
+                invariantSets.set(id, audit.description.invariants);
+            }
             if (audit.verification !== undefined) verifications.set(id, audit.verification);
             if (audit.threatModelBy !== undefined) threatAuthors.set(id, audit.threatModelBy);
             if (audit.threats.length > 0) {
@@ -1013,6 +1017,7 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
             name: resolveName(path, source, sections),
             ...(purpose !== undefined ? { purpose } : {}),
             ...(threatModels.has(id) ? { threats: threatModels.get(id) } : {}),
+            ...(invariantSets.has(id) ? { invariants: invariantSets.get(id) } : {}),
             ...(verifications.has(id) ? { verification: verifications.get(id) } : {}),
             ...(threatAuthors.has(id) ? { threatModelBy: threatAuthors.get(id) } : {}),
             health: healthFor(findings, sections.parallel),

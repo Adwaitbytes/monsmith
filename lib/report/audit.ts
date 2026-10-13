@@ -88,6 +88,17 @@ export interface AuditFinding {
     attack: string;
     impact: string;
     fix: string;
+    /**
+     * The finding that has to be fixed before this one can be reached. One bug
+     * often masks the next, and a fix for the first exposes the second, so a
+     * masked finding is reported with its blocker rather than left for later.
+     */
+    blockedBy?: string;
+    /**
+     * Where a fix review found it: in the lines the fix changed, elsewhere in
+     * the contract, or as an invariant the fixed code no longer keeps.
+     */
+    scope?: "changed" | "elsewhere" | "invariant";
 }
 
 export interface DeepAudit {
@@ -107,6 +118,8 @@ export interface DeepAudit {
     verification?: Verification;
     /** The named model that wrote the threat model, when one did. */
     threatModelBy?: string;
+    /** After a fix: how many of the contract's invariants were checked, and how many no longer hold. */
+    invariantCheck?: { checked: number; broken: number };
 }
 
 export interface Verification {
@@ -533,6 +546,12 @@ ${threats.map((t) => `- [${t.id}] ${t.title}: ${t.approach}`).join("\n")}
 
 Also consider anything the threat model missed that this source reveals.
 
+Also report issues that can only be reached once another issue in your list is
+fixed. One bug often masks the next: a reentrancy that drains everything hides
+the accounting error behind it. Auditors miss these because the first bug looks
+like the whole story. For such a finding, set "blockedBy" to the exact title of
+the finding that currently masks it.
+
 Source with line numbers:
 \`\`\`
 ${numbered(source).slice(0, 26_000)}
@@ -549,7 +568,8 @@ Return JSON:
   "impact":"what is lost, concretely",
   "loss":"what the attacker ends up holding, and what it cost them to try",
   "preconditions":"what must be true first, and how hard that is to arrange",
-  "fix":"the change to make, described in prose"
+  "fix":"the change to make, described in prose",
+  "blockedBy":"title of the finding that must be fixed first, only when one masks this"
 }]}
 
 Severity: critical means funds are directly at risk now. high means a realistic
@@ -560,34 +580,38 @@ Do not put source code, diffs or code fences in any field. Refer to code by line
 number only. Solidity is full of double quotes and code fences, and both break
 the response.`;
 
-    const result = await ask<{ findings?: AuditFinding[] }>(FIND_SYSTEM, prompt, deadline);
+    const result = await ask<{ findings?: unknown[] }>(FIND_SYSTEM, prompt, deadline);
     if (result === null || !Array.isArray(result.findings)) return [];
+    return normalizeFindings(result.findings, source);
+}
 
+/*
+  Evidence is sliced from the source rather than quoted by the model.
+
+  Asking for the offending code back as a JSON string was the original design
+  and it was wrong twice over. Solidity is full of double quotes, so
+  `require(x, "insufficient")` inside a JSON string broke the parse and the
+  whole pass silently returned nothing. And a transcription can drift from the
+  file, which means the evidence for a finding could be something the contract
+  does not actually say. A line range cannot do either: it is one integer the
+  model has to get right, and the quote comes from the file.
+*/
+function excerpt(source: string, from: number, to: number): string {
     const lines = source.split("\n");
-    const lineCount = lines.length;
+    const start = Math.max(1, Math.min(from, lines.length));
+    const end = Math.max(start, Math.min(to, lines.length, start + 12));
+    return lines
+        .slice(start - 1, end)
+        .map((text, index) => `${start + index} | ${text}`)
+        .join("\n");
+}
 
-    /*
-      Evidence is sliced from the source rather than quoted by the model.
+/** The hunt's raw findings in the audit's shape, with locations checked against the file. */
+function normalizeFindings(raw: readonly unknown[], source: string): AuditFinding[] {
+    const lineCount = source.split("\n").length;
 
-      Asking for the offending code back as a JSON string was the original
-      design and it was wrong twice over. Solidity is full of double quotes, so
-      `require(x, "insufficient")` inside a JSON string broke the parse and the
-      whole pass silently returned nothing. And a transcription can drift from
-      the file, which means the evidence for a finding could be something the
-      contract does not actually say. A line range cannot do either: it is one
-      integer the model has to get right, and the quote comes from the file.
-    */
-    const excerpt = (from: number, to: number): string => {
-        const start = Math.max(1, Math.min(from, lineCount));
-        const end = Math.max(start, Math.min(to, lineCount, start + 12));
-        return lines
-            .slice(start - 1, end)
-            .map((text, index) => `${start + index} | ${text}`)
-            .join("\n");
-    };
-
-    return result.findings
-        .filter((finding) => finding !== null && typeof finding === "object")
+    return raw
+        .filter((finding): finding is AuditFinding => finding !== null && typeof finding === "object")
         .map((finding) => {
             const severity = SEVERITIES.has(finding.severity as Severity)
                 ? (finding.severity as Severity)
@@ -612,7 +636,7 @@ the response.`;
                 evidence:
                     line === null
                         ? ""
-                        : excerpt(line, Number.isFinite(rawEnd) ? Math.round(rawEnd) : line),
+                        : excerpt(source, line, Number.isFinite(rawEnd) ? Math.round(rawEnd) : line),
                 attack: String(finding.attack ?? ""),
                 impact: String(finding.impact ?? ""),
                 ...(typeof finding.loss === "string" && finding.loss.length > 0
@@ -622,6 +646,9 @@ the response.`;
                     ? { preconditions: finding.preconditions }
                     : {}),
                 fix: String(finding.fix ?? ""),
+                ...(typeof finding.blockedBy === "string" && finding.blockedBy.trim().length > 0
+                    ? { blockedBy: finding.blockedBy.trim() }
+                    : {}),
             };
         })
         .slice(0, 30);
@@ -835,6 +862,127 @@ function dedupe(findings: readonly AuditFinding[]): AuditFinding[] {
     return kept;
 }
 
+/**
+ * Whether two findings describe the same defect. Like `dedupe`, but tolerant of
+ * a finding with no line, which is common for one carried forward from an
+ * earlier version: then only a very close title counts.
+ */
+function sameDefect(a: AuditFinding, b: AuditFinding): boolean {
+    const shared = overlap(meaningfulWords(a.title), meaningfulWords(b.title));
+    if (a.line === null || b.line === null) return shared >= 0.7;
+    return Math.abs(a.line - b.line) <= 6 && shared >= 0.5;
+}
+
+/** How close to an edited line a finding must sit to count as being in the changed code. */
+const CHANGE_REACH = 2;
+
+/**
+ * The fresh findings of a fix review that are new, each labelled by where it sits.
+ *
+ * Nothing is dropped for being far from the edit: a fix in one place can break
+ * something in an unrelated part of the contract. A finding that repeats one
+ * already carried forward is dropped, so it is not reported twice. Invariant
+ * findings keep their own label.
+ */
+function classifyFixReviewFindings(
+    fresh: readonly AuditFinding[],
+    carried: readonly AuditFinding[],
+    changedLines: readonly number[],
+): AuditFinding[] {
+    const changed = new Set(changedLines);
+    const nearChange = (line: number | null): boolean => {
+        if (line === null) return false;
+        for (let offset = -CHANGE_REACH; offset <= CHANGE_REACH; offset++) {
+            if (changed.has(line + offset)) return true;
+        }
+        return false;
+    };
+    return fresh
+        .filter((finding) => !carried.some((existing) => sameDefect(finding, existing)))
+        .map((finding) =>
+            finding.scope === "invariant"
+                ? finding
+                : { ...finding, scope: nearChange(finding.line) ? ("changed" as const) : ("elsewhere" as const) },
+        );
+}
+
+interface InvariantReply {
+    results?: Array<{ id?: unknown; status?: unknown; line?: unknown; severity?: unknown; how?: unknown }>;
+}
+
+/**
+ * Broken invariants as findings.
+ *
+ * A "broken" verdict counts only when it cites a line in the file and says how
+ * the invariant breaks. The same rule the reviewer is held to: a claim with no
+ * place and no path is an opinion, and a report that prints opinions as
+ * findings stops being trusted.
+ */
+function parseInvariantCheck(
+    invariants: readonly string[],
+    reply: InvariantReply | null,
+    source: string,
+): { checked: number; findings: AuditFinding[] } {
+    if (reply === null || !Array.isArray(reply.results)) return { checked: 0, findings: [] };
+    const lineCount = source.split("\n").length;
+    const findings: AuditFinding[] = [];
+    let checked = 0;
+
+    invariants.forEach((invariant, index) => {
+        const verdict = reply.results?.find((result) => String(result.id ?? "").toUpperCase() === `I${index + 1}`);
+        if (verdict === undefined) return;
+        checked += 1;
+        if (verdict.status !== "broken") return;
+        const line = Number(verdict.line);
+        const how = typeof verdict.how === "string" ? verdict.how.trim() : "";
+        if (!Number.isInteger(line) || line < 1 || line > lineCount || how.length === 0) return;
+        const severity = SEVERITIES.has(verdict.severity as Severity) ? (verdict.severity as Severity) : "high";
+        findings.push({
+            title: `Invariant no longer holds: ${invariant}`.slice(0, 160),
+            severity,
+            confidence: 0.8,
+            line,
+            evidence: excerpt(source, line, line),
+            attack: how,
+            impact: `The contract is meant to guarantee that ${invariant.replace(/\.$/, "")}. After the change it does not.`,
+            fix: "",
+            scope: "invariant",
+        });
+    });
+
+    return { checked, findings };
+}
+
+const INVARIANT_SYSTEM = `You check whether a smart contract still keeps its invariants after its code was changed.
+An invariant is broken only if you can name the line where it breaks and the
+sequence of calls that breaks it, in this code. If you cannot, it holds. Do not
+report general weaknesses that do not break the stated invariant. Respond with
+JSON only.`;
+
+async function checkInvariants(
+    invariants: readonly string[],
+    source: string,
+    deadline: number,
+): Promise<{ checked: number; findings: AuditFinding[] }> {
+    if (invariants.length === 0) return { checked: 0, findings: [] };
+    const reply = await ask<InvariantReply>(
+        INVARIANT_SYSTEM,
+        `These invariants were derived from the contract before it was changed. For each, decide whether the code below still keeps it.
+
+INVARIANTS:
+${invariants.map((invariant, index) => `I${index + 1}. ${invariant}`).join("\n")}
+
+THE CODE NOW:
+${numbered(source).slice(0, 26_000)}
+
+Reply with JSON only: {"results":[{"id":"I1","status":"holds" or "broken","line":<line where it breaks, or null>,"severity":"critical|high|medium|low","how":"numbered calls that break it, empty if it holds"}]}
+
+Do not put source code or code fences in any field.`,
+        deadline,
+    );
+    return parseInvariantCheck(invariants, reply, source);
+}
+
 // ============= THE AUDIT =============
 
 export interface DeepAuditOptions {
@@ -940,25 +1088,34 @@ export interface FixReviewInput {
      * reusing it saves a model round-trip on every optimization.
      */
     threats?: ReadonlyArray<{ title: string; target: string; approach: string }>;
+    /**
+     * What the original contract promised to keep true. A fix is checked
+     * against these, not against invariants re-derived from the fixed code,
+     * which would quietly adapt to whatever the fix broke.
+     */
+    invariants?: readonly string[];
 }
 
 interface Recheck {
     results?: Array<{ id?: unknown; status?: unknown; line?: unknown }>;
 }
 
-/** How far from a changed line a new finding may sit and still be about the change. */
-const CHANGE_REACH = 2;
-
 /**
  * Re-auditing after a fix, the way an audit firm does a fix review.
  *
- * A second open-ended audit of the same code does not return the same list: a
- * model that found a high on Monday may find a different one on Tuesday in a
- * line nobody touched. Scoring an optimization that way measures the dice, not
- * the fix. So the earlier findings are carried forward and checked one by one
- * against the new code, and the fresh hunt only counts what it finds in lines
- * that actually changed, since that is the only place a new problem can have
- * come from.
+ * Three checks run on the fixed code. The earlier findings are carried forward
+ * and checked one by one, so a fix is credited only for what it actually
+ * resolved. The whole contract is audited again, because a fix in one place can
+ * break something in an unrelated part of it; every new finding is kept and
+ * labelled as in the changed code or elsewhere, and a repeat of a carried
+ * finding is not reported twice. And the invariants the original contract
+ * promised are checked against the new code, since an invariant is what an
+ * exploit violates.
+ *
+ * A second open-ended audit does not return exactly the same list as the first,
+ * so a finding elsewhere may have been in the original too and simply missed.
+ * It is still reported: a real issue in the code being shipped matters more
+ * than a flattering before-and-after. The label tells the reader where it sits.
  *
  * When the re-check cannot run, every earlier finding is kept. Claiming a fix
  * without evidence is the one mistake this must not make.
@@ -1044,51 +1201,70 @@ export async function fixReview(
         }
     };
 
-    // The fresh hunt, kept only where the code changed.
-    let introduced: AuditFinding[] = [];
+    // The full re-audit of the fixed contract, and the invariant check, run
+    // beside the re-check above. Anything they find is judged by the reviewer
+    // like any other finding before it is kept.
+    let fresh: AuditFinding[] = [];
+    let invariantsChecked = 0;
     let description: ContractDescription | null = null;
     let threats: Threat[] = [];
-    const huntChanges = async (): Promise<void> => {
-        if (input.changedLines.length > 0 && deadline - Date.now() > 20_000) {
-            description = await describe(source, deadline);
-            if (description !== null) {
-                threats =
-                    input.threats !== undefined && input.threats.length > 0
-                        ? input.threats.map((threat, index) => ({ id: `T${index + 1}`, ...threat }))
-                        : (await deriveThreats(description, source, deadline)).threats;
-                const changed = new Set(input.changedLines);
-                const nearChange = (line: number | null): boolean => {
-                    if (line === null) return false;
-                    for (let offset = -CHANGE_REACH; offset <= CHANGE_REACH; offset++) {
-                        if (changed.has(line + offset)) return true;
-                    }
-                    return false;
-                };
-                const candidates = dedupe(await findVulnerabilities(description, threats, source, deadline)).filter((finding) =>
-                    nearChange(finding.line),
-                );
-                const { kept } = await review(candidates, source, deadline, options.confirmed ?? []);
-                introduced = kept.filter((finding) => finding.confidence >= CONFIDENCE_FLOOR);
-            }
-        }
+    const reaudit = async (): Promise<void> => {
+        if (input.changedLines.length === 0 || deadline - Date.now() <= 20_000) return;
+        const described = await describe(source, deadline);
+        if (described === null) return;
+        const invariants =
+            input.invariants !== undefined && input.invariants.length > 0 ? [...input.invariants] : described.invariants;
+        description = { ...described, invariants };
+        threats =
+            input.threats !== undefined && input.threats.length > 0
+                ? input.threats.map((threat, index) => ({ id: `T${index + 1}`, ...threat }))
+                : (await deriveThreats(described, source, deadline)).threats;
+        const [hunted, invariantCheck] = await Promise.all([
+            findVulnerabilities(description, threats, source, deadline),
+            checkInvariants(invariants, source, deadline),
+        ]);
+        invariantsChecked = invariantCheck.checked;
+        const { kept } = await review(
+            dedupe([...invariantCheck.findings, ...hunted]),
+            source,
+            deadline,
+            options.confirmed ?? [],
+        );
+        fresh = kept.filter((finding) => finding.confidence >= CONFIDENCE_FLOOR);
     };
 
-    await Promise.all([recheckEarlier(), huntChanges()]);
+    await Promise.all([recheckEarlier(), reaudit()]);
+
+    const carriedForward = carried(stillPresent);
+    const introduced = classifyFixReviewFindings(fresh, carriedForward, input.changedLines);
+    const count = (scope: AuditFinding["scope"]): number => introduced.filter((finding) => finding.scope === scope).length;
+    const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
     if (resolved.length > 0) {
-        notes.push(`${resolved.length} earlier finding${resolved.length === 1 ? " was" : "s were"} confirmed fixed.`);
+        notes.push(`${plural(resolved.length, "earlier finding was", "earlier findings were")} confirmed fixed.`);
     }
-    if (introduced.length > 0) {
-        notes.push(`${introduced.length} new finding${introduced.length === 1 ? "" : "s"} in the changed code.`);
+    if (count("changed") > 0) {
+        notes.push(`${plural(count("changed"), "new finding", "new findings")} in the changed code.`);
+    }
+    if (count("elsewhere") > 0) {
+        notes.push(
+            `${plural(count("elsewhere"), "finding", "findings")} elsewhere in the contract from the full re-audit of the fixed code.`,
+        );
+    }
+    if (invariantsChecked > 0) {
+        notes.push(
+            `${invariantsChecked - count("invariant")} of ${invariantsChecked} invariants still hold after the fix.`,
+        );
     }
 
     return {
         description,
         threats,
-        findings: [...carried(stillPresent), ...introduced],
+        findings: [...carriedForward, ...introduced],
         rejected: resolved,
         complete: true,
         notes,
+        ...(invariantsChecked > 0 ? { invariantCheck: { checked: invariantsChecked, broken: count("invariant") } } : {}),
     };
 }
 
@@ -1100,7 +1276,14 @@ export async function fixReview(
  * finding, which is the kind of bug that only shows up in a report nobody
  * double-checked. It is tested directly rather than through a live model call.
  */
-export const __testing = { dedupe };
+export const __testing = { dedupe, classifyFixReviewFindings, parseInvariantCheck, normalizeFindings };
+
+/** One line saying where a fix review found a finding, for the reader. */
+const SCOPE_NOTES: Record<NonNullable<AuditFinding["scope"]>, string> = {
+    changed: "Found by the fix review, in the lines the fix changed.",
+    elsewhere: "Found by the full re-audit of the fixed code, away from the lines the fix changed.",
+    invariant: "Found by checking the original contract's invariants against the fixed code.",
+};
 
 /** Audit findings in the report's own shape. */
 export function toFindings(audit: DeepAudit, contractId: string): Finding[] {
@@ -1116,6 +1299,10 @@ export function toFindings(audit: DeepAudit, contractId: string): Finding[] {
             finding.preconditions !== undefined
                 ? `\nWhat has to be true first: ${finding.preconditions}`
                 : "",
+            finding.blockedBy !== undefined
+                ? `\nOnly reachable once this is fixed: ${finding.blockedBy}. Fixing that one exposes this one.`
+                : "",
+            finding.scope !== undefined ? `\n${SCOPE_NOTES[finding.scope]}` : "",
             // Carried-forward findings have no attack steps of their own.
             finding.attack.length > 0 ? `\nHow it is exploited:\n${finding.attack}` : "",
         ]

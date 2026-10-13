@@ -92,6 +92,21 @@ test("the prompt pins the pragma and lists findings worst first", () => {
     assert.ok(!/\n{3,}/.test(prompt));
 });
 
+test("the prompt asks for alternatives to be weighed and the rejected one named", () => {
+    const prompt = buildOptimizePrompt({
+        path: "contracts/Vault.sol",
+        contractName: "Vault",
+        source: SOURCE,
+        pragma: pragmaOf(SOURCE),
+        findings: [{ id: "crit1", severity: "critical", title: "Reentrancy", source: "security", line: 5 }],
+        contendedSlots: [],
+        expensiveFunctions: [],
+        imports: [],
+    });
+    assert.match(prompt, /weigh at least two ways to fix each critical or high finding/);
+    assert.match(prompt, /name the alternative you rejected/);
+});
+
 test("line deltas count real additions and removals", () => {
     assert.deepEqual(lineDelta("a\nb\nc", "a\nb\nc"), { added: 0, removed: 0 });
     assert.deepEqual(lineDelta("a\nb\nc", "a\nx\nb\nc"), { added: 1, removed: 0 });
