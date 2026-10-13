@@ -12,6 +12,7 @@ import { FOUNDER, SITE_NAME } from "@/lib/seo";
  */
 
 export const PRIMARY_NAV: ReadonlyArray<{ label: string; href: string }> = [
+  { label: "Pull requests", href: "/github" },
   { label: "Learn", href: "/learn" },
   { label: "Glossary", href: "/glossary" },
   { label: "Tutorials", href: "/tutorials" },
@@ -56,6 +57,7 @@ const FOOTER_COLUMNS: ReadonlyArray<{ title: string; links: ReadonlyArray<{ labe
     title: "Product",
     links: [
       { label: "Studio (IDE)", href: "/studio" },
+      { label: "Pull request reviews", href: "/github" },
       { label: "Builder guide", href: "/guide" },
       { label: "Chain Fit gas comparison", href: "/compare" },
       { label: "Live stats", href: "/stats" },

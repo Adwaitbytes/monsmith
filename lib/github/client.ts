@@ -41,7 +41,9 @@ export interface GitHubFetchOptions {
     /** App JWT or installation token. Absent means the unauthenticated path. */
     token?: string | null;
     accept?: string;
-    method?: 'GET' | 'POST';
+    method?: 'GET' | 'POST' | 'PATCH';
+    /** Sent as JSON. Only the pull request review writes anything. */
+    body?: unknown;
 }
 
 /**
@@ -65,6 +67,8 @@ export async function githubFetch(
         headers.Authorization = `Bearer ${token}`;
     }
 
+    if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -73,6 +77,7 @@ export async function githubFetch(
         response = await fetch(`${API_ROOT}${path}`, {
             method: options.method ?? 'GET',
             headers,
+            ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
             signal: controller.signal,
             cache: 'no-store',
         });

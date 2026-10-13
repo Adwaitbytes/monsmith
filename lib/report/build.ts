@@ -86,11 +86,28 @@ export interface BuildInput {
      * Re-audit one contract as a fix review rather than from scratch.
      *
      * Set by the optimizer: the earlier AI findings are re-checked against the
-     * new code, and fresh findings only count in the lines that changed, so the
-     * score moves because of the fix and not because a second open-ended pass
-     * happened to see something different in code nobody touched.
+     * new code one by one, so a fix is credited only for what it resolved, and
+     * the fixed contract is audited again in full with every new finding
+     * labelled by where it sits.
      */
     fixReview?: { path: string } & FixReviewInput;
+    /**
+     * Fix reviews for several contracts, keyed by path.
+     *
+     * Set by the pull request review: a push that changes a contract already
+     * reviewed on that pull request is checked against the earlier findings,
+     * which is what lets the comment say which of them the push fixed.
+     */
+    fixReviews?: Readonly<Record<string, FixReviewInput>>;
+    /**
+     * Contract reports to reuse as they are, keyed by path.
+     *
+     * Used only when the source is byte for byte what was audited, which the
+     * stored source hash proves. A pull request that pushes a fix to one
+     * contract should not pay for, or wait on, a second audit of the five it
+     * did not touch.
+     */
+    reuse?: Readonly<Record<string, ContractReport>>;
 }
 
 // ============= SECURITY =============
@@ -604,11 +621,16 @@ function plural(count: number, noun: string): string {
     return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
-function planContracts(files: Record<string, string>, cap: number): Plan {
+function planContracts(
+    files: Record<string, string>,
+    cap: number,
+    chosen: ReadonlySet<string> | null = null,
+): Plan {
     const auditable: PlannedContract[] = [];
     const skipped: SkippedContract[] = [];
     const notes: string[] = [];
     let oversized = 0;
+    let unselected = 0;
 
     for (const [path, source] of Object.entries(files)) {
         if (!path.toLowerCase().endsWith('.sol')) continue;
@@ -637,6 +659,13 @@ function planContracts(files: Record<string, string>, cap: number): Plan {
             continue;
         }
 
+        // A selection is applied before the cap, so a chosen contract is never
+        // dropped for being smaller than ten that nobody asked about.
+        if (chosen !== null && !chosen.has(path)) {
+            unselected += 1;
+            continue;
+        }
+
         auditable.push({
             id: path,
             path,
@@ -649,6 +678,12 @@ function planContracts(files: Record<string, string>, cap: number): Plan {
     if (oversized > 0) {
         notes.push(
             `${plural(oversized, 'file')} above ${Math.round(MAX_FILE_BYTES / 1024)} KB ${oversized === 1 ? 'was' : 'were'} not audited, because a source that large cannot be compiled and traced inside the per-contract time budget.`,
+        );
+    }
+
+    if (unselected > 0) {
+        notes.push(
+            `${plural(unselected, 'other contract')} in this workspace ${unselected === 1 ? 'was' : 'were'} not audited, because this run was limited to what you selected.`,
         );
     }
 
@@ -849,21 +884,10 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
     // request can deliver. Taking the smaller of the two is what stops a Pro
     // report from dying at the ceiling with most of the repository unmeasured.
     const effectiveCap = Math.min(input.cap, CONTRACTS_PER_RUN);
-    const { planned: allPlanned, skipped, notes } = planContracts(input.files, effectiveCap);
-
     // A selection filters the plan rather than the file map, so the compiler
     // still sees every source and imports keep resolving.
     const chosen = input.only === undefined ? null : new Set(input.only);
-    const planned = chosen === null ? allPlanned : allPlanned.filter((entry) => chosen.has(entry.path));
-
-    if (chosen !== null) {
-        const dropped = allPlanned.length - planned.length;
-        if (dropped > 0) {
-            notes.push(
-                `${plural(dropped, 'other contract')} in this workspace ${dropped === 1 ? 'was' : 'were'} not audited, because this run was limited to what you selected.`,
-            );
-        }
-    }
+    const { planned, skipped, notes } = planContracts(input.files, effectiveCap, chosen);
     const chains = selectChains(input.chains);
 
     yield {
@@ -889,10 +913,27 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
     // The deep audit shares the run's wall clock with everything else, so its
     // budget shrinks as the number of contracts grows. A ten contract repo must
     // not spend ninety seconds each on the audit and time out before the tenth.
-    const auditBudgetMs = Math.max(20_000, Math.round(240_000 / Math.max(1, planned.length)));
+    const reusable = (path: string, source: string): ContractReport | null => {
+        const earlier = input.reuse?.[path];
+        if (earlier === undefined || earlier.sourceHash !== keccak256(toBytes(source))) return null;
+        return earlier;
+    };
+    const toAudit = planned.filter((contract) => reusable(contract.path, contract.source) === null).length;
+    const auditBudgetMs = Math.max(20_000, Math.round(240_000 / Math.max(1, toAudit)));
 
     for (const [index, contract] of planned.entries()) {
         const { id, path, source } = contract;
+
+        const earlier = reusable(path, source);
+        if (earlier !== null) {
+            const reused: ContractReport = { ...earlier, id };
+            contracts.push(reused);
+            counts = addCounts(counts, reused.counts);
+            yield { type: 'progress', done: index + 1, total: planned.length, label: `Unchanged since the last review: ${path}` };
+            yield { type: 'contract', contract: reused };
+            continue;
+        }
+
         const sections: ContractSections = {
             security: pending(),
             parallel: pending(),
@@ -938,9 +979,9 @@ export async function* buildRepoReport(input: BuildInput): AsyncGenerator<Report
                     ...(finding.line !== undefined ? { line: finding.line } : {}),
                 })),
         };
-        const review = input.fixReview;
+        const review = input.fixReview?.path === path ? input.fixReview : input.fixReviews?.[path];
         const auditRun: Promise<DeepAudit | Error> = (
-            review !== undefined && review.path === path
+            review !== undefined
                 ? fixReview(source, review, auditOptions)
                 : deepAudit(source, auditOptions)
         ).catch((error: unknown) => (error instanceof Error ? error : new Error(String(error))));

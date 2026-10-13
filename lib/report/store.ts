@@ -337,6 +337,24 @@ async function adoptVisitorReports(userId: string, visitorId: string): Promise<v
     await sql`UPDATE reports SET user_id = ${userId} WHERE visitor_id = ${visitorId} AND user_id IS NULL`;
 }
 
+/**
+ * Opens a report produced by the pull request review.
+ *
+ * Its findings are already in a comment on the pull request, readable by
+ * everyone who can see that pull request, so the report the comment links to
+ * is opened to match. Nobody paid for it, which is why it carries its own
+ * provider and is never counted as a paid unlock.
+ */
+export async function unlockPullRequestReport(reportId: string): Promise<void> {
+    const sql = client();
+    if (sql === null) return;
+    await ensureSchema();
+    await sql`
+        INSERT INTO report_unlocks (report_id, provider) VALUES (${reportId}, 'github-pr')
+        ON CONFLICT (report_id) DO NOTHING
+    `;
+}
+
 export async function recordUnlock(
     reportId: string,
     owner: ReportOwner,
@@ -494,9 +512,9 @@ export async function freeOptimizationsUsed(userId: string): Promise<number> {
 /**
  * Whether someone paid for this report, by card or MON.
  *
- * Unlocks granted by an optimization, or given to the prepared starter reports,
- * do not count: neither was paid for, and letting them unlock optimizations
- * would make the free allowance unlimited.
+ * Unlocks granted by an optimization, given to the prepared starter reports, or
+ * opened by the pull request review do not count: none was paid for, and
+ * letting them unlock optimizations would make the free allowance unlimited.
  */
 export async function reportWasPaidFor(reportId: string): Promise<boolean> {
     const sql = client();
@@ -505,7 +523,7 @@ export async function reportWasPaidFor(reportId: string): Promise<boolean> {
     const rows = (await sql`
         SELECT 1 FROM report_unlocks
         WHERE report_id = ${reportId}
-          AND (provider IS NULL OR provider NOT IN ('optimization', 'showcase'))
+          AND (provider IS NULL OR provider NOT IN ('optimization', 'showcase', 'github-pr'))
     `) as unknown[];
     return rows.length > 0;
 }

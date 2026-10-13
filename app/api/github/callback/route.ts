@@ -32,6 +32,13 @@ export async function GET(request: Request) {
     const installationId = Number(params.get("installation_id"));
     const setupAction = params.get("setup_action");
 
+    // An install started from the pull request page carries no state, because
+    // it binds nothing to an account here: reviews arrive through the webhook
+    // whoever installed. Nothing is written, so there is nothing to forge.
+    if (params.get("state") === null && setupAction !== "delete") {
+        return NextResponse.redirect(new URL("/github?installed=1", request.url));
+    }
+
     const viewer = await getApiViewer();
     const userId = viewer.userId;
     if (userId === null) return back(request, "signin");

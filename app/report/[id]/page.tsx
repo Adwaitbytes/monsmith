@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import { SiteFooter, SiteNav } from "../../SiteChrome";
+import { publicInstallUrl } from "@/lib/github/app";
 import { loadReport } from "@/lib/report/store";
 import { redactReport } from "@/lib/report/redact";
 import { entitlementFor } from "@/lib/report/entitlement";
@@ -115,7 +116,7 @@ export default async function ReportPage({ params, searchParams }: PageProps) {
             <div className="print:hidden">
                 <SiteNav />
             </div>
-            <ReportView report={report} createdAtLabel={formatRunTime(stored.createdAt)} checkout={checkout} autoPrint={query.print === "1"} />
+            <ReportView report={report} createdAtLabel={formatRunTime(stored.createdAt)} checkout={checkout} autoPrint={query.print === "1"} installUrl={publicInstallUrl()} />
             <div className="print:hidden">
                 <SiteFooter />
             </div>

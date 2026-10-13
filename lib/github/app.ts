@@ -57,6 +57,16 @@ export function installUrl(state: string): string | null {
     return `https://github.com/apps/${config.slug}/installations/new?state=${encodeURIComponent(state)}`;
 }
 
+/**
+ * The plain install link, for the pull request review. It binds nothing to a
+ * Monsmith account, so it needs no state: reviews arrive through the webhook
+ * whoever installed the app.
+ */
+export function publicInstallUrl(): string | null {
+    const config = appConfig();
+    return config === null ? null : `https://github.com/apps/${config.slug}/installations/new`;
+}
+
 // ============= APP AUTHENTICATION =============
 
 type SigningKey = Awaited<ReturnType<typeof importPKCS8>>;

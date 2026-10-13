@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, Loader2, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, ArrowRight, CheckCircle2, GitPullRequest, Loader2, ShieldAlert } from 'lucide-react';
 
 import { useReportUnlock } from '@/lib/billing/useReportUnlock';
 import type { RepoReport } from '@/lib/report/types';
@@ -36,6 +36,49 @@ export interface ReportViewProps {
     autoPrint?: boolean;
     /** Preformatted on the server. See the note in the page component. */
     createdAtLabel: string;
+    /** The GitHub App install link, or null when the app is not configured. */
+    installUrl?: string | null;
+}
+
+/**
+ * The way from one report to a review on every pull request.
+ *
+ * A report is one look at code that will change next week. The repeat unit for
+ * an auditor is the commit, so every report offers the install that turns this
+ * one look into a review of each change, named for the repository it came from
+ * when there is one.
+ */
+function PullRequestOffer({ report, installUrl }: { report: RepoReport; installUrl: string }) {
+    const origin = report.origin;
+    const repo = origin.kind === 'github' ? `${origin.owner}/${origin.repo}` : null;
+    return (
+        <section className="mt-10 rounded-2xl border border-accent-line bg-accent-soft p-6 print:hidden">
+            <div className="flex items-start gap-3">
+                <GitPullRequest size={18} className="mt-0.5 shrink-0 text-accent" aria-hidden />
+                <div>
+                    <h2 className="font-display text-[15px] font-semibold">
+                        {repo !== null ? `Review every pull request on ${repo}` : 'Run this on every pull request'}
+                    </h2>
+                    <p className="mt-1.5 text-[13px] leading-relaxed text-text-secondary">
+                        Install the Monsmith GitHub App and each pull request that changes a contract gets this audit as one comment kept
+                        up to date, the findings on their lines, a count of what each push fixed, and an onchain attestation when it merges.
+                    </p>
+                    <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <a
+                            href={installUrl}
+                            className="group inline-flex items-center gap-1.5 rounded-lg bg-text-primary px-4 py-2 text-[13px] font-semibold text-background outline-none ring-accent-line transition-opacity hover:opacity-90 focus-visible:ring-2"
+                        >
+                            Install on GitHub
+                            <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden />
+                        </a>
+                        <Link href="/github" className="text-[13px] font-medium text-text-secondary underline-offset-4 outline-none ring-accent-line hover:text-text-primary hover:underline focus-visible:ring-2">
+                            How it works
+                        </Link>
+                    </div>
+                </div>
+            </div>
+        </section>
+    );
 }
 
 function originLabel(report: RepoReport): string {
@@ -171,7 +214,7 @@ function ReturnBanner({ status, onDismiss }: { status: Return; onDismiss: () => 
     );
 }
 
-export function ReportView({ report: initial, createdAtLabel, checkout = null, autoPrint = false }: ReportViewProps) {
+export function ReportView({ report: initial, createdAtLabel, checkout = null, autoPrint = false, installUrl = null }: ReportViewProps) {
     // Held in state so an unlock, by payment or by signing in, opens the
     // report in place instead of sending the reader through a reload.
     const [report, setReport] = useState(initial);
@@ -247,6 +290,8 @@ export function ReportView({ report: initial, createdAtLabel, checkout = null, a
                     />
                 </div>
             </div>
+
+            {installUrl !== null && <PullRequestOffer report={report} installUrl={installUrl} />}
 
             <section className="mt-10 rounded-2xl border border-border-subtle bg-surface-sunken p-6">
                 <div className="flex items-start gap-3">
