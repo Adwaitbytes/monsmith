@@ -125,3 +125,19 @@ test("the report says where a re-audit finding sits and what masks a finding", (
     assert.match(elsewhere.description ?? "", /away from the lines the fix changed/);
     assert.match(masked.description ?? "", /Reentrancy in splitDAO/);
 });
+
+test("a new finding the model matches to a known one is dropped, and only ids it was asked about", () => {
+    const { dropKnownDefects } = __testing;
+    const fresh = [finding("Duplicate stakers over-credit rewards", 52), finding("Fee can exceed the pool", 47)];
+    assert.deepEqual(
+        dropKnownDefects(fresh, { duplicates: [{ id: "N1", known: "K2" }, { id: "N9", known: "K1" }] }).map((f) => f.title),
+        ["Fee can exceed the pool"],
+    );
+});
+
+test("an unreadable dedup reply drops nothing", () => {
+    const { dropKnownDefects } = __testing;
+    const fresh = [finding("Duplicate stakers over-credit rewards", 52)];
+    assert.equal(dropKnownDefects(fresh, null).length, 1);
+    assert.equal(dropKnownDefects(fresh, { duplicates: [{ id: "N1" }] }).length, 1);
+});

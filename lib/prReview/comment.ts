@@ -98,8 +98,11 @@ function scoreTable(input: CommentInput): string[] {
             score === undefined || first === undefined || first === score
                 ? ''
                 : ` (${first} at the first review)`;
-        const c = contract.counts;
-        return `| [\`${contract.path}\`](${input.blobUrl(contract.path, null)}) | ${score === undefined ? 'not scored' : `**${score}** ${contract.health?.grade ?? ''}${movement}`} | ${c.critical} | ${c.high} | ${c.medium} | ${c.low} |`;
+        // The same findings the headline counts: security, not gas or chain fit,
+        // which still weigh on the score and are in the full report.
+        const security = contract.findings.filter((finding) => finding.source === 'security' || finding.source === 'ai');
+        const count = (severity: Severity): number => security.filter((finding) => finding.severity === severity).length;
+        return `| [\`${contract.path}\`](${input.blobUrl(contract.path, null)}) | ${score === undefined ? 'not scored' : `**${score}** ${contract.health?.grade ?? ''}${movement}`} | ${count('critical')} | ${count('high')} | ${count('medium')} | ${count('low')} |`;
     });
     return ['| Contract | Score | Critical | High | Medium | Low |', '| --- | --- | ---: | ---: | ---: | ---: |', ...rows];
 }
@@ -179,6 +182,7 @@ export function renderComment(input: CommentInput): string {
     const notes = report.notes.filter((note) => !note.startsWith('A repository is only as safe'));
     if (notes.length > 0) {
         out.push('<details>', '<summary>How this was checked</summary>', '');
+        out.push('- The score also weighs gas and chain fit findings, which are listed in the full report rather than here.');
         for (const note of notes) out.push(`- ${escape(note)}`);
         out.push('', '</details>', '');
     }

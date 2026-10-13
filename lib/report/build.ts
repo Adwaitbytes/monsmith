@@ -167,13 +167,92 @@ function unguardedPrivileged(code: string): string | null {
     return null;
 }
 
+const FUNCTION_HEADER = /\bfunction\s+([A-Za-z_]\w*)\s*\(([^)]*)\)([^{;]*)\{/g;
+const VALUE_TRANSFER = '.call{value:';
+const TYPE_WORD = /^(?:uint\d*|int\d*|bool|address|bytes\d*|string|mapping)$/;
+
+interface FunctionBody {
+    name: string;
+    params: string;
+    /** Visibility, mutability and modifiers, as written between the parameters and the body. */
+    header: string;
+    body: string;
+    /** Offset of the body's first character in the code. */
+    start: number;
+}
+
+function functionBodies(code: string): FunctionBody[] {
+    const bodies: FunctionBody[] = [];
+    for (const match of code.matchAll(FUNCTION_HEADER)) {
+        const open = (match.index ?? 0) + match[0].length - 1;
+        bodies.push({ name: match[1], params: match[2], header: match[3], body: bodyFrom(code, open), start: open + 1 });
+    }
+    return bodies;
+}
+
+/** Names a function declares for itself: parameters, locals and tuple targets. */
+function localNames(fn: FunctionBody): Set<string> {
+    const names = new Set<string>();
+    const declared = /\b(?:uint\d*|int\d*|bool|address|bytes\d*|string)(?:\s+(?:memory|storage|calldata|payable))*\s+([A-Za-z_]\w*)/g;
+    for (const match of `${fn.params};${fn.body}`.matchAll(declared)) names.add(match[1]);
+    return names;
+}
+
+/** True when `tail` assigns to, deletes from, or pushes to something the function did not declare. */
+function writesState(tail: string, locals: ReadonlySet<string>): boolean {
+    if (/\bdelete\s+[A-Za-z_]/.test(tail)) return true;
+    for (const match of tail.matchAll(/([A-Za-z_]\w*)((?:\s*\[[^\]]*\]|\s*\.\s*[A-Za-z_]\w*)*)\s*(?:[+\-*/%|&^]|<<|>>)?=(?!=)/g)) {
+        const name = match[1];
+        if (TYPE_WORD.test(name) || locals.has(name)) continue;
+        // A declaration such as `uint256 x =` names its type first.
+        const before = tail.slice(0, match.index ?? 0).trimEnd();
+        if (/\b(?:uint\d*|int\d*|bool|address|bytes\d*|string|memory|storage|calldata)$/.test(before)) continue;
+        return true;
+    }
+    return /\b([A-Za-z_]\w*)(?:\[[^\]]*\])*\.(?:push|pop)\s*\(/.test(tail);
+}
+
+/**
+ * The offset of the first value transfer that a function follows with a write
+ * to contract state, or null.
+ *
+ * That ordering is what reentrancy is: the recipient runs before the books are
+ * updated, so a re-entered call sees the old balance. A transfer made after
+ * every write, the checks-effects-interactions order, is not flagged, which is
+ * how a vault that already does it right stopped being marked critical. A
+ * transfer made through an internal helper is followed into its callers, which
+ * is how The DAO did it.
+ */
+function reentrantTransfer(code: string): number | null {
+    const bodies = functionBodies(code);
+    const senders = new Set(
+        bodies
+            .filter((fn) => fn.body.includes(VALUE_TRANSFER) && /\b(?:internal|private)\b/.test(fn.header))
+            .map((fn) => fn.name),
+    );
+    for (const fn of bodies) {
+        const locals = localNames(fn);
+        const sites: number[] = [];
+        for (let at = fn.body.indexOf(VALUE_TRANSFER); at !== -1; at = fn.body.indexOf(VALUE_TRANSFER, at + 1)) sites.push(at);
+        for (const helper of senders) {
+            if (helper === fn.name) continue;
+            for (const match of fn.body.matchAll(new RegExp(`\\b${helper}\\s*\\(`, 'g'))) sites.push(match.index ?? 0);
+        }
+        for (const site of sites.sort((a, b) => a - b)) {
+            const end = fn.body.indexOf(';', site);
+            if (end !== -1 && writesState(fn.body.slice(end + 1), locals)) return fn.start + site;
+        }
+    }
+    return null;
+}
+
 interface SecurityRule {
     severity: Severity;
     title: string;
     description: string;
     recommendation: string;
     /** Where in the source to point the reader, when the rule has a giveaway. */
-    anchor?: RegExp;
+    anchor?: RegExp | ((code: string) => number | null);
     /** `code` has comments blanked out; `source` is untouched, for the rules that read comments. */
     applies(code: string, source: string): boolean;
 }
@@ -182,14 +261,14 @@ const SECURITY_RULES: readonly SecurityRule[] = [
     {
         severity: 'critical',
         title: 'Potential Reentrancy Vulnerability',
-        description: 'Contract uses low-level call with value without reentrancy protection',
+        description: 'A function sends value with a low-level call and writes contract state after it, so the recipient can re-enter before the books are updated',
         recommendation:
-            "Import and use OpenZeppelin's ReentrancyGuard modifier on external functions that transfer value",
-        anchor: /\.call\{value:/,
+            'Update state before the call (checks, effects, interactions), or add a reentrancy guard to the functions that send value',
+        anchor: reentrantTransfer,
         applies: (code) =>
-            code.includes('.call{value:') &&
             !code.includes('ReentrancyGuard') &&
-            !code.includes('nonReentrant'),
+            !code.includes('nonReentrant') &&
+            reentrantTransfer(code) !== null,
     },
     {
         severity: 'high',
@@ -330,11 +409,11 @@ const RISK_WEIGHT: Readonly<Record<Severity, number>> = {
 };
 
 /** 1-based line of the first match, so a finding can open the right place. */
-function lineOf(code: string, anchor: RegExp | undefined): number | undefined {
+function lineOf(code: string, anchor: SecurityRule['anchor']): number | undefined {
     if (anchor === undefined) return undefined;
-    const match = anchor.exec(code);
-    if (match === null) return undefined;
-    return code.slice(0, match.index).split('\n').length;
+    const index = typeof anchor === 'function' ? anchor(code) : (anchor.exec(code)?.index ?? null);
+    if (index === null) return undefined;
+    return code.slice(0, index).split('\n').length;
 }
 
 /**

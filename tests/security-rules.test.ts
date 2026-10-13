@@ -61,3 +61,45 @@ test("finding lines still point at the code once comments are blanked", () => {
     const issue = analyzeSecurity(DAO).issues.find((entry) => entry.title === "Use of tx.origin for Authorization");
     assert.ok(issue?.line !== undefined && DAO.split("\n")[issue.line - 1].includes("tx.origin"));
 });
+
+const SEND_THEN_WRITE = `contract V {
+    mapping(address => uint256) public rewardOf;
+    function claim() external {
+        uint256 reward = rewardOf[msg.sender];
+        (bool ok, ) = msg.sender.call{value: reward}("");
+        require(ok);
+        rewardOf[msg.sender] = 0;
+    }
+}`;
+
+const WRITE_THEN_SEND = `contract V {
+    mapping(address => uint256) public stakeOf;
+    uint256 public totalStaked;
+    function unstake(uint256 amount) external {
+        uint256 staked = stakeOf[msg.sender];
+        stakeOf[msg.sender] = staked - amount;
+        totalStaked -= amount;
+        (bool ok, ) = msg.sender.call{value: amount}("");
+        if (!ok) revert();
+        bool done = true;
+    }
+}`;
+
+test("a value call followed by a state write is reentrancy, and points at the call", () => {
+    const issue = analyzeSecurity(SEND_THEN_WRITE).issues.find((entry) => /Reentrancy/.test(entry.title));
+    assert.ok(issue !== undefined);
+    assert.equal(issue.line, 5);
+});
+
+test("checks-effects-interactions is not flagged, even with locals written after the call", () => {
+    assert.ok(!titles(WRITE_THEN_SEND).some((title) => /Reentrancy/.test(title)));
+});
+
+test("a guard silences the rule", () => {
+    assert.ok(!titles(SEND_THEN_WRITE.replace("external {", "external nonReentrant {")).some((title) => /Reentrancy/.test(title)));
+});
+
+test("a value call inside an internal helper is followed into the caller that writes after it", () => {
+    const issue = analyzeSecurity(DAO).issues.find((entry) => /Reentrancy/.test(entry.title));
+    assert.ok(issue?.line !== undefined && /payOut\(|call\{value:/.test(DAO.split("\n")[issue.line - 1]));
+});

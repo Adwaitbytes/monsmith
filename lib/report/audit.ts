@@ -906,6 +906,60 @@ function classifyFixReviewFindings(
         );
 }
 
+interface KnownDefectReply {
+    duplicates?: Array<{ id?: unknown; known?: unknown }>;
+}
+
+/**
+ * The new findings that are not a known defect said again, from the model's answer.
+ *
+ * Only an id the question actually asked about is dropped, so a reply that
+ * invents ids or is unreadable removes nothing. Keeping a duplicate costs the
+ * reader a moment; dropping a real new finding costs them the bug.
+ */
+function dropKnownDefects(fresh: readonly AuditFinding[], reply: KnownDefectReply | null): AuditFinding[] {
+    if (reply === null || !Array.isArray(reply.duplicates)) return [...fresh];
+    const known = new Set(
+        reply.duplicates
+            .filter((entry) => typeof entry.id === "string" && typeof entry.known === "string")
+            .map((entry) => String(entry.id).toUpperCase()),
+    );
+    return fresh.filter((_, index) => !known.has(`N${index + 1}`));
+}
+
+/**
+ * Drops new findings that restate one already carried forward.
+ *
+ * A second open-ended audit describes the same bug in different words, and the
+ * title-and-line comparison in `classifyFixReviewFindings` only catches the
+ * close ones. Without this, a fix review on a pull request told the author
+ * their push "introduced 3 new issues" that were the old ones renamed, which is
+ * the fastest way to teach someone to ignore the comment.
+ */
+async function withoutKnownDefects(
+    fresh: readonly AuditFinding[],
+    carried: readonly AuditFinding[],
+    source: string,
+    deadline: number,
+): Promise<AuditFinding[]> {
+    if (fresh.length === 0 || carried.length === 0) return [...fresh];
+    const reply = await ask<KnownDefectReply>(
+        "You deduplicate smart contract audit findings. Two findings are the same defect when they share a root cause in the same code, even if they describe different symptoms or consequences of it. A different bug in nearby code, or a new consequence that only exists because of a code change, is not the same defect.",
+        `KNOWN findings, already reported:
+${carried.map((finding, index) => `K${index + 1}. [${finding.severity}] ${finding.title}${finding.line === null ? "" : ` (line ${finding.line})`}\n${finding.impact.slice(0, 400)}`).join("\n\n")}
+
+NEW findings from a re-audit of the code below:
+${fresh.map((finding, index) => `N${index + 1}. [${finding.severity}] ${finding.title}${finding.line === null ? "" : ` (line ${finding.line})`}\n${finding.impact.slice(0, 400)}`).join("\n\n")}
+
+THE CODE:
+${numbered(source)}
+
+For each NEW finding that is the same defect as a KNOWN one, name both. Reply with JSON only: {"duplicates":[{"id":"N1","known":"K2"}]}. An empty list is a normal answer.`,
+        deadline,
+    );
+    return dropKnownDefects(fresh, reply);
+}
+
 interface InvariantReply {
     results?: Array<{ id?: unknown; status?: unknown; line?: unknown; severity?: unknown; how?: unknown }>;
 }
@@ -1236,7 +1290,12 @@ export async function fixReview(
     await Promise.all([recheckEarlier(), reaudit()]);
 
     const carriedForward = carried(stillPresent);
-    const introduced = classifyFixReviewFindings(fresh, carriedForward, input.changedLines);
+    const introduced = await withoutKnownDefects(
+        classifyFixReviewFindings(fresh, carriedForward, input.changedLines),
+        carriedForward,
+        source,
+        deadline,
+    );
     const count = (scope: AuditFinding["scope"]): number => introduced.filter((finding) => finding.scope === scope).length;
     const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
@@ -1276,7 +1335,7 @@ export async function fixReview(
  * finding, which is the kind of bug that only shows up in a report nobody
  * double-checked. It is tested directly rather than through a live model call.
  */
-export const __testing = { dedupe, classifyFixReviewFindings, parseInvariantCheck, normalizeFindings };
+export const __testing = { dedupe, classifyFixReviewFindings, parseInvariantCheck, normalizeFindings, dropKnownDefects };
 
 /** One line saying where a fix review found a finding, for the reader. */
 const SCOPE_NOTES: Record<NonNullable<AuditFinding["scope"]>, string> = {
