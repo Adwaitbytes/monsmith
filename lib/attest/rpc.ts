@@ -52,6 +52,8 @@ export interface DeployedCode {
     hasCode: boolean;
     /** Set when the address is an EIP-1967 proxy: the contract whose code actually runs. */
     implementation: Address | null;
+    /** The block both reads were made at, so the answer describes one moment of the chain. */
+    blockNumber: bigint;
 }
 
 /** Decodes an implementation slot value. Exported for tests. */
@@ -71,9 +73,12 @@ export function implementationFromSlot(slot: string | undefined): Address | null
  */
 export async function deployedCode(chainId: number, address: Address): Promise<DeployedCode> {
     const client = createPublicClient({ transport: transportFor(chainId) });
+    // Pinned to one block: a proxy upgraded between the two reads would
+    // otherwise be described half before and half after.
+    const blockNumber = await client.getBlockNumber();
     const [code, slot] = await Promise.all([
-        client.getCode({ address }),
-        client.getStorageAt({ address, slot: IMPLEMENTATION_SLOT }),
+        client.getCode({ address, blockNumber }),
+        client.getStorageAt({ address, slot: IMPLEMENTATION_SLOT, blockNumber }),
     ]);
-    return { hasCode: code !== undefined && code !== '0x', implementation: implementationFromSlot(slot) };
+    return { hasCode: code !== undefined && code !== '0x', implementation: implementationFromSlot(slot), blockNumber };
 }

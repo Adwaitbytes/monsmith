@@ -477,6 +477,25 @@ curl "https://www.monsmith.com/api/verify?source=0x55f6d6e8ea0c86f866b403bf5e3c3
 }
 ```
 
+**Proxies: fail safe if the code changes between the check and the call.** A proxy is always answered for the implementation it points at right now, never for a score bound to the proxy's own address, since its owner can repoint it the next block. The reply names that implementation and the block it was read at, and gives a `recheck` link. Call it right before you send. If the proxy was upgraded in between, the answer comes back `stale` and not attested, so the check fails closed:
+
+```sh
+curl "https://www.monsmith.com/api/verify?chainId=1&address=0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2&expectImplementation=0x5FAab9E1adbddaD0a08734BE8a52185Fd6558E14"
+```
+
+```json
+{
+  "attested": false,
+  "stale": true,
+  "expectedImplementation": "0x5FAab9E1adbddaD0a08734BE8a52185Fd6558E14",
+  "implementation": "0x728a138A4823392C2EFA55e028d434F526fE03CF",
+  "reason": "The proxy now runs different code than the answer you hold, so that answer no longer applies. Do not call it until the new implementation is checked.",
+  "checkedAtBlock": "26185761"
+}
+```
+
+Every proxy anyone verifies is also watched. Every upgrade rewrites the EIP-1967 implementation slot, so Monsmith re-reads that slot whenever the proxy is asked about and on a daily schedule. An upgrade it has seen is in every later answer (`upgradedFrom`, `upgradeSeenAt`) with an `auditNewCode` link that opens the new implementation in the studio for a fresh audit.
+
 **Solidity.** Gate a call on a Chainlink-confirmed audit:
 
 ```solidity
