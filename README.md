@@ -23,7 +23,7 @@
   <img alt="ERC-8004 agent 10332" src="https://img.shields.io/badge/ERC--8004-agent%20%2310332-141218" />
   <img alt="11 attestations" src="https://img.shields.io/badge/attestations-11%20on%20chain-1F9D6B" />
   <img alt="2 Chainlink verdicts" src="https://img.shields.io/badge/Chainlink%20CRE-2%20verdicts-375BD2" />
-  <img alt="336 unit tests" src="https://img.shields.io/badge/unit%20tests-336%20passing-1F9D6B" />
+  <img alt="343 unit tests" src="https://img.shields.io/badge/unit%20tests-343%20passing-1F9D6B" />
   <img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-A29EAA" />
 </p>
 
@@ -339,7 +339,9 @@ flowchart LR
 
 **Proof:** wallet [`0x37E6Be20…A683`](https://monadvision.com/address/0x37E6Be20e5cad8701c0355B38Bc955C46CcCa683) received the identity in [`0x700c0568…dc64`](https://monadvision.com/tx/0x700c05686de63291bcf98570dfb61f1ba6d991dbe59ece32a80f92cdd089dc64) and signed the latest attestation, [`0x1a295209…bcfc`](https://monadvision.com/tx/0x1a295209f50c6a47ea6ca0cc26db496ac814ff78631288c92c63f97e6420bcfc) (MyToken, 85).
 
-**Code:** `lib/attest/signer.ts`, `scripts/dynamic-agent-wallet.mjs`, `scripts/move-identity-to-dynamic.mjs` · **Video:** [0:59](https://youtu.be/d1GNPTCjaDc)
+**The smallest example: the identity flip.** [`examples/dynamic-agent-identity`](examples/dynamic-agent-identity) teaches the two-wallets idea without the rest of Monsmith. One gate contract lets only the current owner of an agent's identity call it. On Monad mainnet the developer wallet registered agent #10402 and could act, while the Dynamic wallet was refused. Then the identity [moved to the Dynamic wallet](https://monadscan.com/tx/0xc12860eb13d9aba38493cf1a7c64e645ec29023dd41f29fbdd017bcea1751055), the Dynamic wallet [acted](https://monadscan.com/tx/0x93b084015cb0d7b0a81c0066e68336268a286bceb028cfbb2a77910843e4ecf6), and the developer was refused by the gate it deployed.
+
+**Code:** `lib/attest/signer.ts`, `scripts/dynamic-agent-wallet.mjs`, `scripts/move-identity-to-dynamic.mjs`, `scripts/dynamic-identity-flip.mjs` · **Video:** [0:59](https://youtu.be/d1GNPTCjaDc)
 
 ---
 
@@ -566,12 +568,13 @@ lib/
   seal/              Mera sealed reports
   stake/             Nansen Profiler client
 contracts/
+  examples/          AgentGate.sol, the Dynamic identity flip
   attest/            MonsmithAttestations.sol
   cre/               MonsmithVerdicts.sol and the CRE receiver template
 cre/                 Chainlink CRE workflow (attestation-verifier)
 indexer/             Envio HyperIndex indexer
 scripts/             ERC-8004 setup, verdicts deploy, Dynamic wallet, identity move
-tests/               336 unit tests
+tests/               343 unit tests
 ```
 
 ---
@@ -638,7 +641,7 @@ Indexer: [`indexer/README.md`](indexer/README.md). CRE workflow: [`cre/README.md
 ## Tests
 
 ```sh
-npm run test:unit                       # 336 tests: audit, reports, pull request review, payments, attestations, ledger, RPC, sealing
+npm run test:unit                       # 343 tests: audit, reports, pull request review, payments, attestations, ledger, RPC, sealing
 npx hardhat test                        # contracts, including MonsmithAttestations and MonsmithVerdicts
 cd indexer && pnpm test                 # Envio handlers
 cd cre/attestation-verifier && bun test # CRE workflow
