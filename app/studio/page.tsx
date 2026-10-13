@@ -2738,6 +2738,7 @@ Be concise but thorough. Format your response with markdown for readability.`;
             unlocking={unlocking || reportUnlock.busy}
             unlockError={unlockError ?? reportUnlock.error}
             onRerun={() => runReport()}
+            offerPullRequests
             onClose={() => {
               setRailOpen(false);
               setRailForced(false);

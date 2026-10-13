@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink, Loader2, MinusCircle, Play, RotateCw, ShieldCheck, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, ExternalLink, GitPullRequest, Loader2, MinusCircle, Play, RotateCw, ShieldCheck, X } from 'lucide-react';
 
 import type { ChainFitReport } from '@/lib/chainfit/report';
 import type { GasProfile } from '@/lib/gasProfiler';
@@ -96,6 +96,38 @@ export interface ReportRailProps {
      * cannot close from inside is a dock people leave open and resent.
      */
     onClose?: () => void;
+    /**
+     * Offers the GitHub App under a finished report. Off where the page around
+     * the rail already makes that offer, so it is never made twice.
+     */
+    offerPullRequests?: boolean;
+}
+
+/**
+ * The step from one report to a review on every pull request. A report is one
+ * look at code that changes next week, and the commit is what repeats.
+ */
+function PullRequestNote({ report }: { report: RepoReport }) {
+    const origin = report.origin;
+    const repo = origin.kind === 'github' ? `${origin.owner}/${origin.repo}` : null;
+    return (
+        <div className="border-t border-border-subtle px-5 pb-20 pt-5 print:hidden">
+            <a
+                href="/github"
+                className="group flex items-start gap-3 rounded-xl border border-border-subtle p-3.5 outline-none ring-accent-line transition-colors hover:bg-surface-raised focus-visible:ring-2"
+            >
+                <GitPullRequest size={15} className="mt-0.5 shrink-0 text-accent" aria-hidden />
+                <span>
+                    <span className="block text-[13px] font-semibold text-text-primary">
+                        {repo !== null ? `Review every pull request on ${repo}` : 'Run this on every pull request'}
+                    </span>
+                    <span className="mt-0.5 block text-[12.5px] leading-relaxed text-text-secondary">
+                        Install the GitHub App and each pull request that changes a contract gets this audit, with what each push fixed.
+                    </span>
+                </span>
+            </a>
+        </div>
+    );
 }
 
 // ============= SMALL FORMATTERS =============
@@ -1058,6 +1090,7 @@ function ReportDocument({
     onShare,
     onDownloadPdf,
     optimize,
+    offerPullRequests = false,
 }: {
     report: RepoReport;
     entitled: boolean;
@@ -1072,6 +1105,7 @@ function ReportDocument({
     onShare?: () => void;
     onDownloadPdf?: () => void;
     optimize?: OptimizeCta;
+    offerPullRequests?: boolean;
 }) {
     const [activeSection, setActiveSection] = useState<SectionKind | null>(null);
     const sectionRefs = useRef<Partial<Record<SectionKind, HTMLElement>>>({});
@@ -1169,6 +1203,8 @@ function ReportDocument({
                     />
                 </div>
             )}
+
+            {!showUnlock && offerPullRequests && <PullRequestNote report={report} />}
         </>
     );
 }
@@ -1190,6 +1226,7 @@ export function ReportRail({
     onDownloadPdf,
     optimize,
     onClose,
+    offerPullRequests = false,
 }: ReportRailProps) {
     const scrollRef = useRef<HTMLDivElement | null>(null);
     const report = state.status === 'ready' ? state.report : state.status === 'running' ? state.partial : null;
@@ -1234,6 +1271,7 @@ export function ReportRail({
                                 : {})}
                             {...(state.status === 'ready' && onDownloadPdf !== undefined ? { onDownloadPdf } : {})}
                             {...(state.status === 'ready' && optimize !== undefined ? { optimize } : {})}
+                            offerPullRequests={state.status === 'ready' && offerPullRequests}
                         />
                     )}
                 </div>
