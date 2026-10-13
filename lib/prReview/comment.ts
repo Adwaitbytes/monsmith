@@ -82,12 +82,15 @@ function headline(input: CommentInput): string {
             ? 'No security findings in the contracts this pull request changes'
             : `${plural(open, 'security finding')} in the contracts this pull request changes`;
     }
-    const parts: string[] = [];
-    if (delta.fixed.length > 0) parts.push(`this push fixed ${plural(delta.fixed.length, 'finding')}`);
-    if (delta.introduced.length > 0) parts.push(`introduced ${plural(delta.introduced.length, 'new one')}`);
-    if (parts.length === 0) return open === 0 ? 'Still clean after this push' : `No change since the last push, ${plural(open, 'finding')} still open`;
-    const sentence = parts.join(' and ');
-    return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+    // "Found", not "introduced": the re-audit can also surface something the
+    // last review missed, and blaming the push for it would be a claim the
+    // review cannot back.
+    const fixed = delta.fixed.length > 0 ? `This push fixed ${plural(delta.fixed.length, 'finding')}` : null;
+    const found = delta.introduced.length > 0 ? `${plural(delta.introduced.length, 'new finding')} since the last push` : null;
+    if (fixed !== null && found !== null) return `${fixed}, and the re-audit found ${plural(delta.introduced.length, 'new one')}`;
+    if (fixed !== null) return fixed;
+    if (found !== null) return found.charAt(0).toUpperCase() + found.slice(1);
+    return open === 0 ? 'Still clean after this push' : `No change since the last push, ${plural(open, 'finding')} still open`;
 }
 
 function scoreTable(input: CommentInput): string[] {
@@ -158,7 +161,7 @@ export function renderComment(input: CommentInput): string {
     }
 
     if (delta.introduced.length > 0) {
-        out.push(`**New in this push**`, '');
+        out.push(`**New since the last push**`, '');
         for (const finding of delta.introduced) out.push(`- **${LABEL[finding.severity]}** · ${escape(finding.title)} · ${where(finding, input.blobUrl)}`);
         out.push('');
     }
