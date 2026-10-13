@@ -12,6 +12,7 @@
 <p align="center">
   <a href="https://www.monsmith.com/studio"><b>Live product</b></a> ·
   <a href="https://www.monsmith.com/verify"><b>Verify a contract</b></a> ·
+  <a href="https://www.monsmith.com/github"><b>Review every pull request</b></a> ·
   <a href="https://youtu.be/amRA1dh4zBw"><b>Demo video</b></a> ·
   <a href="https://youtu.be/TtPaZDOJ-r8"><b>Pitch video</b></a> ·
   <a href="https://www.monsmith.com/agent.json"><b>Agent card</b></a>
@@ -22,7 +23,7 @@
   <img alt="ERC-8004 agent 10332" src="https://img.shields.io/badge/ERC--8004-agent%20%2310332-141218" />
   <img alt="11 attestations" src="https://img.shields.io/badge/attestations-11%20on%20chain-1F9D6B" />
   <img alt="2 Chainlink verdicts" src="https://img.shields.io/badge/Chainlink%20CRE-2%20verdicts-375BD2" />
-  <img alt="303 unit tests" src="https://img.shields.io/badge/unit%20tests-303%20passing-1F9D6B" />
+  <img alt="336 unit tests" src="https://img.shields.io/badge/unit%20tests-336%20passing-1F9D6B" />
   <img alt="Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-A29EAA" />
 </p>
 
@@ -37,6 +38,7 @@
 - [Metropolis entry at a glance](#metropolis-entry-at-a-glance)
 - [Videos](#videos)
 - [Judges: see it working in 60 seconds](#judges-see-it-working-in-60-seconds)
+- [Monsmith on every pull request](#monsmith-on-every-pull-request)
 - [Usage so far](#usage-so-far)
 - [The problem](#the-problem)
 - [How Monsmith works](#how-monsmith-works)
@@ -107,6 +109,41 @@ No account needed for the first three steps.
 2. Press **Optimize this contract**. Monsmith rewrites it, re-checks it like a fix review, and the score goes **39 to 79**, with a before and after diff.
 3. Open **[monsmith.com/verify](https://www.monsmith.com/verify)**. The ledger, indexed by Envio, lists every audit on Monad. Paste The DAO's source or any address to get its onchain score.
 4. To audit your own contract, sign in with Google, GitHub or email. The first two reports and two optimizations are free, and Privy gives you a Monad wallet to deploy with.
+5. See the GitHub App review a real pull request: **[monsmith-pr-demo#2](https://github.com/Adwaitbytes/monsmith-pr-demo/pull/2)**. Three pushes, the score from 15 to 41 to 52, six findings fixed before merge, and the merged code [attested on Monad](https://monadscan.com/tx/0x3f4c960954c71e0f026a13622d4be8285b5d3b3b7f0b840e22a82ee9b14537bb).
+
+---
+
+## Monsmith on every pull request
+
+A report is one look at code that changes next week. A mentor put it plainly: the repeat unit for an auditor is the commit. So Monsmith is also a GitHub App. Install it once, and every pull request that changes Solidity gets reviewed on every push.
+
+<p align="center">
+  <img src="docs/assets/pr-review-comment.png" width="760" alt="Monsmith's comment on a real pull request: score 52, up from 15 at the first review, attested on Monad, with the findings each push fixed struck through" />
+</p>
+
+**What happens on each push**
+
+- **The contracts the pull request changes get a full audit.** It uses the same engine as a report run by hand: the Kimi K3 threat model, the exploit hunt, Qwen 3.8 Max cross-examining every finding, and the static and gas passes. Tests, scripts, dependencies and drafts are skipped. A pull request that touches no Solidity gets no comment at all.
+- **One comment, edited in place.** It shows the score per contract and the findings worst first, each linked to its line at the reviewed commit. A check run puts the same findings on their lines in "Files changed", and the check fails while a critical or high finding is open.
+- **A later push is a fix review, not a fresh audit.** Each earlier finding is re-checked against the new code, so "fixed" is measured, not two model runs that happened to disagree. The changed contract is then audited again in full, so a fix that breaks something elsewhere is caught. The original invariants are checked against the new code. A new finding that only restates a known one is dropped by a model check, so a push is never blamed for old bugs under new names. Contracts the push did not touch are reused as they were, at no cost.
+- **On merge, the reviewed code is attested on Monad.** Monsmith reads the merged files, and only if they are byte for byte what it reviewed does the Dynamic agent wallet write their score to the attestations contract. Anyone can then check it at [`/verify`](https://www.monsmith.com/verify) or with one contract read.
+
+```mermaid
+flowchart LR
+    A[Push to a pull request] --> B{Changes Solidity?}
+    B -- no --> Z[Stay quiet]
+    B -- yes --> C[Unchanged contracts reused]
+    B -- yes --> D[Changed contracts: fix review against the last push, full re-audit, invariant check]
+    C --> E[One comment kept up to date, check run with findings on their lines]
+    D --> E
+    E --> F{Merged?}
+    F -- yes --> G[Merged source equals reviewed source?]
+    G -- yes --> H[Attest on Monad under ERC-8004 agent #10332]
+```
+
+**The numbers it is judged by.** Not comments posted. [`/github`](https://www.monsmith.com/github) shows, live from the database: teams installed, installs still running at week four, pull requests reviewed, findings fixed before merge, fixes merged, and merges attested. The team's own GitHub account is left out of every one of them, so today they read zero. The demo pull request above is ours and is not counted.
+
+**Limits.** Each installation gets 60 reviewed pushes and 10 attestations every 30 days. The app reads contents only on the repositories you pick, and writes only its one comment and its check run. Code lives in [`lib/prReview/`](lib/prReview) and [`app/api/github/webhook/route.ts`](app/api/github/webhook/route.ts).
 
 ---
 
@@ -493,15 +530,18 @@ Chain id 143.
 app/
   studio/            the IDE: editor, Contract Report, optimizer, deploy
   verify/            public verify page and the Envio-backed ledger
+  github/            the pull request review page, with its live numbers
   open/              opens Mera-sealed reports in the browser
   api/verify/        verify by source hash or by chain + address (Alchemy proxy checks)
   api/attestations/  the ledger, from Envio HyperIndex with HyperSync fallback
   api/report/        reports, sharing, attestation (Dynamic signer)
+  api/github/webhook/ the GitHub App's deliveries: pull request reviews and installs
   api/stake/         Nansen "What is at stake"
   api/auth/session/  Privy identity token to HttpOnly session
   agent.json/        ERC-8004 registration file
 lib/
   report/            the four-pass audit (Kimi K3, Claude, Qwen 3.8 Max), scoring, fix review
+  prReview/          pull request review: fix tracking, the comment, check runs, attest on merge
   attest/            signer (Dynamic), RPC (Alchemy), ledger (Envio)
   auth/              Privy client and server
   seal/              Mera sealed reports
@@ -512,7 +552,7 @@ contracts/
 cre/                 Chainlink CRE workflow (attestation-verifier)
 indexer/             Envio HyperIndex indexer
 scripts/             ERC-8004 setup, verdicts deploy, Dynamic wallet, identity move
-tests/               303 unit tests
+tests/               336 unit tests
 ```
 
 ---
@@ -579,7 +619,7 @@ Indexer: [`indexer/README.md`](indexer/README.md). CRE workflow: [`cre/README.md
 ## Tests
 
 ```sh
-npm run test:unit                       # 303 tests: audit, reports, payments, attestations, ledger, RPC, sealing
+npm run test:unit                       # 336 tests: audit, reports, pull request review, payments, attestations, ledger, RPC, sealing
 npx hardhat test                        # contracts, including MonsmithAttestations and MonsmithVerdicts
 cd indexer && pnpm test                 # Envio handlers
 cd cre/attestation-verifier && bun test # CRE workflow

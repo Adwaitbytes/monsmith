@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, Check, FileDiff, GitPullRequest, MessageSquareText, ShieldCheck } from "lucide-react";
 
@@ -30,6 +31,9 @@ async function stats(): Promise<PullReviewStats | null> {
         return null;
     }
 }
+
+const DEMO_PULL = "https://github.com/Adwaitbytes/monsmith-pr-demo/pull/2";
+const DEMO_ATTESTATION = "https://monadscan.com/tx/0x3f4c960954c71e0f026a13622d4be8285b5d3b3b7f0b840e22a82ee9b14537bb";
 
 const STEPS = [
     {
@@ -123,6 +127,49 @@ export default async function GitHubPage({ searchParams }: { searchParams: Promi
                 <p className="mt-3 text-[12.5px] text-text-muted">
                     Free for 60 reviewed pushes per installation every 30 days. Pick the repositories it may read; it asks for nothing else.
                 </p>
+
+                <section aria-labelledby="demo" className="mt-14">
+                    <h2 id="demo" className="font-display text-[22px] font-semibold tracking-[-0.02em]">
+                        On a real pull request
+                    </h2>
+                    <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-text-secondary">
+                        A staking vault in our demo repository. The pull request added reward sharing with three bugs in it. Three pushes later
+                        the score had gone from 15 to 41 to 52, six findings were fixed before merge, and the merged code was attested on Monad.
+                    </p>
+                    <a
+                        href={DEMO_PULL}
+                        className="mt-5 block overflow-hidden rounded-xl border border-border-subtle shadow-[var(--shadow-panel)] outline-none ring-accent-line transition-opacity hover:opacity-95 focus-visible:ring-2"
+                    >
+                        <Image
+                            src="/github/pr-review-comment.png"
+                            alt="Monsmith's comment on the demo pull request: score 52, up from 15 at the first review, attested on Monad, with the findings each push fixed struck through."
+                            width={1512}
+                            height={805}
+                            sizes="(min-width: 768px) 720px, 100vw"
+                            className="h-auto w-full"
+                        />
+                    </a>
+                    <ul className="mt-4 grid gap-2 text-[13.5px] text-text-secondary sm:grid-cols-3">
+                        <li>
+                            <a href={DEMO_PULL} className="font-medium text-text-primary underline-offset-4 hover:underline">
+                                The pull request
+                            </a>{" "}
+                            and its three reviews
+                        </li>
+                        <li>
+                            <a href={`${DEMO_PULL}/files`} className="font-medium text-text-primary underline-offset-4 hover:underline">
+                                Findings on their lines
+                            </a>{" "}
+                            in Files changed
+                        </li>
+                        <li>
+                            <a href={DEMO_ATTESTATION} className="font-medium text-text-primary underline-offset-4 hover:underline">
+                                The attestation
+                            </a>{" "}
+                            on Monad mainnet
+                        </li>
+                    </ul>
+                </section>
 
                 <section aria-labelledby="how" className="mt-16">
                     <h2 id="how" className="font-display text-[22px] font-semibold tracking-[-0.02em]">
