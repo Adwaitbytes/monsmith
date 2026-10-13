@@ -132,6 +132,7 @@ export interface PullRecord {
     number: number;
     installationId: number;
     repoFullName: string;
+    repoOwner: string;
     private: boolean;
     title: string;
     author: string | null;
@@ -151,9 +152,13 @@ export async function notePullHead(pull: PullRecord): Promise<{ commentId: numbe
     const sql = client();
     if (sql === null) return { commentId: null };
     await ensureSchema();
+    // The repository's owner is the account the app is installed on, for
+    // personal and organisation installs alike. Without it, an install made
+    // before the webhook existed could not be told apart from a stranger's.
     await sql`
-        INSERT INTO pr_installations (installation_id) VALUES (${pull.installationId})
-        ON CONFLICT (installation_id) DO NOTHING
+        INSERT INTO pr_installations (installation_id, account_login) VALUES (${pull.installationId}, ${pull.repoOwner})
+        ON CONFLICT (installation_id) DO UPDATE
+            SET account_login = COALESCE(pr_installations.account_login, EXCLUDED.account_login)
     `;
     const rows = (await sql`
         INSERT INTO pull_requests (repo_id, number, installation_id, repo_full_name, private, title, author, latest_head)
@@ -374,7 +379,9 @@ export async function pullReviewStats(teamLogins: readonly string[]): Promise<Pu
     const rows = (await sql`
         WITH outside AS (
             SELECT installation_id, installed_at, uninstalled_at FROM pr_installations
-            WHERE account_login IS NULL OR NOT (LOWER(account_login) = ANY(${team}))
+            -- An account nobody can name cannot be shown to be someone else's,
+            -- so it is left out rather than counted.
+            WHERE account_login IS NOT NULL AND NOT (LOWER(account_login) = ANY(${team}))
         ),
         reviews AS (
             SELECT r.* FROM pr_reviews r JOIN outside o USING (installation_id)

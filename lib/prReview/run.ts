@@ -98,6 +98,7 @@ async function reviewPush(event: PullEvent): Promise<void> {
         number,
         installationId: event.installationId,
         repoFullName: event.repo.fullName,
+        repoOwner: event.repo.owner,
         private: event.repo.private,
         title: event.pull.title,
         author: event.pull.author,
